@@ -1,13 +1,20 @@
 # Corellia — Implementation Stack (v1)
 
-Concrete engineering picks for v1. Companion to `blueprint.md`:
+Concrete engineering picks for v1. Companion docs:
 
-- `blueprint.md` answers *what* we're building and the architecture rules.
-- `stack.md` (this doc) answers *how* we're building it — monorepo layout,
-  tools, build pipelines, local dev, deploy story.
+- `vision.md` — the product vision
+- `blueprint.md` — *what* we're building and the architecture rules (esp. §11)
+- `stack.md` (this doc) — *how* we're building it: tools, layout, pipelines,
+  deploy. The "why these picks" reference.
+- `backend-scaffolding.md` — step-by-step recipe for creating `backend/`,
+  with starter file contents
+- `frontend-scaffolding.md` — step-by-step recipe for creating `frontend/`,
+  with starter file contents
 
 When picks change, update this document. Blueprint rules (especially §11)
-still win when any rule in this doc conflicts with them.
+still win when any rule in this doc conflicts with them. The scaffolding
+docs are recipes; once scaffolding is complete, the live code is
+authoritative.
 
 ---
 
@@ -63,15 +70,17 @@ corellia/
 │   │   ├── config/             env var loading + validation (fails fast)
 │   │   ├── httpsrv/            Chi setup, middleware stack, Connect handler mount
 │   │   └── gen/                generated Connect-go Go server code (do not hand-edit)
-│   ├── proto/                  .proto source files (authored here)
-│   │   ├── buf.yaml
-│   │   ├── buf.gen.yaml
-│   │   └── corellia/v1/*.proto
 │   ├── queries/                sqlc input (raw SQL per domain)
 │   ├── migrations/             goose-managed SQL migrations
 │   ├── Dockerfile              for Fly deploy
 │   ├── fly.toml                Fly app config
 │   └── go.mod
+│
+├── shared/                     language-neutral contracts (Proto IDL, future OpenAPI, etc.)
+│   └── proto/
+│       ├── buf.yaml
+│       ├── buf.gen.yaml
+│       └── corellia/v1/*.proto
 │
 ├── docs/                       vision, blueprint, stack (this file), research
 ├── Procfile.dev                overmind config: web + api
@@ -86,12 +95,18 @@ corellia/
 ### Layout rules
 
 1. **No cross-contamination.** `frontend/` never imports from `backend/` or
-   vice versa. The *only* shared surface is generated code emitted by `buf`
-   into `frontend/src/gen/` and `backend/internal/gen/`.
-2. **Generated code is committed.** Both `frontend/src/gen/` and
+   vice versa. The *only* shared surface is code generated from
+   `shared/proto/` into `frontend/src/gen/` and `backend/internal/gen/`.
+2. **`shared/` is contract-only, no source code.** Proto IDL, OpenAPI
+   specs, JSON Schema, and similar language-neutral contracts live here.
+   Never Go, never TS, never any language-specific implementation code. If
+   you feel the urge to add `shared/utils/` or `shared/types/`, stop —
+   that code belongs in `frontend/` or `backend/` (or, if truly shared,
+   needs a rethink about what "shared" means).
+3. **Generated code is committed.** Both `frontend/src/gen/` and
    `backend/internal/gen/` are checked in. This keeps builds reproducible
    without requiring every environment to run codegen.
-3. **Generated code is never hand-edited.** Anyone editing it is treated
+4. **Generated code is never hand-edited.** Anyone editing it is treated
    the same as editing `node_modules`: the change will be blown away by the
    next `buf generate` and the diff should be rejected in review.
 
@@ -114,12 +129,15 @@ corellia/
 
 ### Where .proto files live
 
-Authored in `backend/proto/corellia/v1/`. The `v1` package namespace is
-permanent — breaking changes go to `v2`, never silent edits to `v1`.
+Authored in `shared/proto/corellia/v1/`. Placed under the root `shared/`
+folder (not `backend/proto/`) to signal that Proto is a **language-neutral
+contract between the two halves**, not a backend-owned artifact. The `v1`
+package namespace is permanent — breaking changes go to `v2`, never
+silent edits to `v1`.
 
 ### Codegen pipeline
 
-Driven by `buf.gen.yaml` in `backend/proto/`. Emits:
+Driven by `buf.gen.yaml` in `shared/proto/`. Emits:
 
 - `backend/internal/gen/` — Go server interfaces and types
 - `frontend/src/gen/` — TS client + message classes
@@ -128,9 +146,7 @@ Trigger:
 
 ```bash
 # from repo root
-pnpm -C frontend exec buf generate ../../backend/proto
-# or, via root task:
-pnpm proto:generate
+pnpm proto:generate     # wraps `buf generate shared/proto`
 ```
 
 A `buf generate` runs in CI on every PR; drift between `.proto` changes
@@ -360,7 +376,7 @@ Extends blueprint §11. Same blocking-rule status.
 The "prove the pipeline works before writing product code" milestone.
 
 1. **Hour 0–1.** Monorepo skeleton: `frontend/` scaffolded via
-   `create-next-app`, `backend/` with `go mod init`, `backend/proto/`
+   `create-next-app`, `backend/` with `go mod init`, `shared/proto/`
    with first `.proto` file, `Procfile.dev`, `.env.example`, `.gitignore`.
 2. **Hour 1–2.** Supabase project created. First migration applied
    (users + organizations + agent_templates + agent_instances from
