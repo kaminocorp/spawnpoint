@@ -1,0 +1,17 @@
+# Environment
+.env
+.env.local
+
+# Go
+backend/tmp/
+backend/bin/
+
+# Node (will be used by frontend later)
+node_modules/
+.next/
+.turbo/
+
+# Editor
+.vscode/
+.idea/
+.DS_Store

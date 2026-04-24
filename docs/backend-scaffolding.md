@@ -65,10 +65,11 @@ backend/
 │   │   └── pool.go                     ← the only hand-written file here
 │   ├── deploy/                         (scaffolded empty; filled post-§15)
 │   ├── gen/                            ★ buf-generated (do not hand-edit)
-│   │   └── corelliav1/
-│   │       ├── users.pb.go
-│   │       └── corelliav1connect/
-│   │           └── users.connect.go
+│   │   └── corellia/
+│   │       └── v1/
+│   │           ├── users.pb.go
+│   │           └── corelliav1connect/
+│   │               └── users.connect.go
 │   ├── httpsrv/
 │   │   ├── server.go                   Chi router + middleware + Connect mounts
 │   │   ├── cors.go                     CORS middleware
@@ -176,12 +177,19 @@ import (
 )
 
 type Config struct {
-    Port              int    `env:"PORT" envDefault:"8080"`
-    DatabaseURL       string `env:"DATABASE_URL,required"`
+    Port int `env:"PORT" envDefault:"8080"`
+
+    // DatabaseURL is the Supabase session-pooler URL used by the app at
+    // runtime. DATABASE_URL_DIRECT (migration-only, superuser role) is
+    // deliberately not exposed here — it is a shell-only env var read by
+    // goose, so the app binary never holds superuser credentials.
+    DatabaseURL string `env:"DATABASE_URL,required"`
+
     SupabaseURL       string `env:"SUPABASE_URL,required"`
     SupabaseJWTSecret string `env:"SUPABASE_JWT_SECRET,required"`
     FlyAPIToken       string `env:"FLY_API_TOKEN,required"`
     FlyOrgSlug        string `env:"FLY_ORG_SLUG,required"`
+    FrontendOrigin    string `env:"FRONTEND_ORIGIN,required"`
 }
 
 func Load() Config {
@@ -210,18 +218,53 @@ package db
 
 import (
     "context"
+    "time"
 
     "github.com/jackc/pgx/v5/pgxpool"
 )
 
+// NewPool builds the app's single pgxpool connected to the Supabase session
+// pooler. Tuning values are v1 starters — revisit when we know real traffic
+// shape and how many Fly machines are in rotation.
 func NewPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
     cfg, err := pgxpool.ParseConfig(dsn)
     if err != nil {
         return nil, err
     }
+
+    cfg.MaxConns = 10
+    cfg.MinConns = 2
+    cfg.MaxConnLifetime = time.Hour
+    cfg.MaxConnIdleTime = 30 * time.Minute
+    cfg.HealthCheckPeriod = time.Minute
+
     return pgxpool.NewWithConfig(ctx, cfg)
 }
 ```
+
+### Connection strategy (why two URLs)
+
+- **`DATABASE_URL`** — the app's runtime connection, via Supabase's
+  **Session Pooler** (Supavisor on port 5432 at the pooler hostname).
+  Gives us IPv4 support, connection multiplexing, and the full PG feature
+  set that pgx + sqlc rely on (prepared statements, session vars,
+  advisory locks).
+- **`DATABASE_URL_DIRECT`** — direct connection (`db.<ref>.supabase.co:5432`),
+  used **only by goose for migrations**. DDL and extension-management
+  statements behave more reliably on a direct connection than through a
+  pooler. Kept out of `config.Config` so the Go binary never holds
+  superuser credentials.
+
+Both URLs use the `postgres` role for v1. Later (post-RLS), `DATABASE_URL`
+switches to a restricted `corellia_app` role that does not bypass RLS;
+`DATABASE_URL_DIRECT` stays on `postgres`.
+
+**We do not use Transaction Pooling (port 6543).** pgx prepares statements
+by default — that's how sqlc's generated code gets its type-safety and
+performance. Transaction pooling (pgbouncer in txn mode) breaks prepared
+statements across txn boundaries. Go servers have stable, modest
+connection counts; the multiplexing txn pooling provides is a pattern for
+Python async / serverless, not for a long-lived Go process.
 
 ### 6.2 First migration
 
@@ -258,10 +301,11 @@ DROP TABLE organizations;
 DROP EXTENSION IF EXISTS "uuid-ossp";
 ```
 
-Apply:
+Apply (migrations always run against `DATABASE_URL_DIRECT`, never the
+pooler URL):
 
 ```bash
-goose -dir backend/migrations postgres "$DATABASE_URL" up
+goose -dir backend/migrations postgres "$DATABASE_URL_DIRECT" up
 ```
 
 Remaining blueprint §9 tables (`harness_adapters`, `agent_templates`,
@@ -397,8 +441,8 @@ Per `stack.md` §11 rule 6, Supabase specifics stay inside `auth/`.
 - **Input:** `.proto` files in `shared/proto/corellia/v1/` — authored as
   the FE↔BE API contract. Changes here require regenerating and
   committing both halves' generated code in the same commit.
-- **Output:** generated Go in `backend/internal/gen/corelliav1/` (messages)
-  and `backend/internal/gen/corelliav1/corelliav1connect/` (service
+- **Output:** generated Go in `backend/internal/gen/corellia/v1/` (messages)
+  and `backend/internal/gen/corellia/v1/corelliav1connect/` (service
   handlers + clients).
 - **Trigger:** `pnpm proto:generate` from repo root. Script defined in
   `frontend/package.json`, wraps `buf generate shared/proto`. Backend
@@ -437,7 +481,7 @@ File: `shared/proto/corellia/v1/users.proto`
 syntax = "proto3";
 package corellia.v1;
 
-option go_package = "<mod>/internal/gen/corelliav1;corelliav1";
+option go_package = "<mod>/internal/gen/corellia/v1;corelliav1";
 
 service UsersService {
   rpc GetCurrentUser(GetCurrentUserRequest) returns (GetCurrentUserResponse);
@@ -458,8 +502,11 @@ message User {
 ```
 
 Run `pnpm proto:generate` from repo root. Verify
-`backend/internal/gen/corelliav1/users.pb.go` and
-`.../corelliav1connect/users.connect.go` exist.
+`backend/internal/gen/corellia/v1/users.pb.go` and
+`backend/internal/gen/corellia/v1/corelliav1connect/users.connect.go`
+exist. The filesystem path mirrors the `.proto` path (because
+`buf.gen.yaml` sets `paths=source_relative`); the Go package name
+stays `corelliav1` via the `;corelliav1` suffix on `go_package`.
 
 ### 9.2 Domain service
 
@@ -474,7 +521,7 @@ import (
 
     "<mod>/internal/auth"
     "<mod>/internal/db"
-    corelliav1 "<mod>/internal/gen/corelliav1"
+    corelliav1 "<mod>/internal/gen/corellia/v1"
     "github.com/google/uuid"
 )
 
@@ -530,7 +577,7 @@ import (
     "context"
 
     "connectrpc.com/connect"
-    corelliav1 "<mod>/internal/gen/corelliav1"
+    corelliav1 "<mod>/internal/gen/corellia/v1"
     "<mod>/internal/users"
 )
 
@@ -605,7 +652,7 @@ import (
 
     "<mod>/internal/auth"
     "<mod>/internal/config"
-    "<mod>/internal/gen/corelliav1/corelliav1connect"
+    "<mod>/internal/gen/corellia/v1/corelliav1connect"
 )
 
 type Deps struct {
@@ -677,7 +724,7 @@ func main() {
     handler := httpsrv.New(httpsrv.Deps{
         Config:        cfg,
         UsersHandler:  httpsrv.NewUsersHandler(usersSvc),
-        AllowedOrigin: os.Getenv("FRONTEND_ORIGIN"), // e.g. http://localhost:3000
+        AllowedOrigin: cfg.FrontendOrigin,
     })
 
     addr := fmt.Sprintf(":%d", cfg.Port)

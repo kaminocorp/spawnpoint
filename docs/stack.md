@@ -196,9 +196,13 @@ corresponding user from `public.users`.
 1. Chi middleware reads `Authorization: Bearer <token>`.
 2. Validates JWT signature against `SUPABASE_JWT_SECRET` (HS256).
 3. Extracts `sub` (Supabase auth user UUID) and `email`.
-4. Loads the corresponding row from `public.users` (by `auth_user_id`
-   column). If not found, auto-provisions the row on first request.
-5. Attaches the loaded `User` to the request context.
+4. Attaches an `AuthClaims{AuthUserID, Email}` value to the request
+   context.
+5. Domain services (e.g. `users.Service`) load the corresponding
+   `public.users` row by `auth_user_id` on demand, auto-provisioning
+   it on first login. Loading/provisioning is a domain concern, not a
+   transport concern — the middleware stays thin and has no DB
+   dependency.
 
 ### JWT validation is offline
 
@@ -218,11 +222,14 @@ Blueprint §9 defines the schema. Implementation specifics:
 - **Row-Level Security (RLS) is disabled in v1.** Go BE has full DB
   access via the connection string; authorization is enforced in
   application code in `backend/internal/agents/` etc.
-- Migrations live in `backend/migrations/` and are run by `goose`:
+- Migrations live in `backend/migrations/` and are run by `goose`
+  against the **direct** connection (bypassing the session pooler):
   ```bash
-  goose -dir backend/migrations postgres "$DATABASE_URL" up
+  goose -dir backend/migrations postgres "$DATABASE_URL_DIRECT" up
   ```
-  Committed SQL files; no Supabase CLI dependency.
+  Committed SQL files; no Supabase CLI dependency. See
+  `backend-scaffolding.md` §6.1 for why the app and migrations use
+  different URLs.
 - sqlc reads from `backend/queries/*.sql` + `backend/sqlc.yaml` and emits
   typed Go query functions into `backend/internal/db/`.
 
@@ -247,7 +254,7 @@ Blueprint §9 defines the schema. Implementation specifics:
 pnpm install                                 # installs frontend deps
 go work sync                                 # syncs Go workspace
 pnpm proto:generate                          # emits generated Go + TS
-goose -dir backend/migrations postgres "$DATABASE_URL" up
+goose -dir backend/migrations postgres "$DATABASE_URL_DIRECT" up
 ```
 
 ### Running locally
@@ -271,7 +278,8 @@ config package panics on missing required vars; Next.js fails the build.
 
 | Var | Consumer | Purpose |
 |-----|----------|---------|
-| `DATABASE_URL` | backend | Postgres connection string (Supabase pooler URL) |
+| `DATABASE_URL` | backend | App connection — Supabase **Session Pooler** URL (port 5432 on `*.pooler.supabase.com`) |
+| `DATABASE_URL_DIRECT` | shell only | Migration-only direct connection (`db.<ref>.supabase.co:5432`); read by `goose`, never by the Go binary |
 | `SUPABASE_URL` | both | Supabase project URL |
 | `SUPABASE_ANON_KEY` | frontend | Public anon key, safe for client bundle |
 | `SUPABASE_SERVICE_KEY` | backend (rare) | Service-role key for admin ops; avoid if possible |
@@ -279,6 +287,7 @@ config package panics on missing required vars; Next.js fails the build.
 | `FLY_API_TOKEN` | backend | Calls Fly's GraphQL API to spawn apps/machines |
 | `FLY_ORG_SLUG` | backend | Fly organization to create apps under |
 | `PORT` | backend | HTTP listen port (default 8080) |
+| `FRONTEND_ORIGIN` | backend | Allowed CORS origin for the deployed FE (e.g., `http://localhost:3000`) |
 | `NEXT_PUBLIC_API_URL` | frontend | BE base URL (e.g., `http://localhost:8080`) |
 
 ---
