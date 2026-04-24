@@ -273,8 +273,20 @@ committed template.
 
 ## 8. Environment variables
 
-Single `.env` at repo root, read by both halves. Validated on startup — Go
-config package panics on missing required vars; Next.js fails the build.
+Per-app env files: `backend/.env` (auto-loaded by Go via `godotenv/autoload`
+from the binary's cwd) and `frontend/.env.local` (auto-loaded by Next.js from
+the `frontend/` project root). Both gitignored. `.env.example` at repo root is
+the single committed template documenting every var both halves read.
+Validated on startup — Go config package panics on missing required vars;
+Next.js fails the build.
+
+Shared Supabase values are duplicated across the two files by design: the
+backend reads `SUPABASE_URL` / `SUPABASE_ANON_KEY`, the frontend reads
+`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Values must
+match. `DATABASE_URL_DIRECT` lives in `backend/.env` but is shell-sourced for
+`goose` (`set -a; source backend/.env; set +a`, or `direnv` with a
+`backend/.envrc` containing `dotenv .env`) — it is never read by
+`config.Load()`.
 
 | Var | Consumer | Purpose |
 |-----|----------|---------|

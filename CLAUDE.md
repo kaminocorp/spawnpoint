@@ -28,7 +28,7 @@ corellia/
 ├── shared/proto/    Proto IDL — the only FE↔BE contract surface
 ├── docs/            vision, blueprint, stack, scaffolding recipes
 ├── go.work          Go workspace: `use ./backend`
-└── .env.example     committed template (real .env is gitignored, loaded by both halves)
+└── .env.example     committed template (real env: backend/.env + frontend/.env.local, both gitignored)
 ```
 
 Go module path: `github.com/hejijunhao/corellia/backend` (where scaffolding docs use `<mod>`).
@@ -127,4 +127,4 @@ pnpm -C frontend build
 
 ## Environment
 
-Single `.env` at repo root (gitignored), read by both halves. See `.env.example` for the full list. Required backend vars (panic-on-missing): `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_JWT_SECRET`, `FLY_API_TOKEN`, `FLY_ORG_SLUG`, `FRONTEND_ORIGIN`. `DATABASE_URL_DIRECT` is shell-only (migrations), deliberately not in `config.Config`.
+Per-app env files, both gitignored: `backend/.env` (backend vars; auto-loaded by `godotenv/autoload` from the Go binary's cwd) and `frontend/.env.local` (frontend vars; auto-loaded by Next.js from the `frontend/` project root). `.env.example` at repo root is the single committed template documenting every var both halves read. Required backend vars (panic-on-missing): `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_JWT_SECRET`, `FLY_API_TOKEN`, `FLY_ORG_SLUG`, `FRONTEND_ORIGIN`. `DATABASE_URL_DIRECT` lives in `backend/.env` but is shell-sourced for `goose`, never read by `config.Load()` — `set -a; source backend/.env; set +a` (or use `direnv`) before running migrations. Shared Supabase values (`SUPABASE_URL` / `SUPABASE_ANON_KEY` ↔ their `NEXT_PUBLIC_*` twins) are duplicated across the two files by design; values must match.

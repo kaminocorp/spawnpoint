@@ -1,10 +1,38 @@
 # Changelog
 
+- [0.2.2 — Env File Placement: Per-App](#022--env-file-placement-per-app-2026-04-24)
 - [0.2.1 — Seeding Removed](#021--seeding-removed-2026-04-24)
 - [0.2.0 — Frontend Scaffolding](#020--frontend-scaffolding-2026-04-24)
 - [0.1.0 — Backend Scaffolding & Docs Reconciliation](#010--backend-scaffolding--docs-reconciliation-2026-04-24)
 
 Latest on top. Each release has a tight index followed by detail entries (**What / Where / Why** inlined). When a decision contradicts an earlier one, note the supersession in the new entry rather than editing the old one.
+
+---
+
+## 0.2.2 — Env File Placement: Per-App (2026-04-24)
+
+Replaced the "single `.env` at repo root" convention with per-app env files: `backend/.env` (auto-loaded by `godotenv/autoload` from the Go binary's cwd) and `frontend/.env.local` (auto-loaded by Next.js from the `frontend/` project root). Matches the default loader behavior of both halves without fighting either — the root-`.env` framing in 0.1.0 would have required symlinks or a `dotenv-cli` wrapper in practice. Supersedes the root-`.env` story across `CLAUDE.md` §Environment, `stack.md` §8, and the `.env.example` comments.
+
+### Index
+- **Committed docs:** `CLAUDE.md` §Environment + architecture diagram, `docs/stack.md` §8, and `.env.example` (top comment + `--- Supabase (frontend-facing copies) ---` block) — all rewritten to describe the per-app split.
+- **Gitignored files (not committed):** `backend/.env` and `frontend/.env.local` scaffolded with the relevant subset of keys from `.env.example`; values left empty for the operator to populate. Covered by existing root `.gitignore` (lines 2–3: `.env`, `.env.local`) and `frontend/.gitignore` (line 34: `.env*`) — no gitignore changes needed.
+- **Shared Supabase values duplicated by design.** Two value pairs now live in both files: `SUPABASE_URL` ↔ `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_ANON_KEY` ↔ `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Rotations touch two files; accepted cost.
+- **`DATABASE_URL_DIRECT`** physical home moves from a (never-created) root `.env` to `backend/.env`. The no-Config invariant from 0.1.0 is unchanged — still absent from `config.Config`, still shell-sourced by `goose`.
+
+### Details
+
+**Per-app convention documented.** `CLAUDE.md` §Environment, `docs/stack.md` §8, and the header comment in `.env.example` previously all said "Single `.env` at repo root, read by both halves." Rewritten to describe `backend/.env` for backend vars and `frontend/.env.local` for frontend vars, with the repo-root `.env.example` as the single committed template documenting every var. The mid-file comment in `.env.example` (originally justifying `NEXT_PUBLIC_*` duplicates "so the same .env file feeds both halves") was rewritten to describe the split and frame the duplication as the intentional cost of it. The architecture diagram in `CLAUDE.md` was updated in the same pass so the `.env.example` line reflects the new real-env paths. *Where:* `CLAUDE.md` (§Environment + architecture diagram line), `docs/stack.md` §8, `.env.example` (top + `--- Supabase (frontend-facing copies) ---` block). *Why:* the single-root-file story was already fighting loader defaults in both halves. `godotenv/autoload` (imported in `backend/cmd/api/main.go:10`) reads `.env` from the process's cwd — and `Procfile.dev` line 2 runs `cd backend && air`, so cwd is `backend/`, not repo root. Next.js's built-in dotenv loader reads `.env` / `.env.local` from the Next project root (`frontend/`), never walking up to a monorepo parent. Reconciling the single-root framing would have required either symlinks (`backend/.env → ../.env`, `frontend/.env.local → ../.env`) or a `dotenv-cli` wrapper in frontend scripts — neither conventional in Next.js or Go monorepos (Turborepo's own docs warn against root `.env` because it interferes with task-hashing). Per-app files match both loaders' defaults, match ecosystem norms (create-t3-turbo, Cal.com, Supabase's own example repos), and cost two duplicated shared Supabase values — an acceptable trade.
+
+**Local env files scaffolded.** `backend/.env` and `frontend/.env.local` created with the relevant subset of keys from `.env.example`, values left empty. *Where:* `backend/.env`, `frontend/.env.local` (both gitignored — not in the commit). *Why:* prefilling placeholder values risks an accidental commit of a nonsense `SUPABASE_JWT_SECRET` that then has to be rotated on Supabase's side. Leaving values empty makes the "not yet populated" state visible — the Go config package will panic on `Load()` with a clear missing-var message on first run, which is the intended failure mode.
+
+### Behavior change (known)
+
+None at runtime — no codepath moved. `godotenv/autoload` was already reading from process cwd; Next.js was already reading from `frontend/`. The only change is that the documented convention now matches where the files actually live. The `DATABASE_URL_DIRECT` ∉ `config.Config` boundary from 0.1.0 is preserved — the struct did not change.
+
+### Known pending work
+
+- **`direnv` or shell-sourcing helper for `DATABASE_URL_DIRECT`.** Running `goose` now requires either `set -a; source backend/.env; set +a` before the command, or a `backend/.envrc` with `dotenv .env` + `direnv allow`. Scaffolding / onboarding docs should pick one and document it when the first migration-apply happens (still blocked on populated Supabase creds — see 0.2.1 pending).
+- **`.env.example` split (deferred).** Could be broken into `backend/.env.example` + `frontend/.env.local.example` for maximum locality with the files they template. Kept as one repo-root file for now: simpler first-clone experience, and the var list is still short enough that co-location isn't paying its way. Revisit if the template grows past ~30 vars or operator confusion about "where does this value go?" shows up.
 
 ---
 
