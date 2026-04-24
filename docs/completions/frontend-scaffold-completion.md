@@ -96,7 +96,7 @@ Removed (post-bootstrap cleanup):
 
 Still open, roughly in order the §14 post-scaffold roadmap would consume them:
 
-1. **Local bring-up.** Populate root `.env` (Supabase URL/anon/JWT-secret, BE `DATABASE_URL` session-pooler, `DATABASE_URL_DIRECT`); run `goose up`; `overmind start`; create a test user in Supabase dashboard; sign in; confirm dashboard renders the email. This is the actual hour-5 milestone from stack.md §12.
+1. **Local bring-up.** Populate `backend/.env` + `frontend/.env.local` (Supabase URL/anon/JWT-secret, BE `DATABASE_URL` Direct Connection, `DATABASE_URL_DIRECT`); run `goose up`; `overmind start`; create a test user in Supabase dashboard; sign in; confirm dashboard renders the email. This is the actual hour-5 milestone from stack.md §12.
 2. **Add `form.tsx` shadcn primitive** (and retry when the registry entry resolves) before the agent-spawn UX lands — blueprint §10 "RPG character creation" form uses zod + react-hook-form + shadcn `<Form>`.
 3. **Update `docs/frontend-scaffolding.md`** to bake in the deviations above (Connect v2 API, Tailwind v4, sonner instead of toast, Next 16 path differences) — so the next fresh scaffold doesn't re-hit the same forks.
 4. **Vercel deploy** (doc §12) — blocked on local bring-up passing first.

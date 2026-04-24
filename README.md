@@ -99,7 +99,7 @@ See [`docs/changelog.md`](docs/changelog.md) for the full trail.
 | ORM / queries | sqlc (typed Go from SQL) |
 | Migrations | goose |
 | Auth | Supabase Auth (HS256 JWT, offline validation) |
-| Database | Supabase Postgres (session pooler for app, direct for migrations) |
+| Database | Supabase Postgres (Direct Connection; `pgxpool` pools in-process) |
 | Frontend deploy | Vercel |
 | Backend deploy | Fly.io (we dogfood the infra we're orchestrating) |
 | Local orchestration | overmind + `Procfile.dev` |

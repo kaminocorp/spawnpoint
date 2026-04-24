@@ -85,7 +85,7 @@ One package per domain. Do not consolidate into a single `domain/` folder — Go
 - **Wire type ≠ DB type**, even when fields look identical. `db.User` has `AuthUserID`/`CreatedAt`; `corelliav1.User` doesn't. The mapping step is intentional — skip a field to keep it private.
 - **Field numbers in proto are forever.** Once shipped, never change or reuse a number; mark retired ones `reserved`. Breaking changes go to `v2`, never silent edits to `v1`.
 - **Generated code is committed.** CI runs both codegen commands and fails on drift (`git diff --exit-code`).
-- **Never use transaction pooling** for `DATABASE_URL` — breaks pgx's prepared-statement cache. Session pooler only (`*.pooler.supabase.com:5432`).
+- **`DATABASE_URL` is Direct Connection.** `pgxpool` is the transaction pooler — in-process, per-query checkout. Session Pooler (`*.pooler.supabase.com:5432`) is the IPv4 fallback only. **Never Transaction Pooler** (`:6543`) — breaks pgx's prepared-statement cache.
 - **Business logic never in handlers.** If a Connect handler is >30 lines, move the logic into the domain service.
 
 ---

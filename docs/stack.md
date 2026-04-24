@@ -223,13 +223,15 @@ Blueprint §9 defines the schema. Implementation specifics:
   access via the connection string; authorization is enforced in
   application code in `backend/internal/agents/` etc.
 - Migrations live in `backend/migrations/` and are run by `goose`
-  against the **direct** connection (bypassing the session pooler):
+  against `DATABASE_URL_DIRECT`, which keeps the `postgres` superuser
+  role (required for DDL on Supabase's `auth` schema triggers):
   ```bash
   goose -dir backend/migrations postgres "$DATABASE_URL_DIRECT" up
   ```
-  Committed SQL files; no Supabase CLI dependency. See
-  `backend-scaffolding.md` §6.1 for why the app and migrations use
-  different URLs.
+  Committed SQL files; no Supabase CLI dependency. The app runtime
+  uses `DATABASE_URL` separately — see §8 for why *both* URLs point
+  at the same Direct Connection host, with the split being role and
+  lifecycle rather than pooler-vs-not.
 - sqlc reads from `backend/queries/*.sql` + `backend/sqlc.yaml` and emits
   typed Go query functions into `backend/internal/db/`.
 
@@ -298,10 +300,37 @@ backend reads `SUPABASE_URL` / `SUPABASE_ANON_KEY`, the frontend reads
 match. `DATABASE_URL_DIRECT` lives in `backend/.env` but is shell-sourced
 for `goose` — it is never read by `config.Load()`.
 
+### Database URLs — both Direct Connection, split by role
+
+Both `DATABASE_URL` and `DATABASE_URL_DIRECT` point at Supabase's **Direct
+Connection** endpoint (`db.<project-ref>.supabase.co:5432`). The split is
+role-and-lifecycle, not host: `DATABASE_URL_DIRECT` stays on the
+superuser `postgres` role and is shell-sourced by `goose` for DDL;
+`DATABASE_URL` will later downgrade to a restricted `corellia_app` role
+read by the Go binary at runtime.
+
+**Why no external pooler on the wire.** `pgxpool` acts as an in-process
+transaction pooler — each query leases a backend for its own duration
+and releases it (a `BeginTx` block leases for the transaction's
+duration). Thousands of concurrent goroutines multiplex onto a bounded
+pool (`MaxConns=10`), so Postgres backend count scales with *Go
+instance count*, not user count. Adding Supavisor in transaction mode
+(`:6543`) would stack a redundant multiplexer across a network hop
+*and* break pgx's prepared-statement cache (which sqlc relies on).
+Supavisor in session mode (`*.pooler.supabase.com:5432`) is the
+**IPv4 fallback** for local-dev networks without IPv6 reachability to
+the Direct host — swapping `DATABASE_URL` to the Session Pooler form
+is a config change with no code impact, and per-developer variation
+costs nothing since `.env` is gitignored. The jump from Direct to
+Session Pooler as the *primary* runtime URL becomes worth making when
+horizontal-scaling operational concerns appear (connection storms on
+rolling deploys, centralized connection limits across ≥10 backend
+instances), not before. **Never transaction pooling.**
+
 | Var | Consumer | Purpose |
 |-----|----------|---------|
-| `DATABASE_URL` | backend | App connection — Supabase **Session Pooler** URL (port 5432 on `*.pooler.supabase.com`) |
-| `DATABASE_URL_DIRECT` | shell only | Migration-only direct connection (`db.<ref>.supabase.co:5432`); read by `goose`, never by the Go binary |
+| `DATABASE_URL` | backend | App connection — Supabase **Direct Connection** (`db.<ref>.supabase.co:5432`, IPv6). `pgxpool` multiplexes in-process; no external pooler. Session Pooler (`*.pooler.supabase.com:5432`) is the IPv4 fallback. |
+| `DATABASE_URL_DIRECT` | shell only | Migration-only Direct Connection (same host, `postgres` superuser role); read by `goose`, never by the Go binary. |
 | `SUPABASE_URL` | both | Supabase project URL |
 | `SUPABASE_ANON_KEY` | frontend | Public anon key, safe for client bundle |
 | `SUPABASE_SERVICE_KEY` | backend (rare) | Service-role key for admin ops; avoid if possible |

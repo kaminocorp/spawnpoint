@@ -49,10 +49,16 @@ Frontend and backend communicate **exclusively via Connect-go RPCs** over HTTP/1
 
 Frontend uses Supabase client **only for auth** (sign-in, session). All application data flows through Connect RPCs. No direct SQL, no Supabase REST for app data. See stack.md §4 and rule §11.10.
 
-### Database connection — two URLs by design
+### Database connection — two URLs, both Direct Connection
 
-- `DATABASE_URL` — app runtime via Supabase **Session Pooler** (port 5432 on `*.pooler.supabase.com`). Preserves prepared statements, which pgx/sqlc require. **Never use transaction pooling** (port 6543) — it breaks prepared statements.
-- `DATABASE_URL_DIRECT` — migration-only, read by `goose` from the shell. Deliberately **not in `config.Config`** so the Go binary never holds superuser credentials.
+Both `DATABASE_URL` and `DATABASE_URL_DIRECT` point at Supabase's **Direct Connection** host (`db.<project-ref>.supabase.co:5432`, IPv6). The split is *role and lifecycle*, not host:
+
+- `DATABASE_URL` — app runtime, read by `config.Load()` at boot, consumed by `pgxpool`. Will later downgrade to a restricted `corellia_app` role (non-RLS-bypassing).
+- `DATABASE_URL_DIRECT` — migration-only, shell-sourced by `goose`. Stays on the `postgres` superuser role (needed for DDL on Supabase's `auth` schema triggers). Deliberately **not in `config.Config`** so the Go binary never holds superuser credentials.
+
+**Why Direct, not an external pooler.** `pgxpool` is an in-process transaction pooler: each `db.QueryContext` call leases a backend for the query's duration only and returns it immediately; a `BeginTx` block leases for the transaction's duration. A single Go process serves thousands of concurrent HTTP goroutines off a bounded pool (`MaxConns=10`), so Postgres backend count scales with *Go instance count*, not user count. An external transaction pooler (Supavisor `:6543`) would stack a redundant multiplexer across a network hop *and* break pgx's prepared-statement cache (which sqlc relies on). **Never transaction pooling.** The Session Pooler (`*.pooler.supabase.com:5432`) is the **IPv4 fallback** only — swap `DATABASE_URL` for the Session Pooler form if your local network can't reach the Direct host over IPv6; drop-in compatible, no code change.
+
+**Ceiling math.** Postgres caps concurrent backends at ~500 on managed instances. With `pgxpool.MaxConns=10`, we exhaust that only at ~50 Go backend instances — well past any v1/v2 scale. The eventual jump from Direct to Supavisor **session** mode (not transaction mode) happens when horizontal-scaling operational concerns bite (connection storms on rolling deploys, centralized limits across many instances), not before.
 
 ## Architecture rules (blocking — treated as defects if broken)
 
@@ -85,7 +91,7 @@ sqlc generate
 
 Both generated trees are committed. CI runs generation and diffs against HEAD.
 
-### Migrations (always use DATABASE_URL_DIRECT, not the pooler URL)
+### Migrations (always via DATABASE_URL_DIRECT)
 
 ```bash
 # Run from backend/ — direnv auto-loads DATABASE_URL_DIRECT from backend/.env on cd

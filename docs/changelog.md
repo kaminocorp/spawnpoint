@@ -1,5 +1,6 @@
 # Changelog
 
+- [0.2.4 — `DATABASE_URL` Canonicalized to Direct Connection](#024--database_url-canonicalized-to-direct-connection-2026-04-24)
 - [0.2.3 — direnv for Shell-Level Env Loading](#023--direnv-for-shell-level-env-loading-2026-04-24)
 - [0.2.2 — Env File Placement: Per-App](#022--env-file-placement-per-app-2026-04-24)
 - [0.2.1 — Seeding Removed](#021--seeding-removed-2026-04-24)
@@ -7,6 +8,49 @@
 - [0.1.0 — Backend Scaffolding & Docs Reconciliation](#010--backend-scaffolding--docs-reconciliation-2026-04-24)
 
 Latest on top. Each release has a tight index followed by detail entries (**What / Where / Why** inlined). When a decision contradicts an earlier one, note the supersession in the new entry rather than editing the old one.
+
+---
+
+## 0.2.4 — `DATABASE_URL` Canonicalized to Direct Connection (2026-04-24)
+
+Rewrote `DATABASE_URL`'s documented connection mode from Supabase **Session Pooler** (`*.pooler.supabase.com:5432`) to **Direct Connection** (`db.<ref>.supabase.co:5432`). Both `DATABASE_URL` and `DATABASE_URL_DIRECT` now point at the same Direct host — the split is role-and-lifecycle, not host-vs-host. Motivated by Supabase's own UI copy ("Direct Connection: ideal for applications with persistent and long-lived connections, such as those running on virtual machines or long-standing containers"), which describes a Go+Fly single-binary orchestrator exactly. Supersedes 0.1.0's "Session Pooler for app, Direct for migrations" framing and re-grounds the rationale on the missing architectural fact: **`pgxpool` is an in-process transaction pooler**, so an external pooler on the wire is redundant.
+
+### Index
+
+- **Docs updated:** `CLAUDE.md` §Database connection (full rewrite with the pgxpool-as-transaction-pooler rationale + ceiling math) and §Migrations heading; `docs/stack.md` §6 migrations clause + new §8 "Database URLs — both Direct Connection, split by role" subsection + `DATABASE_URL` table row; `.env.example` header comment on both URLs (example URL flipped to Direct); `docs/blueprints/codegen-cheatsheet.md` quick rule; `docs/completions/frontend-scaffold-completion.md` pending-work reference.
+- **Code comment updated:** `backend/internal/config/config.go` — `DatabaseURL` godoc rewritten (now names Direct + pgxpool semantics + IPv4 fallback + Transaction Pooler red line).
+- **No runtime code changed.** `pgxpool.Config` values unchanged (`MaxConns=10`, `MinConns=2`, lifetime + idle + health-check); connection URL shape is indifferent to the driver; only the documented convention + the populated value in `backend/.env` changes.
+- **Session Pooler reclassified as the IPv4 fallback**, not the primary. Swap is drop-in — different URL, same driver, same `pgxpool` — so per-developer variation costs nothing and doesn't leak into committed config.
+- **Transaction Pooler rule strengthened, not changed.** Reason upgrades from single-barrel ("breaks pgx") to double-barrel ("redundant *and* breaks pgx") once the in-process-equivalence framing is explicit.
+
+### Details
+
+**The missing link: `pgxpool` is a transaction pooler.** The 0.1.0 entry justified Session Pooling with "prepared statements + IPv4 + full PG feature set" and dismissed Transaction Pooling as "wrong shape for a long-lived Go server." True, but incomplete — it didn't name *why* transaction pooling was wrong-shape, which is: `pgxpool.QueryContext` already leases a backend for the single query's duration and returns it immediately; a `BeginTx` block leases for the transaction's duration. That is transaction-mode pooling semantics, implemented inside the Go process. Supavisor in transaction mode would sit on the wire and do the same job, one layer up and across a network hop, while breaking pgx's prepared-statement cache. Naming the in-process equivalence makes the architectural fit between Go + Direct Connection *positive* instead of framing "we picked Session Pooler" as a compromise. *Where:* new paragraph in `CLAUDE.md` §Database connection; new subsection in `stack.md` §8 ("Database URLs — both Direct Connection, split by role"). *Why:* during a stack review the "FastAPI + PgBouncer transaction mode" pattern was raised as the canonical SaaS default and the implicit challenge was "why aren't we doing that?". The honest answer isn't "we're a special-case orchestrator" (we aren't — v1 Corellia is closer to CRUD-with-two-side-trips-to-Fly than a true 24/7 orchestrator), it's "our driver is doing transaction pooling for us, so the external pooler would be redundant" — a cleaner, more durable framing that survives re-examination.
+
+**Connection count ceiling stated as `instances × pool_size`, not user count.** The direct corollary of the in-process-pooling framing is that Postgres backend count scales with horizontal deployment shape, not traffic. For a single Go binary at `MaxConns=10`, 100 concurrent admin requests use 10 backends held for ~5ms each; they do not use 100. Commercial-scale Corellia (10k orgs) at ~2–5 instances holds 20–50 backends — well under Postgres's ~500 ceiling. The inflection where we'd need Supavisor *session* mode on top is ~50 backend instances, far past v1/v2. Documented explicitly in the new `CLAUDE.md` block and `stack.md` §8 paragraph so future readers don't conflate "high user count" with "connection pressure." *Where:* `CLAUDE.md` §Database connection "Ceiling math" paragraph; `stack.md` §8 new subsection. *Why:* the "scales with users" intuition is load-bearing in the industry-default transaction-pooling argument (Rails/Django/FastAPI shops use it because each request holds a connection for its whole lifetime — a framework-level constraint we don't share). Naming the actual scaling axis (instances, not users) closes the conceptual loop and makes the "when would we add a pooler?" trigger concrete.
+
+**Session Pooler reframed as IPv4 fallback.** Previously the primary recommendation; now named as the specific mitigation for local-dev networks that can't reach the Direct Connection host over IPv6 (Supabase removed IPv4 from the Direct endpoint on the free tier in Jan 2024 — this is also why the Session Pooler exists as a product). Swap is drop-in: same driver, same `pgxpool`, different URL — so per-developer variation costs nothing and doesn't leak into committed config. *Where:* `.env.example` `DATABASE_URL` comment; `CLAUDE.md` §Database connection; `stack.md` §8; `config.go` godoc; `codegen-cheatsheet.md` quick rule. *Why:* the Session Pooler option was overbilled as the "safe default" when it's really just a portability escape hatch. Making the decision tree explicit — try Direct first, fall back only if your network forces it — clarifies the recommendation operationally.
+
+**`.env.example` DATABASE_URL comment rewritten; example URL flipped to Direct.** The committed example now shows `postgres://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require` (matching what the Supabase dashboard's "Direct connection" tab copies out), with the Session Pooler form retained as an IPv4-fallback paragraph further down the block. `DATABASE_URL_DIRECT`'s example is unchanged (same URL; always was Direct). *Where:* `.env.example` lines 13–30 (replaces the prior SP-primary block). *Why:* the `.env.example` is the first thing a new contributor copies; showing the Direct URL as the canonical example makes the recommendation operational, not just documentary.
+
+**`config.go` godoc rewritten.** Three-paragraph structure preserved (what the var is, what `DATABASE_URL_DIRECT`'s role is, a practical caveat). Content flipped to name Direct + `pgxpool`'s role + the IPv4 fallback + the Transaction Pooler red line. *Where:* `backend/internal/config/config.go` lines 13–26. *Why:* this is the doc comment a developer reads via IDE hover; keeping it aligned with the canonical Markdown explanation avoids drift.
+
+**CLAUDE.md §Migrations heading cleaned up.** Was "always use DATABASE_URL_DIRECT, not the pooler URL"; now "always via DATABASE_URL_DIRECT." The "not the pooler URL" framing was meaningful under the old convention (pooler-vs-direct was a user-facing choice); under the new convention both URLs are Direct and the split is by *role*, so the warning no longer parses correctly. *Where:* `CLAUDE.md` §Common commands §Migrations subheading. *Why:* the old wording would have misled a reader into thinking there was a pooler URL in `.env` to accidentally mistype.
+
+### Behavior change (known)
+
+None at runtime. No Go code was touched except the godoc comment on `DatabaseURL`. The Go binary reads whatever `DATABASE_URL` contains — Direct or Session Pooler — and `pgxpool` opens a pool against it either way. The change is documentary and conventional (what we tell a new operator to paste into `backend/.env`, and what the godoc + `.env.example` show as the canonical example). Migrations continue to use `DATABASE_URL_DIRECT`; the superuser role distinction that keeps `DATABASE_URL_DIRECT` out of `config.Config` is unchanged. The pending local bring-up is unblocked by this (populating `DATABASE_URL` with the Direct URL is now the recommended path), not made harder.
+
+### Supersedes
+
+- **0.1.0 "Two-URL DB strategy."** The line "session pooling gives IPv4 support + multiplexing + full PG feature set (prepared statements, advisory locks)" is historically accurate only for the rejected *Transaction* Pooler — Session Pooler was never actually needed for multiplexing (`pgxpool` does that) or prepared statements (Direct keeps them too). The rationale upgrade lands here.
+- **0.2.0 pending-work item** naming "session-pooler `DATABASE_URL`" as a bring-up prerequisite — updated in-place in `docs/completions/frontend-scaffold-completion.md` to read "Direct Connection `DATABASE_URL`."
+
+### Known pending work
+
+- **Local bring-up is still the next blocker** (carried forward from 0.2.1/0.2.2/0.2.3). With the canonical URL now Direct, verify IPv6 reachability from the local network as part of first bring-up — a quick `dig AAAA db.<ref>.supabase.co +short` returning an IPv6 address, plus a one-shot `psql "$DATABASE_URL" -c 'select 1'` smoke test, is enough. Fall back to Session Pooler in `backend/.env` only if Direct fails to connect; the per-developer variation doesn't leak because `backend/.env` is gitignored.
+- **IPv6 egress on Fly production.** Fly machines have native IPv6 and should reach the Direct host without configuration, but this needs to be verified during the first Fly deploy (`fly ssh console` → `dig AAAA db.<ref>.supabase.co` → `psql`). If it fails unexpectedly, Session Pooler is the same drop-in escape hatch in production as locally.
+- **Supavisor session mode (not transaction mode) on top of Direct** becomes worth adding when horizontal-scaling operational concerns appear — connection storms during rolling deploys, centralized connection limits across ≥10 instances, or cleaner failover routing. Not a v1 or v2 concern; flag for v2+ when a second backend instance lands.
 
 ---
 
