@@ -246,7 +246,8 @@ Blueprint §9 defines the schema. Implementation specifics:
 - [goose](https://github.com/pressly/goose): `go install github.com/pressly/goose/v3/cmd/goose@latest`
 - [overmind](https://github.com/DarthSim/overmind): `brew install overmind`
 - [buf](https://buf.build): `brew install bufbuild/buf/buf`
-- A Supabase project (dev) with credentials in `.env`
+- [direnv](https://direnv.net): `brew install direnv` + `eval "$(direnv hook zsh)"` in `~/.zshrc`
+- A Supabase project (dev) with credentials populated in `backend/.env` + `frontend/.env.local`
 
 ### First-time setup
 
@@ -280,13 +281,22 @@ the single committed template documenting every var both halves read.
 Validated on startup — Go config package panics on missing required vars;
 Next.js fails the build.
 
+Shell-level loading via `direnv` (recommended). Committed `backend/.envrc`
+and `frontend/.envrc` contain `dotenv .env` and `dotenv .env.local`
+respectively; direnv auto-sources the matching file into the shell on `cd`,
+unloading on `cd` out. This makes `goose`, ad-hoc `go test`, and any other
+in-directory CLI tool see the same env vars as the Go binary. First-time
+setup: `brew install direnv`, add `eval "$(direnv hook zsh)"` to `~/.zshrc`,
+then `direnv allow` in `backend/` and `frontend/` once (re-required whenever
+an `.envrc` file's contents change, which is the security gate that keeps
+committed `.envrc` files safe). Fallback without direnv: `set -a; source
+backend/.env; set +a` before every goose invocation.
+
 Shared Supabase values are duplicated across the two files by design: the
 backend reads `SUPABASE_URL` / `SUPABASE_ANON_KEY`, the frontend reads
 `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Values must
-match. `DATABASE_URL_DIRECT` lives in `backend/.env` but is shell-sourced for
-`goose` (`set -a; source backend/.env; set +a`, or `direnv` with a
-`backend/.envrc` containing `dotenv .env`) — it is never read by
-`config.Load()`.
+match. `DATABASE_URL_DIRECT` lives in `backend/.env` but is shell-sourced
+for `goose` — it is never read by `config.Load()`.
 
 | Var | Consumer | Purpose |
 |-----|----------|---------|

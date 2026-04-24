@@ -88,9 +88,10 @@ Both generated trees are committed. CI runs generation and diffs against HEAD.
 ### Migrations (always use DATABASE_URL_DIRECT, not the pooler URL)
 
 ```bash
-goose -dir backend/migrations postgres "$DATABASE_URL_DIRECT" up
-goose -dir backend/migrations postgres "$DATABASE_URL_DIRECT" down
-goose -dir backend/migrations create <name> sql
+# Run from backend/ — direnv auto-loads DATABASE_URL_DIRECT from backend/.env on cd
+goose -dir migrations postgres "$DATABASE_URL_DIRECT" up
+goose -dir migrations postgres "$DATABASE_URL_DIRECT" down
+goose -dir migrations create <name> sql
 ```
 
 ### Running locally
@@ -127,4 +128,4 @@ pnpm -C frontend build
 
 ## Environment
 
-Per-app env files, both gitignored: `backend/.env` (backend vars; auto-loaded by `godotenv/autoload` from the Go binary's cwd) and `frontend/.env.local` (frontend vars; auto-loaded by Next.js from the `frontend/` project root). `.env.example` at repo root is the single committed template documenting every var both halves read. Required backend vars (panic-on-missing): `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_JWT_SECRET`, `FLY_API_TOKEN`, `FLY_ORG_SLUG`, `FRONTEND_ORIGIN`. `DATABASE_URL_DIRECT` lives in `backend/.env` but is shell-sourced for `goose`, never read by `config.Load()` — `set -a; source backend/.env; set +a` (or use `direnv`) before running migrations. Shared Supabase values (`SUPABASE_URL` / `SUPABASE_ANON_KEY` ↔ their `NEXT_PUBLIC_*` twins) are duplicated across the two files by design; values must match.
+Per-app env files, both gitignored: `backend/.env` (backend vars; auto-loaded by `godotenv/autoload` from the Go binary's cwd) and `frontend/.env.local` (frontend vars; auto-loaded by Next.js from the `frontend/` project root). `.env.example` at repo root is the single committed template documenting every var both halves read. **Recommended local setup: install `direnv` (`brew install direnv` + `eval "$(direnv hook zsh)"` in `~/.zshrc`) and `direnv allow` in `backend/` and `frontend/` once.** The committed `backend/.envrc` and `frontend/.envrc` auto-load the appropriate env file into your shell on `cd`, so `goose`, `go test`, and any other in-directory CLI tool sees the same env as the Go binary. Without direnv, `goose` migrations require manual sourcing: `set -a; source backend/.env; set +a`. Required backend vars (panic-on-missing): `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_JWT_SECRET`, `FLY_API_TOKEN`, `FLY_ORG_SLUG`, `FRONTEND_ORIGIN`. `DATABASE_URL_DIRECT` lives in `backend/.env` but is shell-sourced for `goose`, never read by `config.Load()`. Shared Supabase values (`SUPABASE_URL` / `SUPABASE_ANON_KEY` ↔ their `NEXT_PUBLIC_*` twins) are duplicated across the two files by design; values must match.

@@ -1,11 +1,50 @@
 # Changelog
 
+- [0.2.3 — direnv for Shell-Level Env Loading](#023--direnv-for-shell-level-env-loading-2026-04-24)
 - [0.2.2 — Env File Placement: Per-App](#022--env-file-placement-per-app-2026-04-24)
 - [0.2.1 — Seeding Removed](#021--seeding-removed-2026-04-24)
 - [0.2.0 — Frontend Scaffolding](#020--frontend-scaffolding-2026-04-24)
 - [0.1.0 — Backend Scaffolding & Docs Reconciliation](#010--backend-scaffolding--docs-reconciliation-2026-04-24)
 
 Latest on top. Each release has a tight index followed by detail entries (**What / Where / Why** inlined). When a decision contradicts an earlier one, note the supersession in the new entry rather than editing the old one.
+
+---
+
+## 0.2.3 — direnv for Shell-Level Env Loading (2026-04-24)
+
+Added committed `backend/.envrc` and `frontend/.envrc` (one line each — `dotenv .env` / `dotenv .env.local`) to auto-source the per-app env files into the shell via `direnv` on `cd`. Resolves the `direnv` pending item from 0.2.2: `goose` migrations, ad-hoc `go test`, and every other in-directory CLI tool now see the same env as the Go binary, with no `set -a; source; set +a` ritual. Manual sourcing retained as the documented fallback for contributors who don't install direnv.
+
+### Index
+- **Committed:** `backend/.envrc` (`dotenv .env`) and `frontend/.envrc` (`dotenv .env.local`) — one line each, zero secrets, safe to commit.
+- **Gitignore fix:** added `!.envrc` negation to `frontend/.gitignore` so the default `.env*` rule (inherited from `create-next-app`) doesn't silently exclude the committed `.envrc`.
+- **Docs updated:** `CLAUDE.md` §Environment (direnv marked recommended; manual-sourcing retained as fallback) and §Common commands §Migrations (`goose` examples now run from `backend/` so direnv-loaded vars are in scope); `docs/stack.md` §7 Prerequisites (direnv added) and §8 Environment variables (new direnv paragraph replaces the parenthetical mention from 0.2.2).
+- **Canonical migration command now runs from `backend/`.** Path shortened from `-dir backend/migrations` to `-dir migrations`; direnv has already exported `DATABASE_URL_DIRECT` into the shell by the time cwd is `backend/`.
+- **Rationale:** direnv is the de-facto standard for per-directory env loading in Go / Rails / Node monorepos (Fly.io docs, Supabase CLI docs, 1Password CLI integration, Nix / devenv, HashiCorp Terraform). Committed `.envrc` means onboarding is a single `direnv allow` per contributor, per directory, after first clone.
+
+### Details
+
+**`backend/.envrc` and `frontend/.envrc` added.** One line each — `dotenv .env` and `dotenv .env.local` respectively. No shell logic, no secrets, no platform-specific code. Committed to git so onboarding is one-time per contributor: `direnv allow` in each directory after first clone. *Where:* `backend/.envrc`, `frontend/.envrc`. *Why:* direnv's `dotenv` directive reads a `KEY=value` file and exports every entry into the shell environment; exports propagate to child processes like `goose`, `sqlc`, `go test`. The `direnv allow` gate is direnv's trust mechanism — re-required on every content change, which is exactly why committing `.envrc` files is safe (the contents are auditable and the gate forces conscious approval). Keeping `.envrc` content to a single `dotenv` directive means the approval covers only that directive; any future addition of shell code requires a fresh `direnv allow`.
+
+**Gitignore fix for `frontend/.envrc`.** `frontend/.gitignore` inherited `.env*` from `create-next-app`'s default template, which unfortunately also matches `.envrc`. Added `!.envrc` negation (with a short comment explaining why committing it is safe) so git tracks the committed file. *Where:* `frontend/.gitignore`. *Why:* caught by `git status` check after creating the file — would otherwise silently not be committed and the onboarding story would break for every new contributor. Root `.gitignore` has specific `.env` + `.env.local` entries (not a glob), so `backend/.envrc` needed no equivalent fix.
+
+**CLAUDE.md §Environment rewritten to recommend direnv.** The 0.2.2 phrasing mentioned direnv as an aside ("or use `direnv`") alongside the manual sourcing form. Flipped the emphasis: direnv is the recommended path (bolded install command + `direnv allow` step), manual sourcing is documented as the fallback for contributors who don't install it. *Where:* `CLAUDE.md` §Environment. *Why:* the aside treatment undersold direnv's actual role. "Install one tool once" is a meaningfully better onboarding story than "remember to prefix every migration with an incantation" — and the committed `.envrc` files make direnv zero-configuration after the initial install.
+
+**`goose` examples relocated to `backend/`.** Previously: `goose -dir backend/migrations postgres "$DATABASE_URL_DIRECT" up` run from repo root. Now: same command run from `backend/` with the shortened `-dir migrations`, prefixed with a comment documenting that direnv loads `DATABASE_URL_DIRECT` on `cd`. *Where:* `CLAUDE.md` §Common commands §Migrations. *Why:* direnv's per-app `.envrc` scope means `DATABASE_URL_DIRECT` is only exported when cwd is within `backend/`. Running goose from repo root would either find an empty `$DATABASE_URL_DIRECT` (silent failure with a confusing connection error) or require a workaround like `direnv exec backend goose …`. Relocating the canonical invocation inside `backend/` keeps the command short, direnv-native, and conceptually aligned — migrations are a backend concern; the tool that applies them should run from the directory that owns the schema.
+
+**stack.md §7 + §8 updated.** §7 Prerequisites gains a `direnv` bullet (install command + shell-hook line) alongside the existing `air` / `goose` / `overmind` / `buf` installs, and corrects the stale "credentials in `.env`" reference to the per-app paths from 0.2.2. §8 Environment variables gains a full paragraph on shell-level loading — mechanism (cd-triggered `.envrc` source via direnv), first-time setup, security-gate behavior on content changes, and the manual-sourcing fallback. The parenthetical mention of direnv added in the 0.2.2 §8 edit was removed in favor of this paragraph. *Where:* `docs/stack.md` §7 Prerequisites bullet, §8 (replaced the last paragraph with a new direnv paragraph + simplified `DATABASE_URL_DIRECT` clause). *Why:* §7 is the "what do I install on a fresh machine?" contract; §8 is the "how is env loading structured?" contract. direnv belongs in both — the 0.2.2 parenthetical wasn't doing the recommendation justice in either.
+
+### Behavior change (known)
+
+None at runtime — code unchanged. `godotenv/autoload` still loads `backend/.env` when the Go binary starts; Next.js still loads `frontend/.env.local` on `next dev` / `next build`; neither knows or cares about direnv. The only change is that the shell environment of a developer `cd`'d into `backend/` now has `DATABASE_URL_DIRECT` + friends exported automatically, so CLI tools that weren't reading `.env` directly (goose, sqlc, any ad-hoc command) now also see those vars. For already-onboarded developers using manual sourcing, their existing workflow still works and remains documented — direnv is purely additive.
+
+### Resolves
+
+- **0.2.2 pending item: "`direnv` or shell-sourcing helper for `DATABASE_URL_DIRECT`."** Picked direnv, committed the `.envrc` files, documented it as recommended across three docs, kept manual sourcing as fallback.
+
+### Known pending work
+
+- **CI and production are untouched.** CI runs env vars from GitHub Actions secrets / platform-native injection, never from `.env` or `.envrc`. Fly + Vercel inject env at runtime from their dashboards. direnv is strictly a local-dev ergonomic layer and the production story stays clean.
+- **Secret-manager migration** (long-lead, not blocking). When team size passes ~5 developers or secrets-rotation becomes a recurring concern, re-evaluate Doppler / Infisical / 1Password CLI. The direnv layer would then become a per-`.envrc` secret-fetch (e.g. `export DATABASE_URL=$(op read …)`) or be wrapped in `doppler run --`; the per-app structure stays intact either way.
 
 ---
 
