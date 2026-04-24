@@ -18,10 +18,6 @@ CREATE TABLE users (
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Seed a default org for v1 (single-tenant assumption).
-INSERT INTO organizations (id, name)
-VALUES ('00000000-0000-0000-0000-000000000001', 'Default Org');
-
 -- +goose Down
 DROP TABLE users;
 DROP TABLE organizations;

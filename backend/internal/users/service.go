@@ -4,14 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/google/uuid"
-
 	"github.com/hejijunhao/corellia/backend/internal/auth"
 	"github.com/hejijunhao/corellia/backend/internal/db"
 	corelliav1 "github.com/hejijunhao/corellia/backend/internal/gen/corellia/v1"
 )
-
-var defaultOrgID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
 type Service struct {
 	queries *db.Queries
@@ -29,15 +25,7 @@ func (s *Service) GetCurrentUser(ctx context.Context) (*corelliav1.User, error) 
 
 	user, err := s.queries.GetUserByAuthID(ctx, claims.AuthUserID)
 	if err != nil {
-		// Auto-provision on first login.
-		user, err = s.queries.CreateUser(ctx, db.CreateUserParams{
-			AuthUserID: claims.AuthUserID,
-			Email:      claims.Email,
-			OrgID:      defaultOrgID,
-		})
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	return &corelliav1.User{

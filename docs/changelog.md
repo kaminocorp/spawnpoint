@@ -1,9 +1,40 @@
 # Changelog
 
+- [0.2.1 — Seeding Removed](#021--seeding-removed-2026-04-24)
 - [0.2.0 — Frontend Scaffolding](#020--frontend-scaffolding-2026-04-24)
 - [0.1.0 — Backend Scaffolding & Docs Reconciliation](#010--backend-scaffolding--docs-reconciliation-2026-04-24)
 
 Latest on top. Each release has a tight index followed by detail entries (**What / Where / Why** inlined). When a decision contradicts an earlier one, note the supersession in the new entry rather than editing the old one.
+
+---
+
+## 0.2.1 — Seeding Removed (2026-04-24)
+
+Removed all seeding from the backend: the default-org `INSERT` in the initial migration, the `defaultOrgID` constant and auto-provisioning branch in `users/service.go`, and the now-unused `CreateUser` query + its sqlc-generated artifacts. Supersedes 0.1.0's "seeds a default org + auto-provisions users on first login" behavior.
+
+### Index
+- Migration: default-org `INSERT` removed from `20260424120000_initial_schema.sql`.
+- Query: `CreateUser` removed from `backend/queries/users.sql`; regenerated `backend/internal/db/users.sql.go` no longer contains `CreateUser` / `CreateUserParams`.
+- Service: `defaultOrgID` constant and the auto-provisioning branch removed from `users/service.go`; `github.com/google/uuid` import dropped.
+- `go vet ./...` + `go build ./...` clean.
+
+### Details
+
+**Seeding removed from migration.** Deleted the two-line `INSERT INTO organizations (id, name) VALUES ('00000000-0000-0000-0000-000000000001', 'Default Org');` and its comment from `backend/migrations/20260424120000_initial_schema.sql`. The `organizations` and `users` tables remain; only the seed row is gone. *Where:* `backend/migrations/20260424120000_initial_schema.sql`. *Why:* seeded rows are policy smuggled into schema. Provisioning the first org (and the first admin user) is a product decision that should live in an explicit bootstrap flow (admin invite, CLI, or a distinct policy migration), not a silent `INSERT` in the schema migration every dev applies.
+
+**Auto-provisioning removed from domain service.** `users.Service.GetCurrentUser` no longer silently creates a `users` row when `GetUserByAuthID` returns no rows — the sqlc error bubbles up as-is. `defaultOrgID = uuid.MustParse("00000000-0000-0000-0000-000000000001")` constant removed; `github.com/google/uuid` import dropped (was only used by the constant). *Where:* `backend/internal/users/service.go`. *Why:* same rationale as the migration — provisioning is an admin decision, not a side effect of first login. A valid JWT with no matching `users` row should fail visibly rather than auto-granting membership to the seeded default org, which amounted to "anyone who signs in becomes an admin."
+
+**`CreateUser` query removed.** The `-- name: CreateUser :one ...` block removed from `backend/queries/users.sql`; `sqlc generate` regenerated `backend/internal/db/users.sql.go` without `CreateUser` or `CreateUserParams`. *Where:* `backend/queries/users.sql`, `backend/internal/db/users.sql.go`. *Why:* auto-provisioning was the only caller. Per CLAUDE.md's "if you are certain that something is unused, delete it completely" rule, leaving `CreateUser` in place as a latent helper would be premature — when an actual provisioning flow arrives (admin invite, bootstrap migration, etc.), it'll define the INSERT it actually needs, which may or may not match today's shape.
+
+### Behavior change (known)
+
+A valid-JWT-but-no-`users`-row request to `GetCurrentUser` now returns `pgx.ErrNoRows` through the domain service. The handler (`httpsrv/users_handler.go`) currently wraps all service errors as `connect.CodeUnauthenticated`, which is the wrong Connect code for "authenticated but not provisioned" — the right code is `CodePermissionDenied` or `CodeFailedPrecondition`. Effect on the FE: the dashboard's `useEffect` catch branch displays the raw error, and the root `/` redirect still routes authenticated users to `/dashboard`, so the user sees an error page rather than an infinite sign-in loop. Not fixed in this pass to keep scope tight; tracked below.
+
+### Known pending work (added by 0.2.1)
+
+- **Error mapping in `users_handler.go`.** Translate `pgx.ErrNoRows` (and a service-layer sentinel like `ErrUserNotProvisioned`) to an appropriate Connect code (likely `PermissionDenied`), so the FE can render a meaningful "your account isn't provisioned — contact an admin" state instead of a generic error string.
+- **First-admin bootstrap path.** Replace what the seeded default-org + auto-provisioning used to do. Options: an admin-invite flow that creates `users` rows explicitly, a separate policy migration that seeds a single bootstrap admin from an env var, or a one-shot CLI command. Pick one when the admin UX in blueprint §10 is specified.
+- **Supersession of 0.1.0 pending item.** 0.1.0 listed "Local bring-up" as blocked on populated `.env`. It's now additionally blocked on a provisioning path — signing in with a Supabase user whose `auth_user_id` isn't in `public.users` will fail.
 
 ---
 
