@@ -1,0 +1,11 @@
+{
+  "name": "corellia",
+  "private": true,
+  "scripts": {
+    "proto:generate": "cd shared/proto && buf generate",
+    "frontend:dev": "pnpm -C frontend dev",
+    "frontend:build": "pnpm -C frontend build",
+    "frontend:type-check": "pnpm -C frontend type-check",
+    "frontend:lint": "pnpm -C frontend lint"
+  }
+}

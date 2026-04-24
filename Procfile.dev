@@ -1,0 +1,2 @@
+web: pnpm -C frontend dev
+api: cd backend && air

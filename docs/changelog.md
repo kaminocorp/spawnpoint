@@ -1,8 +1,79 @@
 # Changelog
 
+- [0.2.0 — Frontend Scaffolding](#020--frontend-scaffolding-2026-04-24)
 - [0.1.0 — Backend Scaffolding & Docs Reconciliation](#010--backend-scaffolding--docs-reconciliation-2026-04-24)
 
 Latest on top. Each release has a tight index followed by detail entries (**What / Where / Why** inlined). When a decision contradicts an earlier one, note the supersession in the new entry rather than editing the old one.
+
+---
+
+## 0.2.0 — Frontend Scaffolding (2026-04-24)
+
+Frontend scaffolded end-to-end through the "prove the pipeline" milestone: Next.js 16 App Router + Supabase SSR auth + Connect-ES v2 client calling the existing `GetCurrentUser` RPC. `pnpm type-check` and `pnpm lint` both clean. Not yet running — requires populated `.env` + seeded Supabase test user. Codegen cheatsheet added under `docs/blueprints/`.
+
+### Index
+- Monorepo workspace plumbing: root `pnpm-workspace.yaml` + `package.json` + `Procfile.dev`.
+- Frontend scaffolding §1–§13 complete: Next.js + shadcn/ui + Supabase SSR clients + Connect API client + sign-in / dashboard / session-gated root redirect.
+- Tooling delta from doc: Next 16 (vs 15), Tailwind v4 (vs v3), React 19 (vs 18), Connect-ES v2 (vs v1), `sonner` (vs `toast`).
+- Connect-ES v2 codegen shift: consolidated into `*_pb.ts` via `@bufbuild/protoc-gen-es` alone; no separate `protoc-gen-connect-es`.
+- `buf.gen.yaml` extended with TS plugin pointing at frontend's `node_modules/.bin/protoc-gen-es`.
+- `.env.example` extended with `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` (gap from 0.1.0 template).
+- ESLint `globalIgnores` extended with `src/gen/**` (structurally enforces blueprint §11.7 on FE).
+- Post-bootstrap cleanup of `create-next-app` artifacts (nested `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `AGENTS.md`, `CLAUDE.md`).
+- `docs/blueprints/codegen-cheatsheet.md` added — entry-point matrix for "I want to do X, I edit Y, I run Z."
+- `docs/completions/frontend-scaffold-completion.md` authored as the durable record of deviations.
+
+### Details
+
+**Monorepo workspace plumbing.** Root `pnpm-workspace.yaml` declares `frontend` as the only workspace; root `package.json` exposes `pnpm proto:generate` (wraps `cd shared/proto && buf generate`) plus `frontend:dev|build|type-check|lint` passthroughs; `Procfile.dev` encodes the overmind-driven `web`/`api` split. *Where:* `/pnpm-workspace.yaml`, `/package.json`, `/Procfile.dev`. *Why:* `CLAUDE.md` §Common commands and `stack.md` §12 both assume `pnpm proto:generate` runs from repo root — a root `package.json` is the idiomatic way to expose that. Workspace file is what enables `pnpm -C frontend` from root and keeps a single authoritative lockfile at `/pnpm-lock.yaml` rather than one per package.
+
+**Bootstrap via `create-next-app`.** `pnpm create next-app@latest frontend --typescript --tailwind --app --src-dir --eslint --import-alias "@/*" --use-pnpm --yes` produced Next 16.2.4 + React 19.2.4 + Tailwind v4.2.4 + TS 5.9. Nested `frontend/pnpm-workspace.yaml`, `frontend/pnpm-lock.yaml`, `frontend/AGENTS.md`, `frontend/CLAUDE.md` were deleted post-bootstrap to avoid workspace-inside-workspace drift and redundant meta files. Added `type-check` (`tsc --noEmit`) and `proto:generate` scripts to `frontend/package.json`. *Where:* `/frontend/**`. *Why:* current `pnpm create next-app@latest` resolves to Next 16 / Tailwind v4 / React 19, not the Next 15 / Tailwind v3 baseline assumed by `frontend-scaffolding.md`. Supersedes doc §2 & §3 for structural paths (see **Known deviations** below); architecture rules and end-state behavior are unchanged.
+
+**Tooling delta vs `frontend-scaffolding.md`.** (1) **Next.js 16** — App Router API is stable across majors; no change to how Supabase SSR or Connect-ES integrates. (2) **Tailwind v4** — configuration-less; no `tailwind.config.ts` emitted, `postcss.config.mjs` (not `.js`), `globals.css` uses `@import "tailwindcss"` (not `@tailwind base/components/utilities`), lives at `src/app/globals.css` (not `src/styles/globals.css` as doc §2 claimed). (3) **React 19** — affects nothing in this scaffold. (4) **`sonner` primitive replaces `toast`** — newer shadcn's canonical toast; functionally equivalent; no call sites yet. *Where:* `frontend/src/app/globals.css`, `frontend/postcss.config.mjs`, `frontend/src/components/ui/sonner.tsx`. *Why:* no meaningful benefit to forcing older versions at scaffold time. Flagged in `docs/completions/frontend-scaffold-completion.md` so a future rescaffold doesn't re-hit the same forks; `frontend-scaffolding.md` update is pending.
+
+**Connect-ES v2 adaptation.** Installed versions (`@connectrpc/connect@2.1.1`, `@connectrpc/connect-web@2.1.1`, `@bufbuild/protobuf@2.12.0`, `@bufbuild/protoc-gen-es@2.12.0`) consolidate message types + service descriptors into a single `*_pb.ts` — no separate `@connectrpc/protoc-gen-connect-es` codegen plugin, no `*_connect.ts` file. API call shape changed from `createPromiseClient(UsersService, transport)` (v1, `@connectrpc/connect`) to `createClient(UsersService, transport)` where `UsersService` is a `GenService` descriptor exported from `users_pb.ts`. *Where:* `shared/proto/buf.gen.yaml` (TS plugin), `frontend/src/gen/corellia/v1/users_pb.ts` (output), `frontend/src/lib/api/client.ts` (consumer). *Why:* v2 is the current release line; v1 is in maintenance. Adapting now avoids a gratuitous migration later. `docs/frontend-scaffolding.md` §4, §7.1, §8 need updating to match — tracked in completion doc.
+
+**Proto TS codegen.** Extended `shared/proto/buf.gen.yaml` with a local plugin entry (`../../frontend/node_modules/.bin/protoc-gen-es`, `target=ts`) alongside the existing remote Go plugins. `pnpm proto:generate` now round-trips both halves: Go emits unchanged to `backend/internal/gen/corellia/v1/` and TS emits to `frontend/src/gen/corellia/v1/users_pb.ts`. *Where:* `shared/proto/buf.gen.yaml`, `frontend/src/gen/corellia/v1/users_pb.ts`. *Why:* single source of truth for the FE↔BE contract per `stack.md` §3. The `local:` resolution depends on `frontend/node_modules/` existing, which is fine because `buf generate` is always run from the workspace where `pnpm install` has run first — same assumption as `protoc-gen-es`'s canonical usage.
+
+**Supabase SSR client triad + Next.js middleware.** Three files under `frontend/src/lib/supabase/` — `client.ts` (browser), `server.ts` (server component, reads `next/headers.cookies()`), `middleware.ts` (session-refresh helper) — plus `frontend/src/middleware.ts` that delegates to the helper with matcher `/((?!_next/static|_next/image|favicon.ico).*)`. *Where:* `frontend/src/lib/supabase/{client,server,middleware}.ts`, `frontend/src/middleware.ts`. *Why:* canonical `@supabase/ssr` pattern for Next.js App Router. Cookie-based SSR auth is what makes `/` a server-side redirect without a client-side auth flash. Per `stack.md` §11.10 the Supabase client is auth-only — `api/client.ts` extracts only the access token from the session, never uses Supabase for application data.
+
+**Connect API client + routes.** `frontend/src/lib/api/client.ts` exposes `createApiClient()` → `{ users: createClient(UsersService, transport) }` where the transport's `fetch` injects `Authorization: Bearer <access_token>` from the Supabase session on every request. Routes: `/` is an async server component that redirects to `/dashboard` or `/sign-in` based on `supabase.auth.getUser()`; `/sign-in` is a client component with plain React form calling `signInWithPassword`; `/dashboard` is a client component that calls `api.users.getCurrentUser({})` in `useEffect` and renders the email. *Where:* `frontend/src/lib/api/client.ts`, `frontend/src/app/{page.tsx,sign-in/page.tsx,dashboard/page.tsx}`. *Why:* this is the literal end of the pipeline described in `stack.md` §12 hour 5 — JWT → Go middleware → `users.Service` → sqlc → wire mapping → Connect response → React render. Deliberately uses `useEffect` (not RSC `fetch`) per `frontend-scaffolding.md` §15 known deferrals.
+
+**shadcn/ui init + primitives.** `shadcn init --defaults --yes --force` detected Tailwind v4, rewrote `src/app/globals.css`, generated `components.json`, `src/lib/utils.ts`, `src/components/ui/button.tsx`. `shadcn add input label select card sonner --yes` added five more. `shadcn add form` silently no-ops in the current registry version (reproduced with `--overwrite`; `--force`/`--reinstall` flags don't exist) — left out deliberately since the doc §9.1 sign-in page uses plain React form markup and `react-hook-form` + `zod` + `@hookform/resolvers` are already installed. *Where:* `frontend/components.json`, `frontend/src/components/ui/`, `frontend/src/lib/utils.ts`. *Why:* minimum primitive set needed for the sign-in page and the upcoming v1 agent-spawn form (blueprint §10). `form.tsx` will land with the spawn UX when the registry entry resolves.
+
+**`.env.example` extended.** Added `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` after the existing `SUPABASE_URL` / `SUPABASE_ANON_KEY` block, with a comment documenting why the values mirror their non-prefixed twins. *Where:* `.env.example`. *Why:* Next.js only inlines `NEXT_PUBLIC_*` vars into the client bundle — without these, the browser Supabase client would see `undefined` at runtime. This was a real gap in the 0.1.0 committed template (the Go backend never needed them, so they weren't added then); flagged in the pre-scaffold alignment audit.
+
+**ESLint ignores generated code.** Added `src/gen/**` to `globalIgnores([...])` in `frontend/eslint.config.mjs`. *Where:* `frontend/eslint.config.mjs`. *Why:* first `pnpm lint` flagged a harmless `Unused eslint-disable` warning inside `users_pb.ts`. Blueprint §11.7 / `stack.md` §11.7 require generated code be treated like `node_modules` — ignoring in ESLint is the mechanical enforcement of that rule on the FE side (the mirror of the BE side's "never hand-edit `backend/internal/gen/` or `backend/internal/db/`").
+
+**Codegen cheatsheet.** Added `docs/blueprints/codegen-cheatsheet.md` as the first entry under `docs/blueprints/` (previously empty). Short reference mapping the two codegen pipelines (proto → Go + TS; SQL → Go), an entry-point matrix keyed by goal ("I want to X, I edit Y"), a new-domain walkthrough (example: `agents`), five quick rules, and relative file pointers for ctrl-click navigation. *Where:* `docs/blueprints/codegen-cheatsheet.md`. *Why:* `stack.md` and `blueprint.md` answer *why* each codegen choice exists; neither answers "I'm adding a new column, what files do I touch and in what order?" efficiently. The cheatsheet fills that gap without duplicating the canonical docs — it's organized by goal, they're organized by concept.
+
+**Completion record.** Authored `docs/completions/frontend-scaffold-completion.md` (the first entry under `docs/completions/`) as a durable record of the five deviations (Next 16, Tailwind v4, Connect v2, sonner, no `form.tsx`) and the cleanup steps. *Where:* `docs/completions/frontend-scaffold-completion.md`. *Why:* this changelog entry summarizes; the completion doc serves as the exhaustive one-stop reference for anyone trying to understand why the live frontend code drifts from `frontend-scaffolding.md`. Same pattern should apply to future scaffolding passes.
+
+### Known deviations from `docs/frontend-scaffolding.md`
+
+All intentional; all flagged in the completion doc. Listed here for changelog completeness:
+
+1. **Next.js 16 + Tailwind v4 + React 19** instead of Next 15 / Tailwind v3 / React 18. Structural path differences: no `tailwind.config.ts`, `postcss.config.mjs` (not `.js`), `globals.css` at `src/app/globals.css` not `src/styles/globals.css`.
+2. **Connect-ES v2** — consolidated `*_pb.ts`, no `protoc-gen-connect-es`, `createClient` instead of `createPromiseClient`.
+3. **`sonner`** replaces `toast` in newer shadcn (equivalent).
+4. **No `form.tsx` shadcn primitive** — registry entry silently no-ops; deferred until spawn UX arrives.
+5. **Post-bootstrap cleanup**: removed `frontend/{pnpm-workspace.yaml,pnpm-lock.yaml,AGENTS.md,CLAUDE.md}`.
+
+### Validation
+
+- `pnpm -C frontend type-check` — clean.
+- `pnpm -C frontend lint` — clean after `src/gen/**` ignore.
+- `pnpm proto:generate` — round-trips on both sides; generated Go is byte-identical to 0.1.0 (same `.proto` source).
+
+Not validated in this pass (deliberately): end-to-end sign-in round-trip, `pnpm build` — both require populated `.env` + seeded Supabase test user.
+
+### Known pending work
+
+- **Local bring-up (FE+BE together)** — populate root `.env`, apply migration, `overmind start`, create Supabase test user via dashboard, sign in, confirm dashboard renders the email. The actual hour-5 milestone from `stack.md` §12. Supersedes 0.1.0's "local bring-up" (now bottlenecked on the same populated `.env` for both halves, but with the FE ready to exercise it).
+- **`docs/frontend-scaffolding.md` update** — bake in the five deviations above so a fresh scaffold doesn't re-hit the same forks.
+- **`form.tsx` shadcn primitive** — retry when the spawn UX lands (blueprint §10 "RPG character creation" uses shadcn `<Form>` + zod).
+- **Vercel deploy** (doc §12) — blocked on local bring-up.
+- **Product code per blueprint §10** — catalog → spawn form → fleet view → agent detail. All downstream of pipeline proof.
 
 ---
 

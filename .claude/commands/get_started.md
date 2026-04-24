@@ -1,0 +1,1 @@
+To get started and familiarise yourself with Corellia, look at docs/vision.md, docs/blueprint.md, docs/stack.md and docs/changelog.md (first 200 lines or so, its a long file).
