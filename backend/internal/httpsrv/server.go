@@ -16,6 +16,7 @@ type Deps struct {
 	AuthVerifier         *auth.JWKSVerifier
 	UsersHandler         corelliav1connect.UsersServiceHandler
 	OrganizationsHandler corelliav1connect.OrganizationsServiceHandler
+	AgentsHandler        corelliav1connect.AgentsServiceHandler
 	AllowedOrigin        string
 }
 
@@ -38,6 +39,9 @@ func New(d Deps) http.Handler {
 
 		orgsPath, orgsHandler := corelliav1connect.NewOrganizationsServiceHandler(d.OrganizationsHandler)
 		r.Mount(orgsPath, orgsHandler)
+
+		agentsPath, agentsHandler := corelliav1connect.NewAgentsServiceHandler(d.AgentsHandler)
+		r.Mount(agentsPath, agentsHandler)
 	})
 
 	return r

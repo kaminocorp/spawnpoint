@@ -10,7 +10,6 @@ import { createClient } from "@/lib/supabase/client";
 
 export default function SignInPage() {
   const router = useRouter();
-  const supabase = createClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -18,12 +17,13 @@ export default function SignInPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
+    const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       setErr(error.message);
       return;
     }
-    router.push("/dashboard");
+    router.replace("/dashboard");
   }
 
   return (

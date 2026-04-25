@@ -9,6 +9,29 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AgentTemplate struct {
+	ID               uuid.UUID          `json:"id"`
+	Name             string             `json:"name"`
+	Description      string             `json:"description"`
+	HarnessAdapterID uuid.UUID          `json:"harness_adapter_id"`
+	DefaultConfig    []byte             `json:"default_config"`
+	CreatedByUserID  pgtype.UUID        `json:"created_by_user_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type HarnessAdapter struct {
+	ID                  uuid.UUID          `json:"id"`
+	HarnessName         string             `json:"harness_name"`
+	UpstreamImageDigest string             `json:"upstream_image_digest"`
+	AdapterImageRef     *string            `json:"adapter_image_ref"`
+	Source              string             `json:"source"`
+	GeneratedAt         pgtype.Timestamptz `json:"generated_at"`
+	ValidatedAt         pgtype.Timestamptz `json:"validated_at"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Organization struct {
 	ID        uuid.UUID          `json:"id"`
 	Name      string             `json:"name"`

@@ -1,0 +1,19 @@
+syntax = "proto3";
+package corellia.v1;
+
+option go_package = "github.com/hejijunhao/corellia/backend/internal/gen/corellia/v1;corelliav1";
+
+service AgentsService {
+  rpc ListAgentTemplates(ListAgentTemplatesRequest) returns (ListAgentTemplatesResponse);
+}
+
+message ListAgentTemplatesRequest {}
+message ListAgentTemplatesResponse {
+  repeated AgentTemplate templates = 1;
+}
+
+message AgentTemplate {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+}

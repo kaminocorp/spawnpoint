@@ -10,6 +10,7 @@ import (
 
 	_ "github.com/joho/godotenv/autoload"
 
+	"github.com/hejijunhao/corellia/backend/internal/agents"
 	"github.com/hejijunhao/corellia/backend/internal/auth"
 	"github.com/hejijunhao/corellia/backend/internal/config"
 	"github.com/hejijunhao/corellia/backend/internal/db"
@@ -42,12 +43,14 @@ func main() {
 	queries := db.New(pool)
 	usersSvc := users.NewService(queries)
 	orgsSvc := organizations.NewService(queries, usersSvc)
+	agentsSvc := agents.NewService(queries)
 
 	handler := httpsrv.New(httpsrv.Deps{
 		Config:               cfg,
 		AuthVerifier:         verifier,
 		UsersHandler:         httpsrv.NewUsersHandler(usersSvc),
 		OrganizationsHandler: httpsrv.NewOrganizationsHandler(orgsSvc),
+		AgentsHandler:        httpsrv.NewAgentsHandler(agentsSvc),
 		AllowedOrigin:        cfg.FrontendOrigin,
 	})
 
