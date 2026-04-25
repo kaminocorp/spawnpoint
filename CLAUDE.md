@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Corellia is a control plane for AI agents — spawn, deploy, govern, and manage agents across any model, provider, or harness framework. v1 is a hackathon-scoped MVP: one harness (Hermes), one deploy target (Fly.io), Supabase auth, Go backend + Next.js frontend.
 
-**Current state: scaffolding phase.** Only `backend/` is partially scaffolded (through §10 of `docs/backend-scaffolding.md` — the `GetCurrentUser` RPC pipeline). `frontend/` does not yet exist. No Dockerfile/fly.toml yet. Nothing is deployed.
+**Current state: scaffolding phase.** Backend is scaffolded through the `GetCurrentUser` RPC pipeline plus an ES256/JWKS auth middleware and an `auth.users` → `public.users` provisioning trigger; frontend is scaffolded end-to-end through sign-in + dashboard. No Dockerfile/fly.toml yet. Nothing is deployed. The historical step-by-step recipes live under `docs/archive/{backend,frontend}-scaffolding.md`; live code is authoritative.
 
 ## Doc hierarchy (read these when context is needed)
 
@@ -14,10 +14,10 @@ Precedence — the higher doc wins on conflict:
 
 1. `docs/blueprint.md` — product architecture, data model (§9), **architecture rules (§11)**, MVP scope (§1)
 2. `docs/stack.md` — tech picks with rationale, monorepo layout (§2), **implementation rules (§11)**, env vars (§8)
-3. `docs/backend-scaffolding.md` / `docs/frontend-scaffolding.md` — step-by-step recipes with starter code
+3. `docs/archive/backend-scaffolding.md` / `docs/frontend-scaffolding.md` — step-by-step recipes with starter code; backend's is archival (live code supersedes), frontend's is still live as the FE half is the more recent scaffold
 4. `docs/vision.md` — product framing (admin/policy-setter model, "garage of harnesses")
 
-Scaffolding docs are recipes; once a file is scaffolded, the live code is authoritative. Update the docs only if the *approach* changes before scaffolding.
+Scaffolding docs are recipes; once a file is scaffolded, the live code is authoritative. Update the docs only if the *approach* changes before scaffolding. (Backend hit that point in 0.1.0 — hence the archive move; frontend is converging on it.)
 
 ## Architecture at a glance
 
@@ -35,13 +35,13 @@ Go module path: `github.com/hejijunhao/corellia/backend` (where scaffolding docs
 
 ### Backend layout (`backend/internal/`)
 
-- `auth/` — Supabase JWT middleware (HS256, offline validation via shared secret). Attaches `AuthClaims{AuthUserID, Email}` to request context. No DB access here — user provisioning is a domain concern.
+- `auth/` — Supabase JWT middleware (ES256, offline validation via cached JWKS from Supabase's well-known endpoint; initial fetch at boot, background hourly refresh, unknown-`kid` refetch rate-limited to one per 5 min). Attaches `AuthClaims{AuthUserID, Email}` to request context. No DB access here — user provisioning is a domain concern.
 - `config/` — env var loading via `caarlos0/env`. The **only** place that touches `os.Getenv`. Panics on missing required vars at startup.
 - `db/` — sqlc-generated types + queries. `pool.go` is the only hand-written file here; everything else is generated from `migrations/` + `queries/`.
 - `gen/corellia/v1/` — buf-generated Go from `shared/proto/`. Never hand-edit.
 - `httpsrv/` — Chi router, CORS, auth middleware wiring, Connect handler mounts. Handlers are thin (<30 lines); they parse → call domain → marshal response.
 - `users/` — domain service (first example). Domain packages own business logic.
-- Planned packages (blueprint §9, scaffolded empty at §15 of backend-scaffolding): `agents/`, `adapters/`, `deploy/`.
+- Planned packages (blueprint §9, not yet present): `agents/`, `adapters/`, `deploy/`.
 
 ### The contract boundary
 
@@ -134,4 +134,4 @@ pnpm -C frontend build
 
 ## Environment
 
-Per-app env files, both gitignored: `backend/.env` (backend vars; auto-loaded by `godotenv/autoload` from the Go binary's cwd) and `frontend/.env.local` (frontend vars; auto-loaded by Next.js from the `frontend/` project root). `.env.example` at repo root is the single committed template documenting every var both halves read. **Recommended local setup: install `direnv` (`brew install direnv` + `eval "$(direnv hook zsh)"` in `~/.zshrc`) and `direnv allow` in `backend/` and `frontend/` once.** The committed `backend/.envrc` and `frontend/.envrc` auto-load the appropriate env file into your shell on `cd`, so `goose`, `go test`, and any other in-directory CLI tool sees the same env as the Go binary. Without direnv, `goose` migrations require manual sourcing: `set -a; source backend/.env; set +a`. Required backend vars (panic-on-missing): `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_JWT_SECRET`, `FLY_API_TOKEN`, `FLY_ORG_SLUG`, `FRONTEND_ORIGIN`. `DATABASE_URL_DIRECT` lives in `backend/.env` but is shell-sourced for `goose`, never read by `config.Load()`. Shared Supabase values (`SUPABASE_URL` / `SUPABASE_ANON_KEY` ↔ their `NEXT_PUBLIC_*` twins) are duplicated across the two files by design; values must match.
+Per-app env files, both gitignored: `backend/.env` (backend vars; auto-loaded by `godotenv/autoload` from the Go binary's cwd) and `frontend/.env.local` (frontend vars; auto-loaded by Next.js from the `frontend/` project root). `.env.example` at repo root is the single committed template documenting every var both halves read. **Recommended local setup: install `direnv` (`brew install direnv` + `eval "$(direnv hook zsh)"` in `~/.zshrc`) and `direnv allow` in `backend/` and `frontend/` once.** The committed `backend/.envrc` and `frontend/.envrc` auto-load the appropriate env file into your shell on `cd`, so `goose`, `go test`, and any other in-directory CLI tool sees the same env as the Go binary. Without direnv, `goose` migrations require manual sourcing: `set -a; source backend/.env; set +a`. Required backend vars (panic-on-missing): `DATABASE_URL`, `SUPABASE_URL`, `FLY_API_TOKEN`, `FLY_ORG_SLUG`, `FRONTEND_ORIGIN`. The JWKS URL for JWT validation is derived from `SUPABASE_URL` — no separate secret needed. `DATABASE_URL_DIRECT` lives in `backend/.env` but is shell-sourced for `goose`, never read by `config.Load()`. Shared Supabase values (`SUPABASE_URL` / `SUPABASE_ANON_KEY` ↔ their `NEXT_PUBLIC_*` twins) are duplicated across the two files by design; values must match.

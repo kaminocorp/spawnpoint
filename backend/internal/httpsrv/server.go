@@ -12,9 +12,11 @@ import (
 )
 
 type Deps struct {
-	Config        config.Config
-	UsersHandler  corelliav1connect.UsersServiceHandler
-	AllowedOrigin string
+	Config               config.Config
+	AuthVerifier         *auth.JWKSVerifier
+	UsersHandler         corelliav1connect.UsersServiceHandler
+	OrganizationsHandler corelliav1connect.OrganizationsServiceHandler
+	AllowedOrigin        string
 }
 
 func New(d Deps) http.Handler {
@@ -29,10 +31,13 @@ func New(d Deps) http.Handler {
 	})
 
 	r.Group(func(r chi.Router) {
-		r.Use(auth.Middleware(d.Config.SupabaseJWTSecret))
+		r.Use(auth.Middleware(d.AuthVerifier))
 
-		path, handler := corelliav1connect.NewUsersServiceHandler(d.UsersHandler)
-		r.Mount(path, handler)
+		usersPath, usersHandler := corelliav1connect.NewUsersServiceHandler(d.UsersHandler)
+		r.Mount(usersPath, usersHandler)
+
+		orgsPath, orgsHandler := corelliav1connect.NewOrganizationsServiceHandler(d.OrganizationsHandler)
+		r.Mount(orgsPath, orgsHandler)
 	})
 
 	return r

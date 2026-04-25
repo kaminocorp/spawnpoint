@@ -36,11 +36,15 @@ const (
 	// UsersServiceGetCurrentUserProcedure is the fully-qualified name of the UsersService's
 	// GetCurrentUser RPC.
 	UsersServiceGetCurrentUserProcedure = "/corellia.v1.UsersService/GetCurrentUser"
+	// UsersServiceUpdateCurrentUserNameProcedure is the fully-qualified name of the UsersService's
+	// UpdateCurrentUserName RPC.
+	UsersServiceUpdateCurrentUserNameProcedure = "/corellia.v1.UsersService/UpdateCurrentUserName"
 )
 
 // UsersServiceClient is a client for the corellia.v1.UsersService service.
 type UsersServiceClient interface {
 	GetCurrentUser(context.Context, *connect.Request[v1.GetCurrentUserRequest]) (*connect.Response[v1.GetCurrentUserResponse], error)
+	UpdateCurrentUserName(context.Context, *connect.Request[v1.UpdateCurrentUserNameRequest]) (*connect.Response[v1.UpdateCurrentUserNameResponse], error)
 }
 
 // NewUsersServiceClient constructs a client for the corellia.v1.UsersService service. By default,
@@ -60,12 +64,19 @@ func NewUsersServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(usersServiceMethods.ByName("GetCurrentUser")),
 			connect.WithClientOptions(opts...),
 		),
+		updateCurrentUserName: connect.NewClient[v1.UpdateCurrentUserNameRequest, v1.UpdateCurrentUserNameResponse](
+			httpClient,
+			baseURL+UsersServiceUpdateCurrentUserNameProcedure,
+			connect.WithSchema(usersServiceMethods.ByName("UpdateCurrentUserName")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // usersServiceClient implements UsersServiceClient.
 type usersServiceClient struct {
-	getCurrentUser *connect.Client[v1.GetCurrentUserRequest, v1.GetCurrentUserResponse]
+	getCurrentUser        *connect.Client[v1.GetCurrentUserRequest, v1.GetCurrentUserResponse]
+	updateCurrentUserName *connect.Client[v1.UpdateCurrentUserNameRequest, v1.UpdateCurrentUserNameResponse]
 }
 
 // GetCurrentUser calls corellia.v1.UsersService.GetCurrentUser.
@@ -73,9 +84,15 @@ func (c *usersServiceClient) GetCurrentUser(ctx context.Context, req *connect.Re
 	return c.getCurrentUser.CallUnary(ctx, req)
 }
 
+// UpdateCurrentUserName calls corellia.v1.UsersService.UpdateCurrentUserName.
+func (c *usersServiceClient) UpdateCurrentUserName(ctx context.Context, req *connect.Request[v1.UpdateCurrentUserNameRequest]) (*connect.Response[v1.UpdateCurrentUserNameResponse], error) {
+	return c.updateCurrentUserName.CallUnary(ctx, req)
+}
+
 // UsersServiceHandler is an implementation of the corellia.v1.UsersService service.
 type UsersServiceHandler interface {
 	GetCurrentUser(context.Context, *connect.Request[v1.GetCurrentUserRequest]) (*connect.Response[v1.GetCurrentUserResponse], error)
+	UpdateCurrentUserName(context.Context, *connect.Request[v1.UpdateCurrentUserNameRequest]) (*connect.Response[v1.UpdateCurrentUserNameResponse], error)
 }
 
 // NewUsersServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -91,10 +108,18 @@ func NewUsersServiceHandler(svc UsersServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(usersServiceMethods.ByName("GetCurrentUser")),
 		connect.WithHandlerOptions(opts...),
 	)
+	usersServiceUpdateCurrentUserNameHandler := connect.NewUnaryHandler(
+		UsersServiceUpdateCurrentUserNameProcedure,
+		svc.UpdateCurrentUserName,
+		connect.WithSchema(usersServiceMethods.ByName("UpdateCurrentUserName")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/corellia.v1.UsersService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case UsersServiceGetCurrentUserProcedure:
 			usersServiceGetCurrentUserHandler.ServeHTTP(w, r)
+		case UsersServiceUpdateCurrentUserNameProcedure:
+			usersServiceUpdateCurrentUserNameHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -106,4 +131,8 @@ type UnimplementedUsersServiceHandler struct{}
 
 func (UnimplementedUsersServiceHandler) GetCurrentUser(context.Context, *connect.Request[v1.GetCurrentUserRequest]) (*connect.Response[v1.GetCurrentUserResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.UsersService.GetCurrentUser is not implemented"))
+}
+
+func (UnimplementedUsersServiceHandler) UpdateCurrentUserName(context.Context, *connect.Request[v1.UpdateCurrentUserNameRequest]) (*connect.Response[v1.UpdateCurrentUserNameResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.UsersService.UpdateCurrentUserName is not implemented"))
 }

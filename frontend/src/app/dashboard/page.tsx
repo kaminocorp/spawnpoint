@@ -2,23 +2,34 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Code, ConnectError } from "@connectrpc/connect";
 
 import { createApiClient } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
 
+type State =
+  | { kind: "loading" }
+  | { kind: "ready"; email: string }
+  | { kind: "not-provisioned" }
+  | { kind: "error"; message: string };
+
 export default function DashboardPage() {
   const router = useRouter();
-  const [email, setEmail] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [state, setState] = useState<State>({ kind: "loading" });
 
   useEffect(() => {
     (async () => {
       try {
         const api = createApiClient();
         const res = await api.users.getCurrentUser({});
-        setEmail(res.user?.email ?? null);
+        setState({ kind: "ready", email: res.user?.email ?? "" });
       } catch (e) {
-        setErr(String(e));
+        const err = ConnectError.from(e);
+        if (err.code === Code.PermissionDenied) {
+          setState({ kind: "not-provisioned" });
+        } else {
+          setState({ kind: "error", message: err.message });
+        }
       }
     })();
   }, []);
@@ -32,12 +43,22 @@ export default function DashboardPage() {
   return (
     <main className="mx-auto max-w-xl space-y-4 p-8">
       <h1 className="text-2xl font-bold">Corellia</h1>
-      {err && <p className="text-red-600">{err}</p>}
-      {email && (
+      {state.kind === "loading" && <p className="text-gray-500">Loading…</p>}
+      {state.kind === "ready" && (
         <p>
-          Signed in as <strong>{email}</strong>
+          Signed in as <strong>{state.email}</strong>
         </p>
       )}
+      {state.kind === "not-provisioned" && (
+        <div className="rounded border border-amber-300 bg-amber-50 p-4 text-amber-900">
+          <p className="font-semibold">Your account isn&apos;t provisioned yet.</p>
+          <p className="text-sm">
+            Sign-in succeeded, but no workspace record exists for your account. Contact an
+            administrator to be added.
+          </p>
+        </div>
+      )}
+      {state.kind === "error" && <p className="text-red-600">{state.message}</p>}
       <button onClick={signOut} className="text-sm underline">
         Sign out
       </button>

@@ -357,6 +357,17 @@ Expected: `backend/internal/db/` now contains generated `db.go`, `models.go`,
 
 ## 7. Auth middleware
 
+> **Superseded — see `docs/executing/auth-es256-migration.md`.** This
+> section captures the 0.1.0 HS256 scaffold (shared-secret HMAC
+> validation via `SUPABASE_JWT_SECRET`). The live code now validates
+> ES256 signatures against a cached JWKS fetched from Supabase's
+> `.well-known` endpoint; the `SUPABASE_JWT_SECRET` config field and
+> env var have been removed. The prose below is preserved as the
+> historical record of what 0.1.0 shipped — do not edit it to match
+> the current state; read the completion docs in
+> `docs/completions/auth-es256-migration-phase*-completion.md` for
+> what actually landed.
+
 File: `backend/internal/auth/claims.go`
 
 ```go

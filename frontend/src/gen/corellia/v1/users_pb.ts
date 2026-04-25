@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file corellia/v1/users.proto.
  */
 export const file_corellia_v1_users: GenFile = /*@__PURE__*/
-  fileDesc("Chdjb3JlbGxpYS92MS91c2Vycy5wcm90bxILY29yZWxsaWEudjEiFwoVR2V0Q3VycmVudFVzZXJSZXF1ZXN0IjkKFkdldEN1cnJlbnRVc2VyUmVzcG9uc2USHwoEdXNlchgBIAEoCzIRLmNvcmVsbGlhLnYxLlVzZXIiPwoEVXNlchIKCgJpZBgBIAEoCRINCgVlbWFpbBgCIAEoCRIOCgZvcmdfaWQYAyABKAkSDAoEcm9sZRgEIAEoCTJpCgxVc2Vyc1NlcnZpY2USWQoOR2V0Q3VycmVudFVzZXISIi5jb3JlbGxpYS52MS5HZXRDdXJyZW50VXNlclJlcXVlc3QaIy5jb3JlbGxpYS52MS5HZXRDdXJyZW50VXNlclJlc3BvbnNlQkxaSmdpdGh1Yi5jb20vaGVqaWp1bmhhby9jb3JlbGxpYS9iYWNrZW5kL2ludGVybmFsL2dlbi9jb3JlbGxpYS92MTtjb3JlbGxpYXYxYgZwcm90bzM");
+  fileDesc("Chdjb3JlbGxpYS92MS91c2Vycy5wcm90bxILY29yZWxsaWEudjEiFwoVR2V0Q3VycmVudFVzZXJSZXF1ZXN0IjkKFkdldEN1cnJlbnRVc2VyUmVzcG9uc2USHwoEdXNlchgBIAEoCzIRLmNvcmVsbGlhLnYxLlVzZXIiLAocVXBkYXRlQ3VycmVudFVzZXJOYW1lUmVxdWVzdBIMCgRuYW1lGAEgASgJIkAKHVVwZGF0ZUN1cnJlbnRVc2VyTmFtZVJlc3BvbnNlEh8KBHVzZXIYASABKAsyES5jb3JlbGxpYS52MS5Vc2VyIlsKBFVzZXISCgoCaWQYASABKAkSDQoFZW1haWwYAiABKAkSDgoGb3JnX2lkGAMgASgJEgwKBHJvbGUYBCABKAkSEQoEbmFtZRgFIAEoCUgAiAEBQgcKBV9uYW1lMtkBCgxVc2Vyc1NlcnZpY2USWQoOR2V0Q3VycmVudFVzZXISIi5jb3JlbGxpYS52MS5HZXRDdXJyZW50VXNlclJlcXVlc3QaIy5jb3JlbGxpYS52MS5HZXRDdXJyZW50VXNlclJlc3BvbnNlEm4KFVVwZGF0ZUN1cnJlbnRVc2VyTmFtZRIpLmNvcmVsbGlhLnYxLlVwZGF0ZUN1cnJlbnRVc2VyTmFtZVJlcXVlc3QaKi5jb3JlbGxpYS52MS5VcGRhdGVDdXJyZW50VXNlck5hbWVSZXNwb25zZUJMWkpnaXRodWIuY29tL2hlamlqdW5oYW8vY29yZWxsaWEvYmFja2VuZC9pbnRlcm5hbC9nZW4vY29yZWxsaWEvdjE7Y29yZWxsaWF2MWIGcHJvdG8z");
 
 /**
  * @generated from message corellia.v1.GetCurrentUserRequest
@@ -43,6 +43,40 @@ export const GetCurrentUserResponseSchema: GenMessage<GetCurrentUserResponse> = 
   messageDesc(file_corellia_v1_users, 1);
 
 /**
+ * @generated from message corellia.v1.UpdateCurrentUserNameRequest
+ */
+export type UpdateCurrentUserNameRequest = Message<"corellia.v1.UpdateCurrentUserNameRequest"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message corellia.v1.UpdateCurrentUserNameRequest.
+ * Use `create(UpdateCurrentUserNameRequestSchema)` to create a new message.
+ */
+export const UpdateCurrentUserNameRequestSchema: GenMessage<UpdateCurrentUserNameRequest> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_users, 2);
+
+/**
+ * @generated from message corellia.v1.UpdateCurrentUserNameResponse
+ */
+export type UpdateCurrentUserNameResponse = Message<"corellia.v1.UpdateCurrentUserNameResponse"> & {
+  /**
+   * @generated from field: corellia.v1.User user = 1;
+   */
+  user?: User | undefined;
+};
+
+/**
+ * Describes the message corellia.v1.UpdateCurrentUserNameResponse.
+ * Use `create(UpdateCurrentUserNameResponseSchema)` to create a new message.
+ */
+export const UpdateCurrentUserNameResponseSchema: GenMessage<UpdateCurrentUserNameResponse> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_users, 3);
+
+/**
  * @generated from message corellia.v1.User
  */
 export type User = Message<"corellia.v1.User"> & {
@@ -65,6 +99,11 @@ export type User = Message<"corellia.v1.User"> & {
    * @generated from field: string role = 4;
    */
   role: string;
+
+  /**
+   * @generated from field: optional string name = 5;
+   */
+  name?: string | undefined;
 };
 
 /**
@@ -72,7 +111,7 @@ export type User = Message<"corellia.v1.User"> & {
  * Use `create(UserSchema)` to create a new message.
  */
 export const UserSchema: GenMessage<User> = /*@__PURE__*/
-  messageDesc(file_corellia_v1_users, 2);
+  messageDesc(file_corellia_v1_users, 4);
 
 /**
  * @generated from service corellia.v1.UsersService
@@ -85,6 +124,14 @@ export const UsersService: GenService<{
     methodKind: "unary";
     input: typeof GetCurrentUserRequestSchema;
     output: typeof GetCurrentUserResponseSchema;
+  },
+  /**
+   * @generated from rpc corellia.v1.UsersService.UpdateCurrentUserName
+   */
+  updateCurrentUserName: {
+    methodKind: "unary";
+    input: typeof UpdateCurrentUserNameRequestSchema;
+    output: typeof UpdateCurrentUserNameResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_corellia_v1_users, 0);

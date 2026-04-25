@@ -6,8 +6,9 @@ Concrete engineering picks for v1. Companion docs:
 - `blueprint.md` — *what* we're building and the architecture rules (esp. §11)
 - `stack.md` (this doc) — *how* we're building it: tools, layout, pipelines,
   deploy. The "why these picks" reference.
-- `backend-scaffolding.md` — step-by-step recipe for creating `backend/`,
-  with starter file contents
+- `archive/backend-scaffolding.md` — historical step-by-step recipe for
+  creating `backend/`, with starter file contents (archival; live code is
+  now authoritative)
 - `frontend-scaffolding.md` — step-by-step recipe for creating `frontend/`,
   with starter file contents
 
@@ -194,8 +195,15 @@ corresponding user from `public.users`.
 ### Request validation (backend)
 
 1. Chi middleware reads `Authorization: Bearer <token>`.
-2. Validates JWT signature against `SUPABASE_JWT_SECRET` (HS256).
-3. Extracts `sub` (Supabase auth user UUID) and `email`.
+2. Parses the JWT and resolves the public key for the token's `kid`
+   via the JWKS cache (fetched once from
+   `$SUPABASE_URL/auth/v1/.well-known/jwks.json` at backend boot,
+   refreshed hourly in the background; unknown `kid`s trigger an
+   immediate rate-limited refetch).
+3. Validates the signature with ES256 (ECDSA / P-256) and rejects
+   any other algorithm via `jwt.WithValidMethods` — defence against
+   algorithm-confusion attacks. Extracts `sub` (Supabase auth user
+   UUID) and `email`.
 4. Attaches an `AuthClaims{AuthUserID, Email}` value to the request
    context.
 5. Domain services (e.g. `users.Service`) load the corresponding
@@ -204,11 +212,16 @@ corresponding user from `public.users`.
    transport concern — the middleware stays thin and has no DB
    dependency.
 
-### JWT validation is offline
+### JWT validation is offline (after boot)
 
-No network call to Supabase to validate a token. Shared secret + HMAC
-signature check is enough. Token expiry is enforced (default: 1 hour),
-refresh happens on the FE via `@supabase/supabase-js`.
+The JWKS document is fetched once at backend boot and cached in
+memory; all subsequent request-path validation is fully offline
+(ECDSA verify against the cached public key). The cache refreshes
+in the background every hour and immediately on any unknown `kid`
+(rate-limited to one refetch per 5 minutes) — so Supabase-side key
+rotations propagate within the cache TTL without a backend restart.
+Token expiry is enforced (default: 1 hour); refresh happens on the
+FE via `@supabase/supabase-js`.
 
 ---
 
@@ -334,7 +347,6 @@ instances), not before. **Never transaction pooling.**
 | `SUPABASE_URL` | both | Supabase project URL |
 | `SUPABASE_ANON_KEY` | frontend | Public anon key, safe for client bundle |
 | `SUPABASE_SERVICE_KEY` | backend (rare) | Service-role key for admin ops; avoid if possible |
-| `SUPABASE_JWT_SECRET` | backend | HMAC secret for validating access tokens |
 | `FLY_API_TOKEN` | backend | Calls Fly's GraphQL API to spawn apps/machines |
 | `FLY_ORG_SLUG` | backend | Fly organization to create apps under |
 | `PORT` | backend | HTTP listen port (default 8080) |

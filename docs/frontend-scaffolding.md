@@ -14,7 +14,7 @@ this doc only if the scaffolding *approach* changes before we've scaffolded.
 - `vision.md` — the problem Corellia is solving
 - `blueprint.md` — the product architecture this frontend surfaces (esp. §10 UX flow)
 - `stack.md` — *why* each tool was picked; canonical spec for `shared/`, env vars, deploy
-- `backend-scaffolding.md` — mirrored guide for the Go half; the API this frontend talks to
+- `archive/backend-scaffolding.md` — mirrored guide for the Go half; the API this frontend talks to (archival; live backend code is authoritative)
 
 When this doc conflicts with `stack.md`, `stack.md` wins. When `stack.md`
 conflicts with `blueprint.md`, `blueprint.md` wins.

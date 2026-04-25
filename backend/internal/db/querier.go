@@ -11,7 +11,11 @@ import (
 )
 
 type Querier interface {
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	GetOrganizationByID(ctx context.Context, id uuid.UUID) (Organization, error)
 	GetUserByAuthID(ctx context.Context, authUserID uuid.UUID) (User, error)
+	UpdateOrganizationName(ctx context.Context, arg UpdateOrganizationNameParams) (Organization, error)
+	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)

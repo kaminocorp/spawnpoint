@@ -27,11 +27,10 @@ type Config struct {
 	// prepared-statement cache, which sqlc relies on.
 	DatabaseURL string `env:"DATABASE_URL,required"`
 
-	SupabaseURL       string `env:"SUPABASE_URL,required"`
-	SupabaseJWTSecret string `env:"SUPABASE_JWT_SECRET,required"`
-	FlyAPIToken       string `env:"FLY_API_TOKEN,required"`
-	FlyOrgSlug        string `env:"FLY_ORG_SLUG,required"`
-	FrontendOrigin    string `env:"FRONTEND_ORIGIN,required"`
+	SupabaseURL    string `env:"SUPABASE_URL,required"`
+	FlyAPIToken    string `env:"FLY_API_TOKEN,required"`
+	FlyOrgSlug     string `env:"FLY_ORG_SLUG,required"`
+	FrontendOrigin string `env:"FRONTEND_ORIGIN,required"`
 }
 
 func Load() Config {

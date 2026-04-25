@@ -1,6 +1,7 @@
 import { createClient as createConnectClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 
+import { OrganizationsService } from "@/gen/corellia/v1/organizations_pb";
 import { UsersService } from "@/gen/corellia/v1/users_pb";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 
@@ -21,5 +22,6 @@ export function createApiClient() {
 
   return {
     users: createConnectClient(UsersService, transport),
+    organizations: createConnectClient(OrganizationsService, transport),
   };
 }

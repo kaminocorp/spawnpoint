@@ -6,12 +6,15 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 
 	_ "github.com/joho/godotenv/autoload"
 
+	"github.com/hejijunhao/corellia/backend/internal/auth"
 	"github.com/hejijunhao/corellia/backend/internal/config"
 	"github.com/hejijunhao/corellia/backend/internal/db"
 	"github.com/hejijunhao/corellia/backend/internal/httpsrv"
+	"github.com/hejijunhao/corellia/backend/internal/organizations"
 	"github.com/hejijunhao/corellia/backend/internal/users"
 )
 
@@ -28,13 +31,24 @@ func main() {
 	}
 	defer pool.Close()
 
+	jwksURL := strings.TrimRight(cfg.SupabaseURL, "/") + "/auth/v1/.well-known/jwks.json"
+	verifier, err := auth.NewJWKSVerifier(ctx, jwksURL)
+	if err != nil {
+		slog.Error("jwks verifier", "err", err, "url", jwksURL)
+		os.Exit(1)
+	}
+	slog.Info("jwks initialised", "url", jwksURL)
+
 	queries := db.New(pool)
 	usersSvc := users.NewService(queries)
+	orgsSvc := organizations.NewService(queries, usersSvc)
 
 	handler := httpsrv.New(httpsrv.Deps{
-		Config:        cfg,
-		UsersHandler:  httpsrv.NewUsersHandler(usersSvc),
-		AllowedOrigin: cfg.FrontendOrigin,
+		Config:               cfg,
+		AuthVerifier:         verifier,
+		UsersHandler:         httpsrv.NewUsersHandler(usersSvc),
+		OrganizationsHandler: httpsrv.NewOrganizationsHandler(orgsSvc),
+		AllowedOrigin:        cfg.FrontendOrigin,
 	})
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
