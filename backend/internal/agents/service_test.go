@@ -1310,6 +1310,24 @@ func TestBulkUpdateDeployConfig_OverLimit(t *testing.T) {
 	}
 }
 
+func TestBulkUpdateDeployConfig_ContextCancellation(t *testing.T) {
+	q, a, _, r := newSpawnReadyHarness()
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	ids := make([]uuid.UUID, 3)
+	for i := range ids {
+		ids[i] = uuid.New()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancelled before the call
+
+	_, err := s.BulkUpdateDeployConfig(ctx, ids, uuid.New(), agents.BulkConfigDelta{}, false)
+	if err == nil {
+		t.Fatal("expected error from cancelled context, got nil")
+	}
+}
+
 // ---------- Phase 4 — DetectDrift ----------
 
 func TestDetectDrift_CountMismatch(t *testing.T) {

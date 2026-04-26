@@ -22,20 +22,15 @@ Priority filter, per the assessment ask: **functionality, accuracy, maintainabil
 
 ## 2. Correctness findings (priority order)
 
-### 2.1 BLOCKER — `BulkUpdateDeployConfig` swallows context-cancellation errors
+### 2.1 ~~BLOCKER~~ FIXED — `BulkUpdateDeployConfig` swallows context-cancellation errors
 
-**Location:** `backend/internal/agents/fleet.go:497`
+**Fixed in 0.11.7 / post-assessment patch.** `fleet.go:497` now propagates `g.Wait()` errors; `TestBulkUpdateDeployConfig_ContextCancellation` added to `service_test.go`.
 
-```go
-_ = g.Wait()
-return results, nil
-```
+**Location:** `backend/internal/agents/fleet.go` (was line 497)
 
-The bulk-apply pattern intentionally uses per-row error capture in `BulkResult.Err` so a single failed instance doesn't fail the batch — that's correct. But discarding `g.Wait()`'s return value also discards **errgroup-level errors**: specifically, `sem.Acquire(gctx, 1)` returns the context's error when `gctx` is cancelled (parent timeout, client disconnect, server shutdown). Today those errors disappear into `_`, and the call returns `(results, nil)` with some `results[i]` zero-valued because `applyBulkOne` was never invoked.
+The bulk-apply pattern intentionally uses per-row error capture in `BulkResult.Err` so a single failed instance doesn't fail the batch — that's correct. But discarding `g.Wait()`'s return value also discarded **errgroup-level errors**: specifically, `sem.Acquire(gctx, 1)` returns the context's error when `gctx` is cancelled (parent timeout, client disconnect, server shutdown). Those errors disappeared into `_`, and the call returned `(results, nil)` with some `results[i]` zero-valued because `applyBulkOne` was never invoked.
 
-A caller that times out at the handler/RPC layer cannot tell the difference between "all 50 instances applied successfully" and "the request was cancelled after applying 12 of them."
-
-**Fix:**
+**Applied fix:**
 
 ```go
 if err := g.Wait(); err != nil {
@@ -45,8 +40,6 @@ return results, nil
 ```
 
 Returning `results` alongside the error preserves the partial-progress information the BE already computes, while making the cancellation observable.
-
-**Effort:** 2 lines + one test (`TestBulkUpdate_ContextCancellation`).
 
 ---
 
@@ -214,7 +207,7 @@ For transparency: the agent reports flagged the following as BLOCKERs. Each was 
 
 ## 7. Recommended action order
 
-1. **Fix `BulkUpdateDeployConfig` `Wait()` discard** (§2.1) — 2-line change + 1 test. Highest correctness-per-effort ratio in the assessment.
+1. ~~**Fix `BulkUpdateDeployConfig` `Wait()` discard** (§2.1) — 2-line change + 1 test.~~ **Done.**
 2. **Split `wizard.tsx`** (§3.3) — biggest single maintainability win. Unblocks all future spawn-flow work.
 3. **Split `fly.go`** (§3.1) — second-biggest maintainability win. Each phase already maps to one of the proposed seams; doing this now sets up Phase 6 (Hermes-readiness) and the v1.5 second-target story.
 4. **Extract `form-inputs/`** (§3.5) — single coherent change, eliminates 200+ LOC of near-duplicate code between bulk and standard config forms.

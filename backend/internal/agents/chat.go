@@ -148,8 +148,12 @@ func (s *Service) ChatWithAgent(
 		// 401 from the sidecar means our token doesn't match what
 		// the sidecar holds — Fly secret-store drift, not a user
 		// error. Surfaced as Internal at the handler layer.
+		// 0.11.9: drain the body before returning so the underlying
+		// connection can be reused from the pool.
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 		return "", ErrChatAuth
 	case resp.StatusCode < 200 || resp.StatusCode >= 300:
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 		slog.Warn("agents: chat non-2xx",
 			"instance_id", instanceID, "status", resp.StatusCode)
 		return "", ErrChatUnreachable

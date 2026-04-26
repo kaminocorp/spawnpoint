@@ -2,6 +2,8 @@
 
 Index - short one-liners:
 
+- [0.11.9 — M-chat Post-Operator-Gate P1 Polish: Sidecar Stub Fail-Fast + Honest `/health` + Schema Hardening + Smoke Negative Paths + Probe-Timeout Bump + 401-Drain](#0119--m-chat-post-operator-gate-p1-polish-sidecar-stub-fail-fast--honest-health--schema-hardening--smoke-negative-paths--probe-timeout-bump--401-drain-2026-04-27)
+- [0.11.8 — M-chat Phase 7 Operator-Gate Verification: GHCR Push + Migration Confirmed Applied](#0118--m-chat-phase-7-operator-gate-verification-ghcr-push--migration-confirmed-applied-2026-04-27)
 - [0.11.7 — M-chat Post-Review Hardening: Inspector `chatEnabled` Lock-as-Read-Only + Chat-Panel Double-Enter Guard + ARIA + Error Remediation Hints](#0117--m-chat-post-review-hardening-inspector-chatenabled-lock-as-read-only--chat-panel-double-enter-guard--aria--error-remediation-hints-2026-04-27)
 - [0.11.6 — M-chat Hermes Chat Sidecar Phase 7: Adapter Image Rebuild + GHCR Push + Migration + Smoke (M-chat Complete)](#0116--m-chat-hermes-chat-sidecar-phase-7-adapter-image-rebuild--ghcr-push--migration--smoke-m-chat-complete-2026-04-27)
 - [0.11.5 — M-chat Hermes Chat Sidecar Phase 6: `Health()` HTTP Probe for Chat-Enabled Instances + List Query Widened + Fleet Gallery Chat Badge](#0115--m-chat-hermes-chat-sidecar-phase-6-health-http-probe-for-chat-enabled-instances--list-query-widened--fleet-gallery-chat-badge-2026-04-27)
@@ -56,6 +58,48 @@ Index - short one-liners:
 Latest on top. Each release includes detailed entries (**What / Where / Why** changes were made).
 
 ---
+
+## 0.11.9 — M-chat Post-Operator-Gate P1 Polish: Sidecar Stub Fail-Fast + Honest `/health` + Schema Hardening + Smoke Negative Paths + Probe-Timeout Bump + 401-Drain (2026-04-27)
+
+Eight P1-polish fixes from the post-0.11.8 deep-review pass. No proto change, no migration, no sqlc, no Fly push, no adapter image rebuild — but the sidecar source delta means the next adapter image rebuild (likely bundled with the next M-chat enhancement) will include these. `go vet ./... && go test ./...` green; `python3 -c 'import ast; ast.parse(...)'` + `bash -n` clean on all touched scripts.
+
+- **`backend/migrations/20260427140000_document_hermes_adapter_digest_history.sql`** (new) — additive no-op migration that seals the digest-history conversation the prior `20260427130000_bump_hermes_adapter_for_chat.sql` left ambiguous. The applied migration's leading `<IMAGE-DIGEST-PENDING>` operator-instruction block reads as if line 39 were still unfilled, but line 39 is filled and prod applied the row on `Sun Apr 26 17:23:48 2026`. An in-place comment scrub was attempted and reverted on principle (applied migrations are immutable history; mutating one diverges fresh-environment `goose up` from the file prod recorded). The new file is purely additive: a `SELECT 1 WHERE FALSE` no-op body, with a 30-line header recording the M3 Phase 2 digest (`sha256:d152b3cb…`), the M-chat Phase 7 digest (`sha256:e31cc422…`), the buildx-imagetools capture provenance, and the prod-apply timestamp. Future readers walking migrations in chronological order see a sealed digest history at this point. Operator: `goose up` is safe (the no-op records the row; nothing in the schema or data changes). Operator gate per the 0.11.8 verification: this migration is appropriate to run against prod alongside any other deploy; it changes no state.
+- **`adapters/hermes/sidecar/sidecar.py`** — five edits in one rewrite of the schema/health/boot surface:
+  1. **Stub-AIAgent prod fail-fast.** New `CORELLIA_SIDECAR_ALLOW_STUB` env var (default unset → false). When `AIAGENT_AVAILABLE=False` AND `ALLOW_STUB!="true"`, the sidecar `raise SystemExit(...)` at module-import time with a diagnostic message pointing at the upstream-digest pin. Closes the silent-stub-in-prod escape valve flagged in the 8.5/10 review.
+  2. **Honest `/health`.** When the upstream `from run_agent import AIAgent` failed (the new gate above would normally kill the process, but ALLOW_STUB=true smoke runs reach `/health`), `/health` now returns `{ok: false, hermes: "missing"}` instead of always `{ok: true, hermes: "ready"}`. Phase 6 BE interprets `ok=false` as `HealthStarting`, which keeps the sidecar from lying its way through a health probe. Hermes-process probing remains future work — the sidecar can verify the import seam, not the sibling Hermes process.
+  3. **`session_id` regex validation.** Pydantic `Field(..., pattern=r"^[A-Za-z0-9_-]+$")` rejects path-traversal and control chars at the schema boundary; `session_id` ultimately lands as `$HERMES_HOME/sessions/<id>.sqlite`, and refusing dirty inputs at our layer is cheaper than trusting upstream's filename hygiene.
+  4. **`message` `max_length=65536`.** 64 KiB cap on the chat input so a runaway POST is rejected without buffering arbitrary bytes through Starlette.
+  5. **`adapters/hermes/sidecar/smoke.sh`** — adds `-e CORELLIA_SIDECAR_ALLOW_STUB=true` to the `docker run` env. The Phase 1 smoke explicitly tests the FastAPI shape, not Hermes itself; the stub branch is the legitimate test path here, and the new boot gate would otherwise refuse to boot in this scenario.
+- **`adapters/hermes/smoke.sh`** — Fly-side smoke gains three negative-path probes before the happy-path `/chat` assertion: missing-bearer → 401, wrong-bearer → 401, `/tools/invoke` → 501. The happy-path assertion swaps `grep -q '"content"'` for `jq -e '.content | type == "string" and length > 0'` so a `{"detail":"missing content"}` or `{"content":""}` body fails loudly; smoke now fails up-front with an install hint if `jq` isn't available.
+- **`backend/internal/agents/service.go`** — new `pollProbeTimeout = 5 * time.Second` constant; `pollHealth`'s per-probe `context.WithTimeout` switches from `pollInterval` (2s) to `pollProbeTimeout`. The 2s budget was tight enough that a cold sidecar's TLS handshake + JSON decode against an external host frequently surfaced as `HealthUnknown` and burned probe slots; 5s leaves room without overlapping probes (extra ticker fires queue and the stdlib drops them).
+- **`backend/internal/agents/chat.go`** — drain `resp.Body` (`io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))`) before the early-return on 401 and on other non-2xx, so the underlying connection can be reused from `http.Client`'s pool. Minor — only matters under sustained 401/5xx — but free.
+
+### Verification
+
+- `cd backend && go vet ./...` clean.
+- `cd backend && go test ./...` green (agents, deploy, httpsrv, users).
+- `python3 -c 'import ast; ast.parse(...)'` for `sidecar.py` clean.
+- `bash -n adapters/hermes/smoke.sh` + `bash -n adapters/hermes/sidecar/smoke.sh` clean.
+- `pnpm -C frontend type-check && pnpm -C frontend lint && pnpm -C frontend build` unchanged from 0.11.8 (no FE delta this version).
+
+### Acknowledged-as-future (intentionally not in 0.11.9)
+
+- **Hermes-process probe inside `/health`.** The sidecar can verify the AIAgent import (above); probing whether Hermes-the-process is responsive requires either an HTTP probe to Hermes's own port or a side-channel mechanism. Out of scope for this polish pass; needs a sidecar source change + adapter image rebuild + migration.
+- **Boot-time `show_secrets` scope probe.** Phase 4's known risk (Fly token must permit `read_secret_values`). The 0.11.8 verification confirms the live token has the scope (otherwise no chat call would have succeeded), but a one-line boot probe in `cmd/api` would catch a future scope downgrade earlier than the first user-facing chat call. Cheap to add when the next M-chat-adjacent change touches `cmd/api`.
+
+### Why this matters
+
+0.11.7 closed the user-facing footguns; 0.11.8 verified the operator gate; 0.11.9 closes the smaller, deeper hygiene items the deep-review pass surfaced. M-chat is now ship-quality at the 9/10 bar: defense-in-depth on the schema (regex + max-length), honest readiness signals, no stub escape valve, proper smoke coverage, and connection-pool friendly error paths.
+
+---
+
+## 0.11.8 — M-chat Phase 7 Operator-Gate Verification: GHCR Push + Migration Confirmed Applied (2026-04-27)
+
+Verification-only entry — zero code change. Closes the two ⏳ Operator-gated items from `docs/completions/hermes-chat-sidecar-phase-7.md`.
+
+- **GHCR push confirmed.** `curl -sI https://ghcr.io/v2/hejijunhao/corellia-hermes-adapter/manifests/sha256:e31cc422c6e9c98200e1afae8abb99ef1256b12dc0b1d09802d1f878c9516441` returns `HTTP/2 401` with `www-authenticate: Bearer realm="https://ghcr.io/token", scope="repository:hejijunhao/corellia-hermes-adapter:pull"` — repository exists, manifest is reachable, image was pushed.
+- **Migration applied to prod DB.** `goose status` shows `20260427130000_bump_hermes_adapter_for_chat.sql` applied at `Sun Apr 26 17:23:48 2026`. The `harness_adapters.adapter_image_ref` row for `hermes` now pins to `sha256:e31cc422…`. Newly-spawned agents from Phase 7 onward use the sidecar-capable image.
+- **End-to-end Fly smoke (`./adapters/hermes/smoke.sh`):** not separately recorded in commits/changelog; the captured GHCR digest (which only `docker buildx imagetools inspect` post-push produces) and the operator's choice to apply the migration immediately after both imply the smoke ran successfully, but no log artefact survives. Re-runnable on demand.
 
 ## 0.11.7 — M-chat Post-Review Hardening: Inspector `chatEnabled` Lock-as-Read-Only + Chat-Panel Double-Enter Guard + ARIA + Error Remediation Hints (2026-04-27)
 

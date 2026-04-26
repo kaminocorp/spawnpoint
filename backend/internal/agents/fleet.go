@@ -494,7 +494,9 @@ func (s *Service) BulkUpdateDeployConfig(
 			return nil
 		})
 	}
-	_ = g.Wait()
+	if err := g.Wait(); err != nil {
+		return results, err
+	}
 	return results, nil
 }
 

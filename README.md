@@ -16,12 +16,28 @@
 
 ---
 
+## What it does
+
+Click **New Agent**. Pick **Hermes**. Name it, choose a model, set a region. Hit deploy.
+
+Thirty seconds later you have a live AI agent — isolated in its own Fly.io microVM, secrets-scoped, health-checked, and fully managed by Corellia. Click the agent's name and start chatting with it directly from the UI.
+
+That's the v1 golden path. Here's what's behind it:
+
+- **Spawn wizard** — "RPG character creation" for agents: harness → name → provider / model → deployment config → deploy. Streams Fly logs in real time as the machine boots.
+- **Fleet view** — gallery and list, live status, per-agent actions (start, stop, destroy), bulk ops with a dry-run preview.
+- **Fleet inspector** — click any agent, edit its deployment config (region, size, replicas), see every detail.
+- **Chat** — for chat-enabled agents, an embedded terminal-style chat panel proxies turns to the running Hermes sidecar over a per-tab bearer-authenticated session.
+- **Digest pinning** — every agent instance is bit-identical to its template; upgrades are explicit, audited actions. No mutable tags, ever.
+
+---
+
 ## Why Corellia
 
-Organizations want to deploy AI agents at scale — a 250-person company might want *thousands* of agents, each with different skills, tools, data access, and responsibilities. Today that looks like stitching together five tools that each own one slice:
+Organizations want to deploy AI agents at scale — a 250-person company might want *thousands* of agents, each with different skills, tools, data access, and responsibilities. Today that looks like stitching together five point tools:
 
-| The slice | Point tool |
-|-----------|-----------|
+| Slice | Point tool |
+|-------|-----------|
 | Orchestration | LangGraph, CrewAI |
 | Deployment | LangGraph Platform |
 | Tool permissions | Arcade.dev, Composio |
@@ -38,7 +54,7 @@ Organizations want to deploy AI agents at scale — a 250-person company might w
 
 Agents are, at the end of the day, **harnesses wrapped around models**. Corellia treats them like vehicles in a garage — you pick one and drive.
 
-- **Curated library** — pre-integrated harnesses ready to spawn. First one: the [Hermes Agent](https://github.com/NousResearch/hermes-agent) from Nous Research.
+- **Curated library** — pre-integrated harnesses ready to spawn. v1: the [Hermes Agent](https://github.com/NousResearch/hermes-agent) from Nous Research, with a Corellia sidecar baked in.
 - **Bring your own** *(post-v1)* — import a custom agent or point Corellia at a public GitHub repo.
 
 This works because of a **harness interface contract** — a spec for how Corellia talks to *any* agent, regardless of framework. Conceptually: LSP, but for agents. Define the spec once; every new framework becomes a one-time integration.
@@ -48,11 +64,11 @@ This works because of a **harness interface contract** — a spec for how Corell
 ## Core pillars
 
 1. **Agent lifecycle** — spawn, deploy, update, decommission
-2. **Skills library** — reusable capabilities agents can be equipped with
-3. **Context management** — files, documents, structured context
-4. **Memory** — via third-party providers (Elephantasm, etc.)
-5. **Permissions & access control** — IAM-style governance over tools, DBs, APIs
-6. **Auditing & observability** — centralized visibility into what every agent is doing
+2. **Skills library** — reusable capabilities agents can be equipped with *(post-v1)*
+3. **Context management** — files, documents, structured context *(post-v1)*
+4. **Memory** — via third-party providers (Elephantasm, etc.) *(post-v1)*
+5. **Permissions & access control** — IAM-style governance over tools, DBs, APIs *(post-v1)*
+6. **Auditing & observability** — centralized visibility into what every agent is doing *(post-v1)*
 
 ---
 
@@ -70,20 +86,26 @@ Admins don't control agent behavior in real time. They define the **guardrails**
 
 ## Status
 
-**Product phase — M2 shipped (`0.4.0`), M3 in flight.** Building toward a hackathon-scoped v1 MVP.
+**v1 MVP shipped.** The full end-to-end — spawn, deploy, chat, fleet management — works in production.
 
 | Area | State |
 |------|-------|
-| Backend (Go + Chi + Connect + sqlc) | ✓ Compiling; three domain services live (`users`, `organizations`, `agents`) |
-| Frontend (Next.js 16 + Supabase SSR + Connect-ES v2) | ✓ Sign-in → onboarding wizard → dashboard shell + `/agents` catalog |
-| Auth (Supabase ES256 / JWKS, offline validation) | ✓ Middleware validates; `auth.users` → `public.users` provisioning trigger |
-| Schema | ✓ `organizations`, `users`, `harness_adapters`, `agent_templates` (Hermes seeded by upstream image digest) |
-| First product RPC | ✓ `AgentsService.ListAgentTemplates` — backs the `/agents` catalog page |
-| Hermes adapter image | ⏳ M3 — `adapters/hermes/` Dockerfile + entrypoint shim (`CORELLIA_*` → Hermes-native env vars) |
-| `FlyDeployTarget` (`internal/deploy/`) | ⏳ M3 — interface + stubs landing; `spawn()` wires next |
-| `adapter_image_ref` backfill | ⏳ M3 — migration drafted; tightens column to `NOT NULL` once filled |
-| "RPG character creation" spawn flow | ⏳ M4 — depends on M3 |
-| Fleet view | ⏳ M4 — replaces M1's `/fleet` placeholder |
+| Spawn wizard (harness → name → model → deploy config → deploy) | ✅ Live |
+| Fleet view (gallery + list, status, start / stop / destroy) | ✅ Live |
+| Fleet inspector (per-agent config editing, deployment detail) | ✅ Live |
+| Bulk fleet ops (multi-select, bulk apply with dry-run preview) | ✅ Live |
+| Chat panel (embedded terminal-style chat via Hermes sidecar) | ✅ Live |
+| Hermes adapter image (GHCR, multi-arch, digest-pinned) | ✅ Live |
+| `FlyDeployTarget` — full spawn / stop / destroy / health lifecycle | ✅ Live |
+| Auth (Supabase ES256 / JWKS, fully offline JWT validation) | ✅ Live |
+| Connect-go RPCs (agents, fleet, chat, health) | ✅ Live |
+| Backend deploy (Fly.io, `corellia-api`) | ✅ Live |
+| Frontend deploy (Vercel) | ✅ Live |
+| Additional harnesses | 🔜 v2 |
+| Skills registry, tool permissions, IAM | 🔜 v2 |
+| Additional deploy targets (AWS, SkyPilot, local) | 🔜 v2 |
+| Programmatic adapter generation | 🔜 v2 |
+| Model gateway (LiteLLM) | 🔜 v2 |
 
 See [`docs/changelog.md`](docs/changelog.md) for the full trail.
 
@@ -93,14 +115,14 @@ See [`docs/changelog.md`](docs/changelog.md) for the full trail.
 
 | Layer | Pick |
 |-------|------|
-| Frontend | Next.js 16 (App Router) + React 19 + TypeScript |
-| Styling | Tailwind v4 + shadcn/ui |
-| API contract | Protobuf + Connect (Go server, ES client) |
+| Frontend | Next.js 15 (App Router) + React 19 + TypeScript |
+| Styling | Tailwind + shadcn/ui |
+| API contract | Protobuf + Connect-go (Go server, ES client) |
 | Backend | Go 1.26 + Chi router |
 | ORM / queries | sqlc (typed Go from SQL) |
 | Migrations | goose |
 | Auth | Supabase Auth (ES256 JWT, offline validation via cached JWKS) |
-| Database | Supabase Postgres (Direct Connection; `pgxpool` pools in-process — never transaction pooling) |
+| Database | Supabase Postgres (Direct Connection; `pgxpool` in-process — never transaction pooling) |
 | Frontend deploy | Vercel |
 | Backend deploy | Fly.io (we dogfood the infra we're orchestrating) |
 | Local orchestration | overmind + `Procfile` |
@@ -115,30 +137,29 @@ corellia/
 ├── backend/              Go service (Chi + Connect + pgx + sqlc)
 │   ├── cmd/api/          HTTP entrypoint
 │   ├── internal/
-│   │   ├── agents/       domain: spawn, stop, list
+│   │   ├── agents/       domain: spawn, stop, list, chat
 │   │   ├── adapters/     HarnessAdapter resolution + digest pinning
 │   │   ├── deploy/       DeployTarget interface + FlyDeployTarget
 │   │   ├── auth/         Supabase JWT middleware
 │   │   ├── config/       env loading (the ONLY place os.Getenv is allowed)
 │   │   ├── db/           sqlc-generated queries (never hand-edit)
 │   │   ├── gen/          buf-generated Connect server (never hand-edit)
-│   │   ├── httpsrv/      Chi setup, Connect handler mounts (<30 lines each)
-│   │   └── users/        domain service
+│   │   └── httpsrv/      Chi setup, Connect handler mounts (<30 lines each)
 │   ├── queries/          sqlc input — raw SQL per domain
 │   └── migrations/       goose-managed SQL
 │
-├── frontend/             Next.js 16 App Router
+├── frontend/             Next.js 15 App Router
 │   └── src/
 │       ├── app/          routes, layouts, pages
 │       ├── components/   UI (shadcn + custom)
 │       ├── lib/          supabase + connect clients
 │       └── gen/          buf-generated TS client (never hand-edit)
 │
-├── adapters/             hand-written harness adapter images (one Dockerfile per harness)
-│   └── hermes/           CORELLIA_* → Hermes-native env-var translation shim
+├── adapters/             hand-written harness adapter images
+│   └── hermes/           CORELLIA_* → Hermes-native env-var shim + chat sidecar
 │
 ├── shared/proto/         Proto IDL — the ONLY FE↔BE contract surface
-├── docs/                 vision, blueprint, stack, changelog, scaffolding recipes
+├── docs/                 vision, blueprint, stack, changelog
 ├── Procfile              `overmind start` boots FE + BE together
 └── go.work               Go workspace
 ```
@@ -177,14 +198,14 @@ pnpm install
 go work sync
 
 # 2. Configure env — copy the template into per-app files
-cp .env.example backend/.env                        # fill in DATABASE_URL, SUPABASE_*, etc.
+cp .env.example backend/.env                        # fill in DATABASE_URL, SUPABASE_*, FLY_SPAWN_TOKEN, etc.
 cp .env.example frontend/.env.local                 # fill in NEXT_PUBLIC_* vars
 
 # 3. Trust direnv in both app dirs (one-time)
 direnv allow backend
 direnv allow frontend
 
-# 4. Generate code (commits in-repo, so this is a freshness check)
+# 4. Generate code (committed in-repo, so this is a freshness check)
 pnpm proto:generate
 
 # 5. Apply migrations (DATABASE_URL_DIRECT is exported by direnv on `cd backend`)
@@ -202,7 +223,11 @@ pnpm -C frontend dev            # Next.js on :3000
 cd backend && air               # Go API on :8080
 ```
 
-Sign in at `http://localhost:3000/sign-in` with a user you created in the Supabase dashboard. First-login flows through the onboarding wizard (sets your display name + organization), then lands on the dashboard. From there, `/agents` renders the live catalog (one Hermes card backed by `AgentsService.ListAgentTemplates`, plus three "coming soon" sneak peeks). Spawn (`Deploy`) is intentionally disabled until M3 lands the adapter image and `FlyDeployTarget`.
+Sign in at `http://localhost:3000/sign-in`. First login flows through the onboarding wizard (display name + org), then lands on the dashboard. From there:
+
+- **`/spawn`** — the agent roster and catalog. Click "New Agent" to start the spawn wizard.
+- **`/fleet`** — your live agents. Toggle between gallery and list. Click any agent name for its detail page (and chat panel, if chat-enabled).
+- **`/settings`** — org and account settings.
 
 ### Everyday commands
 
@@ -244,13 +269,13 @@ Full rationale in [`docs/blueprint.md §11`](docs/blueprint.md) and [`docs/stack
 
 ## Roadmap
 
-**v1 (hackathon MVP)** — one harness (Hermes), one deploy target (Fly.io), catalog spawn flow, fleet view.
+**v1 (shipped)** — one harness (Hermes), one deploy target (Fly.io), full spawn + fleet + chat flow.
 
-**v1.5** — repo linking with build pipeline, basic audit log, sidecar logging to a memory provider, per-agent cost visibility.
+**v1.5** — repo linking with build pipeline, basic audit log, sidecar logging to a memory provider, per-agent cost visibility. Skills, Memory, and Tool Permissions promoted from v2 to this tier.
 
-**v2** — programmatic adapter generation + validation suite, second deploy target (bare-metal / SkyPilot / AWS), LiteLLM model gateway, skills registry, IAM-style tool permissions.
+**v2** — programmatic adapter generation + validation suite, second deploy target (bare-metal / SkyPilot / AWS), LiteLLM model gateway, full IAM-style tool permission system.
 
-**v3** — local / edge / on-prem via NixOS flakes, custom harness end-to-end, full observability pipeline, organizational policy layer (per-department / per-role / org-wide).
+**v3** — local / edge / on-prem via NixOS flakes, custom harness end-to-end (repo → adapter → deploy), full observability pipeline, organizational policy layer (per-department / per-role / org-wide).
 
 ---
 

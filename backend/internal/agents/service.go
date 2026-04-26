@@ -69,6 +69,13 @@ const (
 	bulkConcurrency     = 3
 	pollInterval        = 2 * time.Second
 	pollBudget          = 90 * time.Second
+	// 0.11.9: per-probe timeout was previously equal to pollInterval (2s),
+	// which is fine for the Fly machine-state poll (one API call) but very
+	// tight for the M-chat HTTP /health probe (TLS handshake + JSON decode
+	// against an external host on a cold sidecar). 5s gives the chat-enabled
+	// probe room without starving the ticker — extra ticks queue and the
+	// stdlib drops them, so probes don't overlap.
+	pollProbeTimeout = 5 * time.Second
 	flyDeployTargetName = "fly" // server-resolved per decision 5
 	flyExternalRefPfx   = "fly-app:"
 
@@ -671,7 +678,7 @@ func (s *Service) pollHealth(instanceID uuid.UUID, target deploy.DeployTarget, e
 	defer ticker.Stop()
 
 	probe := func() (deploy.HealthStatus, error) {
-		probeCtx, probeCancel := context.WithTimeout(ctx, pollInterval)
+		probeCtx, probeCancel := context.WithTimeout(ctx, pollProbeTimeout)
 		defer probeCancel()
 		return target.Health(probeCtx, externalRef, chatEnabled)
 	}

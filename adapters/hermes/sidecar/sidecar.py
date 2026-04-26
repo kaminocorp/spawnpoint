@@ -88,6 +88,22 @@ AUTH_TOKEN: str = os.environ.get("CORELLIA_SIDECAR_AUTH_TOKEN", "")
 # from disk — never data loss.
 MAX_SESSIONS: int = int(os.environ.get("CORELLIA_SIDECAR_MAX_SESSIONS", "100"))
 
+# Production safety gate (0.11.9): when the upstream AIAgent isn't
+# importable, the stub returns "[stub-aiagent] echo: ..." — useful for
+# workstation dev + smoke, never acceptable in a deployed agent. Set
+# CORELLIA_SIDECAR_ALLOW_STUB=true to permit the stub path; any other
+# value (including unset) refuses to boot when AIAGENT_AVAILABLE is
+# False. The Phase 1 sidecar smoke (sidecar/smoke.sh) sets this flag;
+# the entrypoint-driven prod boot does not.
+ALLOW_STUB: bool = os.environ.get("CORELLIA_SIDECAR_ALLOW_STUB", "").lower() == "true"
+if not AIAGENT_AVAILABLE and not ALLOW_STUB:
+    raise SystemExit(
+        "corellia/hermes-adapter sidecar: refusing to boot — upstream AIAgent "
+        "not importable and CORELLIA_SIDECAR_ALLOW_STUB is not 'true'. This "
+        "almost always means the deployed image is missing run_agent on "
+        "PYTHONPATH; verify the upstream digest pin in adapters/hermes/Dockerfile."
+    )
+
 
 # --- Session cache --------------------------------------------------------
 
@@ -149,8 +165,13 @@ app = FastAPI(title="corellia/hermes-adapter sidecar", lifespan=lifespan)
 
 
 class ChatRequest(BaseModel):
-    session_id: str = Field(..., min_length=1, max_length=128)
-    message: str = Field(..., min_length=1)
+    # session_id is restricted to URL-safe characters because it eventually
+    # lands on disk as $HERMES_HOME/sessions/<id>.sqlite — refusing path
+    # traversal / control chars at the schema boundary is cheaper than
+    # trusting the upstream's filename hygiene. message is capped to 64KB
+    # so a runaway POST doesn't get fully buffered before pydantic rejects.
+    session_id: str = Field(..., min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+    message: str = Field(..., min_length=1, max_length=65536)
 
 
 class ChatResponse(BaseModel):
@@ -198,10 +219,15 @@ async def bearer_auth(request: Request, call_next):
 
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
-    # Phase 1: the sidecar process is its own readiness signal. Phase 6
-    # tightens this into a real Hermes-side probe (risk 7's
-    # `{ok: false, hermes: "starting"}` pre-ready branch). For now,
-    # being able to answer at all means we're ready.
+    # 0.11.9: honest readiness signal. We can verify the AIAgent import
+    # succeeded (so chat calls won't immediately 502 on missing-class)
+    # but we can't probe Hermes-the-process from here — they're sibling
+    # processes under entrypoint.sh's supervisor branch. Phase 6 of the
+    # BE interprets ok=false as HealthStarting, ok=true as HealthStarted;
+    # surfacing the import state at this seam is the strictly-true signal
+    # the sidecar can offer without a Hermes-side probe.
+    if not AIAGENT_AVAILABLE:
+        return HealthResponse(ok=False, hermes="missing")
     return HealthResponse(ok=True, hermes="ready")
 
 

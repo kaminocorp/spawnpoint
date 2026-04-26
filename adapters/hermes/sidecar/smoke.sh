@@ -66,6 +66,7 @@ docker run -d --rm \
     -v "${HOST_DIR}:/corellia/sidecar:ro" \
     -e CORELLIA_SIDECAR_AUTH_TOKEN="$TOKEN" \
     -e CORELLIA_SIDECAR_PORT="$PORT" \
+    -e CORELLIA_SIDECAR_ALLOW_STUB=true \
     -e CORELLIA_MODEL_PROVIDER=openrouter \
     -e HERMES_INFERENCE_PROVIDER=openrouter \
     -e OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \

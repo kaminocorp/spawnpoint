@@ -131,9 +131,44 @@ if [ "$HEALTH_OK" -ne 1 ]; then
     exit 1
 fi
 
-# /chat probe — bearer token required; sidecar returns 401 without it.
-# Sends a minimal prompt; asserts the response carries a non-empty "content"
-# key. Uses the same SIDECAR_TOKEN staged above.
+# Negative-path probes — confirm bearer-auth is wired correctly through Fly's
+# edge proxy. A regression where the middleware accidentally short-circuits
+# to call_next would ship undetected from the happy-path probe alone.
+echo ">> probing POST /chat (no bearer) -> expect 401"
+CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+    -X POST "https://${APP}.fly.dev/chat" \
+    -H "Content-Type: application/json" \
+    -d '{"session_id":"smoke","message":"hi"}' || echo "000")
+if [ "$CODE" != "401" ]; then
+    echo "!! /chat without bearer: expected 401, got $CODE" >&2
+    exit 1
+fi
+
+echo ">> probing POST /chat (wrong bearer) -> expect 401"
+CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+    -X POST "https://${APP}.fly.dev/chat" \
+    -H "Authorization: Bearer not-the-token" \
+    -H "Content-Type: application/json" \
+    -d '{"session_id":"smoke","message":"hi"}' || echo "000")
+if [ "$CODE" != "401" ]; then
+    echo "!! /chat with wrong bearer: expected 401, got $CODE" >&2
+    exit 1
+fi
+
+echo ">> probing POST /tools/invoke (valid bearer) -> expect 501"
+CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+    -X POST "https://${APP}.fly.dev/tools/invoke" \
+    -H "Authorization: Bearer ${SIDECAR_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{}' || echo "000")
+if [ "$CODE" != "501" ]; then
+    echo "!! /tools/invoke: expected 501, got $CODE" >&2
+    exit 1
+fi
+
+# /chat happy path — bearer token required; asserts the response carries a
+# non-empty .content string (jq-precise: `{"detail":"missing content"}` or
+# `{"content":""}` would both have failed the looser grep predecessor).
 echo ">> probing POST /chat with bearer token (30s timeout)"
 CHAT_RESP=$(curl -fsS --max-time 30 \
     -X POST "https://${APP}.fly.dev/chat" \
@@ -142,10 +177,15 @@ CHAT_RESP=$(curl -fsS --max-time 30 \
     -d '{"session_id":"smoke","message":"reply with the single word: pong"}' \
     2>/dev/null || true)
 echo ">> /chat response: $CHAT_RESP"
-if echo "$CHAT_RESP" | grep -q '"content"'; then
-    echo ">> smoke complete (trap will destroy $APP)"
-    exit 0
+if command -v jq >/dev/null 2>&1; then
+    if echo "$CHAT_RESP" | jq -e '.content | type == "string" and length > 0' >/dev/null 2>&1; then
+        echo ">> smoke complete (trap will destroy $APP)"
+        exit 0
+    else
+        echo "!! /chat did not return non-empty .content (jq strict)" >&2
+        exit 1
+    fi
 else
-    echo "!! /chat did not return {\"content\":...}" >&2
+    echo "!! jq not installed — install jq for strict .content assertion (brew install jq)" >&2
     exit 1
 fi
