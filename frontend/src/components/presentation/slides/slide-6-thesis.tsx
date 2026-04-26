@@ -1,118 +1,131 @@
 "use client";
 
 /**
- * Slide 6 — GOVERNANCE-AS-A-SERVICE
+ * Slide — TECHNICAL IMPLEMENTATION
  *
- * Technical architecture overview: three stacked tiers (Control Plane →
- * API + Governance Engine → Agent Infrastructure) with module badges and
- * stack annotations. Each tier and connector animates in with a stagger
- * so the diagram builds as the presenter narrates.
+ * Three-column layout: Tech Stack | Today | Tomorrow.
+ * Each column is a TierBox-style card with sub-grouped badge items.
+ * Columns stagger in left-to-right so the presenter can walk each one.
  */
 
-type Tier = {
+type Group = { label: string; items: readonly string[] };
+
+type Column = {
   id: string;
   label: string;
-  accent: string; // CSS var name e.g. "--feature-catalog"
-  modules: readonly string[];
-  tech: string;
+  accent: string;
+  groups: readonly Group[];
 };
 
-const TIERS: readonly Tier[] = [
+const COLUMNS: readonly Column[] = [
   {
-    id: "control",
-    label: "CONTROL PLANE",
+    id: "stack",
+    label: "TECH STACK",
     accent: "--feature-catalog",
-    modules: ["Spawn Wizard", "Fleet View", "Inspector", "Chat Panel"],
-    tech: "Next.js 15 App Router  ·  Vercel  ·  TypeScript  ·  shadcn/ui  ·  Connect-go TS",
-  },
-  {
-    id: "api",
-    label: "API · GOVERNANCE ENGINE",
-    accent: "--feature-adapter",
-    modules: [
-      "Connect-go RPCs",
-      "JWT Auth",
-      "Tool Manifest",
-      "corellia_guard",
-      "sqlc / pgx",
+    groups: [
+      {
+        label: "BACKEND",
+        items: ["Go 1.26", "Chi router", "Connect-go RPCs", "sqlc · pgx"],
+      },
+      {
+        label: "FRONTEND",
+        items: ["Next.js 15 App Router", "TypeScript", "shadcn/ui"],
+      },
+      {
+        label: "DATA & AUTH",
+        items: ["Supabase Postgres", "Supabase Auth · ES256 JWT", "Vercel · Fly.io"],
+      },
     ],
-    tech: "Go 1.26  ·  Chi  ·  Supabase Postgres  ·  ES256 JWKS  ·  Fly.io  ·  Buf Proto IDL",
   },
   {
-    id: "infra",
-    label: "AGENT INFRASTRUCTURE",
+    id: "today",
+    label: "TODAY",
     accent: "--feature-deploy",
-    modules: ["Hermes Adapter", "Chat Sidecar", "Digest Pin", "CORELLIA_* env"],
-    tech: "Fly.io Machines (Firecracker)  ·  1 app = 1 agent  ·  Docker  ·  digest-pinned images",
+    groups: [
+      {
+        label: "HARNESS",
+        items: ["Hermes Agent", "Nous Research"],
+      },
+      {
+        label: "DEPLOYMENT",
+        items: ["Fly.io · Firecracker VMs", "AWS underlying", "1 app = 1 agent"],
+      },
+      {
+        label: "GOVERNANCE",
+        items: ["Fixed Hermes adapter", "corellia_guard plugin", "Chat sidecar", "Tool permissions"],
+      },
+    ],
+  },
+  {
+    id: "tomorrow",
+    label: "TOMORROW",
+    accent: "--feature-adapter",
+    groups: [
+      {
+        label: "HARNESSES",
+        items: ["Opus 4.7 adapter gen", "OpenClaw", "CrewAI · AutoGen", "Any GitHub repo"],
+      },
+      {
+        label: "DEPLOYMENT",
+        items: ["AWS · GCP · Azure", "Hetzner · bare metal", "Edge & on-prem"],
+      },
+      {
+        label: "GOVERNANCE",
+        items: ["Skills registry", "Memory providers", "Full IAM + audit trail"],
+      },
+    ],
   },
 ];
 
-const ARROWS = [
-  "Connect RPCs  ·  HTTP/1.1 JSON  ·  Supabase ES256 JWT",
-  "Fly Machines API  ·  secrets injection  ·  /health probe",
-];
-
-function TierBox({ tier, delay }: { tier: Tier; delay: number }) {
-  const accentColor = `hsl(var(${tier.accent}))`;
+function ColumnCard({ col, delay }: { col: Column; delay: number }) {
+  const accent = `hsl(var(${col.accent}))`;
   return (
     <div
-      className="arch-animate border border-border/60 bg-black/30"
+      className="arch-animate flex flex-col border border-border/60 bg-black/30"
       style={{
-        borderLeftColor: accentColor,
+        borderLeftColor: accent,
         borderLeftWidth: "2px",
         animation: `arch-in 0.45s ease-out ${delay}ms both`,
       }}
     >
-      <div className="border-b border-border/40 px-4 py-2">
+      {/* Header */}
+      <div className="border-b border-border/40 px-4 py-2.5">
         <span
-          className="font-display text-[10px] uppercase tracking-widest"
-          style={{ color: accentColor }}
+          className="font-display text-[11px] uppercase tracking-widest"
+          style={{ color: accent }}
         >
-          [ {tier.label} ]
+          [ {col.label} ]
         </span>
       </div>
-      <div className="px-4 py-3">
-        <div className="mb-2.5 flex flex-wrap gap-1.5">
-          {tier.modules.map((m) => (
-            <span
-              key={m}
-              className="border px-2 py-0.5 font-mono text-[10px] text-foreground/80"
-              style={{ borderColor: `hsl(var(${tier.accent}) / 0.4)` }}
-            >
-              {m}
-            </span>
-          ))}
-        </div>
-        <p className="font-mono text-[10px] leading-relaxed text-muted-foreground/80">
-          {tier.tech}
-        </p>
-      </div>
-    </div>
-  );
-}
 
-function ArrowConnector({ label, delay }: { label: string; delay: number }) {
-  return (
-    <div
-      className="arch-animate flex items-center gap-3 px-5 py-1.5"
-      style={{ animation: `arch-in 0.4s ease-out ${delay}ms both` }}
-    >
-      <div className="flex flex-col items-center">
-        <div className="h-3 w-px bg-border/50" />
-        <span className="font-mono text-[10px] leading-none text-muted-foreground/50">
-          ▾
-        </span>
+      {/* Groups */}
+      <div className="flex flex-1 flex-col gap-4 px-4 py-4">
+        {col.groups.map((g) => (
+          <div key={g.label}>
+            <p className="mb-2 font-display text-[9px] uppercase tracking-widest text-muted-foreground/45">
+              {g.label}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {g.items.map((item) => (
+                <span
+                  key={item}
+                  className="border px-2 py-0.5 font-mono text-[11px] text-foreground/80"
+                  style={{ borderColor: `hsl(var(${col.accent}) / 0.35)` }}
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
-      <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground/55">
-        {label}
-      </span>
     </div>
   );
 }
 
 export function SlideThesis() {
   return (
-    <div className="flex size-full min-h-[70vh] w-full max-w-5xl flex-col items-center justify-center gap-8">
+    <div className="flex size-full min-h-[70vh] w-full max-w-6xl flex-col items-center justify-between py-8">
       {/* Title */}
       <div
         className="arch-animate flex flex-col items-center gap-2"
@@ -122,28 +135,26 @@ export function SlideThesis() {
           [ ARCHITECTURE ]
         </p>
         <h2 className="text-center font-display text-3xl font-black uppercase tracking-[0.15em] text-foreground sm:text-5xl">
-          Governance-as-a-Service.
+          Technical Implementation.
         </h2>
+        <p className="font-mono text-sm uppercase tracking-wider text-muted-foreground">
+          Stack · Today · Tomorrow
+        </p>
       </div>
 
-      {/* Three-tier architecture diagram */}
-      <div className="w-full">
-        {TIERS.map((tier, i) => (
-          <div key={tier.id}>
-            <TierBox tier={tier} delay={200 + i * 220} />
-            {i < ARROWS.length && (
-              <ArrowConnector label={ARROWS[i]} delay={280 + i * 220} />
-            )}
-          </div>
+      {/* Three columns */}
+      <div className="grid w-full grid-cols-3 gap-4">
+        {COLUMNS.map((col, i) => (
+          <ColumnCard key={col.id} col={col} delay={200 + i * 180} />
         ))}
       </div>
 
       {/* Footer */}
       <p
         className="arch-animate font-mono text-sm uppercase tracking-wider text-muted-foreground"
-        style={{ animation: "arch-in 0.4s ease-out 920ms both" }}
+        style={{ animation: "arch-in 0.4s ease-out 760ms both" }}
       >
-        one proto IDL · buf generate → Go + TS · single source of truth
+        open · extensible · production-ready
       </p>
 
       <style>{`

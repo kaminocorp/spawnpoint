@@ -2,7 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ConnectError } from "@connectrpc/connect";
-import { EyeIcon, EyeOffIcon, KeyIcon, LockIcon } from "lucide-react";
+import {
+  Clock3Icon,
+  CodeIcon,
+  EyeIcon,
+  EyeOffIcon,
+  FolderIcon,
+  GlobeIcon,
+  KeyIcon,
+  LockIcon,
+  MessageSquareIcon,
+  NetworkIcon,
+  ShieldIcon,
+  TerminalIcon,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,12 +41,6 @@ import type { Tool } from "@/gen/corellia/v1/tools_pb";
 
 import type { JsonObject } from "@bufbuild/protobuf";
 
-/**
- * Per-toolset wizard state. `scope` is a free-form JSON object whose keys
- * mirror the catalog row's `scope_shape`. `credential` carries the raw
- * value the operator pasted; per blueprint §11.6 it is forwarded once
- * to the BE secret-store on submit and never persisted client-side.
- */
 export type ToolsetState = {
   equipped: boolean;
   scope: Record<string, unknown>;
@@ -47,21 +54,6 @@ type FetchState =
   | { kind: "ready"; tools: Tool[] }
   | { kind: "error"; message: string };
 
-/**
- * `<ToolsStep>` — the operator-facing milestone of v1.5 Pillar B Phase 4.
- *
- * Fetches the toolset catalog scoped to the harness adapter (filtered to
- * the caller's org by the BE's `ListTools` org-curation merge), renders
- * each toolset as an equippable card, and returns the equipped subset
- * with scopes + credentials when the operator confirms.
- *
- * Phase-4 deviation note: credential capture lives in the UI for parity
- * with the spawn flow's API-key pattern. The wire shape currently sends
- * an empty `credentialStorageRef` because the BE secret-stash leg is
- * scoped for the Phase 4.5 / 5 work — see plan §3 risk row + completion
- * notes. Operators see a clear "captured but not yet wired" notice on
- * any credential field they touch.
- */
 export function ToolsStep({
   harnessAdapterId,
   value,
@@ -99,15 +91,13 @@ export function ToolsStep({
 
   const visibleTools = useMemo(() => {
     if (fetch.kind !== "ready") return [] as Tool[];
-    // Plan §3 Phase 4: org-curated-out toolsets are hidden entirely
-    // (locked rendering is reserved for OAuth-only).
     return fetch.tools.filter((t) => t.enabledForOrg);
   }, [fetch]);
 
   if (fetch.kind === "loading") {
     return (
-      <div className="space-y-3">
-        {[0, 1, 2].map((i) => (
+      <div className="grid grid-cols-2 gap-2">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
           <div
             key={i}
             className="h-24 w-full animate-telemetry border border-border bg-card"
@@ -155,45 +145,40 @@ export function ToolsStep({
   const equippedCount = Object.values(draft).filter((t) => t.equipped).length;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="font-display text-[11px] uppercase tracking-widest text-[hsl(var(--feature-tools))]">
-        [ EQUIP TOOLSETS ]
-      </div>
-      <p className="text-sm leading-relaxed text-muted-foreground">
-        Pick the toolsets the agent may call, scope each one, and attach
-        credentials where required. URL, command, and path allowlists are
-        captured here and enforced by the corellia_guard plugin once Pillar
-        B Phase 5 ships.
-      </p>
-
-      <div className="space-y-3">
-        {visibleTools.length === 0 && (
-          <p className="font-mono text-sm text-muted-foreground">
-            No toolsets available for this harness in your org.
-          </p>
-        )}
-        {visibleTools.map((tool) => (
-          <ToolsetCard
-            key={tool.id}
-            tool={tool}
-            state={draft[tool.toolsetKey]}
-            onToggle={(equipped) => setToolset(tool.toolsetKey, { equipped })}
-            onScopeChange={(scope) => setToolset(tool.toolsetKey, { scope })}
-            onCredentialChange={(credential) =>
-              setToolset(tool.toolsetKey, { credential })
-            }
-            error={submitErrors[tool.toolsetKey]}
-          />
-        ))}
+        [ INVENTORY ]
       </div>
 
-      <div className="flex items-center justify-between border-t border-border pt-3">
+      {visibleTools.length === 0 ? (
+        <p className="font-mono text-sm text-muted-foreground">
+          No toolsets available for this harness in your org.
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 items-start gap-2">
+          {visibleTools.map((tool) => (
+            <ToolsetCard
+              key={tool.id}
+              tool={tool}
+              state={draft[tool.toolsetKey]}
+              onToggle={(equipped) => setToolset(tool.toolsetKey, { equipped })}
+              onScopeChange={(scope) => setToolset(tool.toolsetKey, { scope })}
+              onCredentialChange={(credential) =>
+                setToolset(tool.toolsetKey, { credential })
+              }
+              error={submitErrors[tool.toolsetKey]}
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between border-t border-border pt-2.5">
         <div className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70">
           {equippedCount === 0
-            ? "no toolsets equipped"
+            ? "nothing equipped"
             : equippedCount === 1
-              ? "1 toolset equipped"
-              : `${equippedCount} toolsets equipped`}
+              ? "1 equipped"
+              : `${equippedCount} equipped`}
         </div>
         <Button size="sm" type="button" onClick={onConfirmClick}>
           › CONFIRM
@@ -222,56 +207,86 @@ function ToolsetCard({
 
   if (tool.oauthOnly) {
     return (
-      <div className="border border-border bg-card p-4 opacity-70">
-        <div className="flex items-center gap-2">
-          <LockIcon className="size-4 text-muted-foreground" />
-          <span className="font-mono text-sm text-foreground">
-            {tool.displayName}
-          </span>
-          <span className="ml-auto font-display text-[10px] uppercase tracking-widest text-muted-foreground">
-            [ OAUTH REQUIRED — v1.6 ]
-          </span>
+      <div className="flex flex-col items-center gap-2 border border-border/30 bg-card/60 p-3 opacity-40">
+        <div className="flex size-9 shrink-0 items-center justify-center border border-border/30 bg-black/20 text-muted-foreground/50">
+          {renderToolIcon(tool, "size-4")}
         </div>
-        <p className="mt-1.5 text-xs text-muted-foreground">
-          {tool.description}
-        </p>
+        <div className="line-clamp-2 text-center font-display text-[9px] uppercase leading-tight tracking-[0.14em] text-muted-foreground">
+          {tool.displayName}
+        </div>
+        <LockIcon className="size-2.5 text-muted-foreground/40" />
       </div>
     );
   }
 
   return (
     <div
-      className={
-        "border bg-card p-4 transition " +
-        (equipped
-          ? "border-[hsl(var(--feature-tools))]"
-          : "border-border hover:border-[hsl(var(--feature-tools))]/40")
-      }
+      className={[
+        "border bg-card transition-colors",
+        equipped
+          ? "border-[hsl(var(--feature-tools))]/60"
+          : "border-border/40 hover:border-[hsl(var(--feature-tools))]/30",
+      ].join(" ")}
     >
-      <div className="flex items-start gap-3">
-        <div className="flex-1 space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-sm text-foreground">
-              {tool.displayName}
-            </span>
-            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/70">
-              {tool.category}
-            </span>
-          </div>
-          <p className="text-xs text-muted-foreground">{tool.description}</p>
-        </div>
-        <Button
-          size="xs"
-          variant={equipped ? "default" : "outline"}
-          type="button"
-          onClick={() => onToggle(!equipped)}
+      {/* Inventory tile — click to toggle equip */}
+      <button
+        type="button"
+        onClick={() => onToggle(!equipped)}
+        className="flex w-full flex-col items-center gap-2 p-3 text-center"
+      >
+        {/* Icon */}
+        <div
+          className={[
+            "flex size-9 shrink-0 items-center justify-center border transition-colors",
+            equipped
+              ? "border-[hsl(var(--feature-tools))]/60 bg-[hsl(var(--feature-tools))]/10 text-[hsl(var(--feature-tools))]"
+              : "border-border/40 bg-black/30 text-muted-foreground/60",
+          ].join(" ")}
         >
-          {equipped ? "[ ✓ EQUIPPED ]" : "[ EQUIP ]"}
-        </Button>
-      </div>
+          {renderToolIcon(tool, "size-4")}
+        </div>
 
+        {/* Name + category */}
+        <div className="w-full space-y-0.5">
+          <div
+            className={[
+              "line-clamp-2 font-display text-[9px] uppercase leading-tight tracking-[0.14em]",
+              equipped
+                ? "text-[hsl(var(--feature-tools))]"
+                : "text-foreground/80",
+            ].join(" ")}
+          >
+            {tool.displayName}
+          </div>
+          <div className="font-mono text-[8px] uppercase tracking-wider text-muted-foreground/40">
+            {tool.category}
+          </div>
+        </div>
+
+        {/* Equip indicator */}
+        <div
+          className={[
+            "flex items-center gap-1 font-mono text-[8px] uppercase tracking-widest",
+            equipped
+              ? "text-[hsl(var(--feature-tools))]"
+              : "text-muted-foreground/40",
+          ].join(" ")}
+        >
+          <div
+            className={[
+              "size-1.5 rounded-full",
+              equipped
+                ? "bg-[hsl(var(--feature-tools))]"
+                : "border border-muted-foreground/30",
+            ].join(" ")}
+          />
+          {equipped ? "equipped" : "equip"}
+        </div>
+      </button>
+
+      {/* Scope drawer — expands when equipped */}
       {equipped && (
-        <div className="mt-4 space-y-4 border-t border-border pt-4">
+        <div className="space-y-2 border-t border-[hsl(var(--feature-tools))]/20 p-2.5">
           <ScopeFields
             tool={tool}
             scope={state?.scope ?? {}}
@@ -284,11 +299,48 @@ function ToolsetCard({
               onChange={onCredentialChange}
             />
           )}
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && (
+            <p className="font-mono text-[9px] text-destructive">{error}</p>
+          )}
         </div>
       )}
     </div>
   );
+}
+
+function renderToolIcon(tool: Tool, className: string) {
+  const key = tool.toolsetKey.toLowerCase();
+  const name = tool.displayName.toLowerCase();
+  const category = tool.category.toLowerCase();
+
+  if (key.includes("browser") || name.includes("browser")) {
+    return <GlobeIcon className={className} />;
+  }
+  if (key.includes("clarify") || name.includes("clarify")) {
+    return <MessageSquareIcon className={className} />;
+  }
+  if (key.includes("code") || name.includes("code")) {
+    return <CodeIcon className={className} />;
+  }
+  if (key.includes("cron") || name.includes("cron")) {
+    return <Clock3Icon className={className} />;
+  }
+  if (key.includes("delegat") || name.includes("delegat")) {
+    return <NetworkIcon className={className} />;
+  }
+  if (key.includes("file") || name.includes("file")) {
+    return <FolderIcon className={className} />;
+  }
+  if (key.includes("shell") || name.includes("shell")) {
+    return <TerminalIcon className={className} />;
+  }
+  if (category.includes("compute")) {
+    return <CodeIcon className={className} />;
+  }
+  if (category.includes("info")) {
+    return <ShieldIcon className={className} />;
+  }
+  return <ShieldIcon className={className} />;
 }
 
 function ScopeFields({
@@ -304,8 +356,8 @@ function ScopeFields({
   const keys = Object.keys(shape);
   if (keys.length === 0) {
     return (
-      <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground/60">
-        no operator-configurable scope
+      <p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground/50">
+        no scope required
       </p>
     );
   }
@@ -315,7 +367,7 @@ function ScopeFields({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {keys.map((key) => {
         switch (key) {
           case "url_allowlist":
@@ -351,16 +403,14 @@ function ScopeFields({
               />
             );
           default:
-            // Unknown shape — render an inert preview so the catalog
-            // can introduce new scope keys without crashing the wizard.
             return (
               <div
                 key={key}
-                className="rounded-sm border border-dashed border-border p-2 font-mono text-[11px] text-muted-foreground"
+                className="border border-dashed border-border p-2 font-mono text-[9px] text-muted-foreground"
               >
                 <div className="uppercase tracking-wider">[ {key} ]</div>
-                <div className="mt-1 text-muted-foreground/60">
-                  shape not yet wired in this build
+                <div className="mt-0.5 text-muted-foreground/50">
+                  not yet wired
                 </div>
               </div>
             );
@@ -382,9 +432,9 @@ function CredentialField({
   const [show, setShow] = useState(false);
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center gap-2 font-display text-[11px] uppercase tracking-widest text-muted-foreground/70">
-        <KeyIcon className="size-3.5 text-[hsl(var(--feature-secrets))]" />
-        [ CREDENTIAL · {envVars.join(" / ")} ]
+      <div className="flex items-center gap-1.5 font-display text-[9px] uppercase tracking-widest text-muted-foreground/70">
+        <KeyIcon className="size-3 text-[hsl(var(--feature-secrets))]" />
+        {envVars[0]}
       </div>
       <div className="relative">
         <Input
@@ -395,25 +445,17 @@ function CredentialField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           aria-label={`${envVars.join(", ")} value`}
-          className="pr-10 font-mono"
+          className="h-7 pr-8 font-mono text-[10px]"
         />
         <button
           type="button"
           onClick={() => setShow((s) => !s)}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
-          aria-label={show ? "Hide credential" : "Show credential"}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          aria-label={show ? "Hide" : "Show"}
         >
-          {show ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}
+          {show ? <EyeOffIcon className="size-3" /> : <EyeIcon className="size-3" />}
         </button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Forwarded once to the agent&apos;s secret store. Never written to
-        Corellia&apos;s database.
-      </p>
-      <p className="font-mono text-[10px] uppercase tracking-widest text-[hsl(var(--status-pending))]">
-        [ STASH WIRING IN PILLAR B PHASE 4.5 ] — captured here today; the
-        BE→Fly secret stash lands alongside the manifest env-var resolver.
-      </p>
     </div>
   );
 }
@@ -462,13 +504,6 @@ function validateScope(
   return null;
 }
 
-/**
- * Project the wizard's `ToolsetStateMap` into the GrantInput[] shape the
- * SetInstanceToolGrants RPC expects. Only equipped toolsets are included.
- * Drops `credential` (raw value) — the wire today carries an empty
- * `credentialStorageRef`; see the Phase 4 deviation note in the file
- * header.
- */
 export function toolsetMapToGrants(
   toolsets: ToolsetStateMap,
   toolIdByKey: Record<string, string>,
@@ -483,7 +518,6 @@ export function toolsetMapToGrants(
   return out;
 }
 
-/** Summary rows for the Review-step character sheet. */
 export function toolsetSummaryRows(
   toolsets: ToolsetStateMap,
 ): ReadonlyArray<{ label: string; value: string }> {

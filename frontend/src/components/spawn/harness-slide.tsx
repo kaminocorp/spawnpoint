@@ -10,10 +10,11 @@ import type { HarnessEntry } from "@/lib/spawn/harnesses";
  * One harness card — the atomic unit of both the carousel and the
  * `prefers-reduced-motion` grid fallback.
  *
- * Each slide owns its avatar: the active unlocked slide renders a live
- * `<NebulaAvatar>` canvas; locked and off-screen slides show the static
+ * Each slide owns its avatar: the active slide renders a live
+ * `<NebulaAvatar>` canvas; off-screen slides show the static
  * `<AvatarFallback>`. Since scroll-snap shows exactly one slide at a time,
- * only one canvas is ever mounted in the carousel at once.
+ * only one canvas is ever mounted in the carousel at once, even when the
+ * active slide is a locked harness.
  *
  * `isActive` controls both the avatar branch and whether `› SELECT` is in
  * the Tab order (`tabIndex={0}` when active, `tabIndex={-1}` otherwise).
@@ -44,7 +45,7 @@ export function HarnessSlide({
   return (
     <article
       className={[
-        "flex h-full flex-col border border-border bg-card",
+        "mx-auto flex h-full w-full max-w-[clamp(20rem,36vw,31rem)] min-w-0 flex-col border border-border bg-card",
         isLocked
           ? "opacity-70"
           : "transition-colors hover:border-[hsl(var(--feature-catalog))]/60",
@@ -68,8 +69,8 @@ export function HarnessSlide({
         </span>
       </header>
 
-      <div className="relative h-48 bg-black/40 sm:h-56 md:h-64">
-        {isActive && !isLocked ? (
+      <div className="relative aspect-[5/6] min-h-[15rem] max-h-[42vh] bg-black/40 lg:aspect-[4/5] lg:min-h-[17rem] lg:max-h-[48vh] xl:min-h-[18rem]">
+        {isActive ? (
           <NebulaAvatar fill harness={harness.key} />
         ) : (
           <AvatarFallback fill harness={harness.key} />
@@ -90,15 +91,15 @@ export function HarnessSlide({
         <dl className="space-y-1 font-mono text-xs">
           {isLocked ? (
             <>
-              <SlideSpecRow label="VENDOR" value={harness.vendor} muted />
+              <SlideSpecRow label="FROM" value={harness.vendor} muted />
               <SlideSpecRow label="STATUS" value="COMING SOON" muted />
               <SlideSpecRow label="ETA" value={harness.eta ?? "—"} muted />
             </>
           ) : (
             <>
               <SlideSpecRow label="HARNESS" value={harness.key} />
+              <SlideSpecRow label="FROM" value={harness.vendor} />
               <SlideSpecRow label="ADAPTER" value="hand-written" />
-              <SlideSpecRow label="DEPLOY" value="fly.io" />
             </>
           )}
         </dl>

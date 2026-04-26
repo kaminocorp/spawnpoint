@@ -188,9 +188,8 @@ function Crystal({
       }`}
       style={{
         animation: show
-          ? `opus-crystallize 600ms ease-out forwards`
+          ? `opus-crystallize 600ms ease-out ${delay}ms forwards`
           : undefined,
-        animationDelay: `${delay}ms`,
       }}
     >
       <span className="block font-display text-[10px] uppercase tracking-widest text-muted-foreground">

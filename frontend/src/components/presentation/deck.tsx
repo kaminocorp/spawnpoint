@@ -5,11 +5,12 @@ import { useCallback, useEffect, useState } from "react";
 import { AudioBed, SlideCue } from "./audio/audio-bed";
 import { SlideFrame } from "./slide-frame";
 import { SlideHook } from "./slides/slide-1-hook";
-import { SlideTangle } from "./slides/slide-2-tangle";
+import { SlideHarness } from "./slides/slide-2a-harness";
+import { SlideDeploy } from "./slides/slide-2b-deploy";
+import { SlideTools } from "./slides/slide-2c-tools";
+import { SlideOversight } from "./slides/slide-2d-oversight";
 import { SlideGarage } from "./slides/slide-3-garage";
-import { SlideGuardian } from "./slides/slide-4-guardian";
 import { SlideOpus } from "./slides/slide-5-opus";
-import { SlideAdaptive } from "./slides/slide-adaptive";
 import { SlideThesis } from "./slides/slide-6-thesis";
 import { SlideHandoff } from "./slides/slide-7-handoff";
 
@@ -44,11 +45,12 @@ import { SlideHandoff } from "./slides/slide-7-handoff";
 
 type SlideId =
   | "hook"
-  | "tangle"
+  | "harness"
+  | "deploy"
+  | "tools"
+  | "oversight"
   | "garage"
-  | "guardian"
   | "opus"
-  | "adaptive"
   | "thesis"
   | "handoff";
 
@@ -62,12 +64,13 @@ type SlideEntry = {
 };
 
 const SLIDES: readonly SlideEntry[] = [
-  { id: "hook", title: "HOOK", durationMs: 8000 },
-  { id: "tangle", title: "TANGLE", durationMs: 10000 },
-  { id: "garage", title: "GARAGE", durationMs: 10000 },
-  { id: "guardian", title: "GUARDIAN", durationMs: 10000 },
+  { id: "hook",      title: "HOOK",       durationMs: 8000  },
+  { id: "harness",   title: "HARNESS",    durationMs: 9000  },
+  { id: "tools",     title: "TOOLS",      durationMs: 9000  },
+  { id: "deploy",    title: "DEPLOYMENT", durationMs: 9000  },
+  { id: "oversight", title: "OVERSIGHT",  durationMs: 9000  },
+  { id: "garage",    title: "GARAGE",     durationMs: 10000 },
   { id: "opus", title: "OPUS LOOP", durationMs: 10000 },
-  { id: "adaptive", title: "ADAPTIVE PLANE", durationMs: 10000 },
   { id: "thesis", title: "THESIS", durationMs: 7000 },
   { id: "handoff", title: "HANDOFF", durationMs: 5000 },
 ];
@@ -75,20 +78,22 @@ const SLIDES: readonly SlideEntry[] = [
 const COUNT = SLIDES.length;
 const CROSSFADE_MS = 250;
 
-function renderSlide(id: SlideId, options: { collapsing?: boolean }) {
+function renderSlide(id: SlideId) {
   switch (id) {
     case "hook":
       return <SlideHook />;
-    case "tangle":
-      return <SlideTangle collapsing={options.collapsing} />;
+    case "harness":
+      return <SlideHarness />;
+    case "deploy":
+      return <SlideDeploy />;
+    case "tools":
+      return <SlideTools />;
+    case "oversight":
+      return <SlideOversight />;
     case "garage":
       return <SlideGarage />;
-    case "guardian":
-      return <SlideGuardian />;
     case "opus":
       return <SlideOpus />;
-    case "adaptive":
-      return <SlideAdaptive />;
     case "thesis":
       return <SlideThesis />;
     case "handoff":
@@ -184,20 +189,6 @@ export function Deck({ recordMode = false }: { recordMode?: boolean }) {
 
   const slide = SLIDES[index];
 
-  // Phase-4 link: when transitioning *out of* slide 2 (tangle), pass
-  // `collapsing` to the tangle scene so the lines + nodes converge to
-  // a point in the screen-center — which is where slide 3's hub will
-  // appear. The collapse animation lives entirely inside the
-  // CROSSFADE_MS window: the scene's own start-time ref (kept in
-  // useFrame) lerps over COLLAPSE_DURATION_S = 250ms, fitting the
-  // crossfade exactly so the convergence is visible before the
-  // tangle unmounts.
-  const isCollapsing =
-    slide.id === "tangle" &&
-    transitioning &&
-    pendingIndex !== null &&
-    pendingIndex === SLIDES.findIndex((s) => s.id === "garage");
-
   return (
     <div
       className="relative flex min-h-screen w-full cursor-pointer flex-col"
@@ -219,7 +210,7 @@ export function Deck({ recordMode = false }: { recordMode?: boolean }) {
           className="relative flex w-full items-center justify-center transition-opacity duration-200"
           style={{ opacity: transitioning ? 0 : 1 }}
         >
-          {renderSlide(slide.id, { collapsing: isCollapsing })}
+          {renderSlide(slide.id)}
         </div>
       </SlideFrame>
 

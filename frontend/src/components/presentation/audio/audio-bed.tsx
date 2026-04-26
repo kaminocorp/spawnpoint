@@ -40,11 +40,10 @@ export function AudioBed({
   );
 }
 
-export function SlideCue({ src, key }: { src?: string; key?: string | number }) {
+export function SlideCue({ src }: { src?: string }) {
   if (!src) return null;
   return (
     <audio
-      key={key}
       src={src}
       autoPlay
       ref={(el: HTMLAudioElement | null) => {

@@ -149,7 +149,7 @@ function ReadyChrome({
             userName={user.name ?? ""}
             email={user.email}
           />
-          <div className="grid-bg flex-1 p-6">{children}</div>
+          <div className="grid-bg min-w-0 flex-1 p-6">{children}</div>
         </SidebarInset>
       </SidebarProvider>
     </UserProvider>

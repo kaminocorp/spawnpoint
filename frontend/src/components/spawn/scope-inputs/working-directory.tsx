@@ -39,8 +39,9 @@ export function WorkingDirectoryInput({
         aria-invalid={!!error}
         spellCheck={false}
         autoComplete="off"
+        className="h-8 text-xs"
       />
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[11px] leading-5 text-muted-foreground">
         Pin the agent&apos;s working directory. Leave blank to allow any
         directory (default-allow).
       </p>

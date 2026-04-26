@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
 import { HarnessSlide } from "@/components/spawn/harness-slide";
+import { Button } from "@/components/ui/button";
 import type { AgentTemplate } from "@/gen/corellia/v1/agents_pb";
 import type { HarnessEntry } from "@/lib/spawn/harnesses";
 
@@ -148,64 +150,71 @@ export function HarnessCarousel({
 
   return (
     <section role="region" aria-label="Select your harness" className="space-y-3">
-      {/* Navigation row: [‹] [n / total] [›] */}
-      <div className="flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={() => scrollToIndex(activeIndex - 1)}
-          disabled={activeIndex === 0}
-          aria-label="Previous harness"
-          className="px-1 font-display text-base leading-none text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
-        >
-          ‹
-        </button>
+      <div className="flex items-center justify-center">
         <span className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
           {activeIndex + 1} / {harnesses.length}
         </span>
-        <button
+      </div>
+
+      <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 sm:gap-5">
+        <Button
           type="button"
+          variant="outline"
+          size="icon-lg"
+          onClick={() => scrollToIndex(activeIndex - 1)}
+          disabled={activeIndex === 0}
+          aria-label="Previous harness"
+          className="justify-self-start border-[hsl(var(--feature-catalog))]/40 bg-black/30 text-[hsl(var(--feature-catalog))] hover:bg-[hsl(var(--feature-catalog))]/10 hover:border-[hsl(var(--feature-catalog))]/70 disabled:border-border disabled:text-muted-foreground"
+        >
+          <ChevronLeftIcon className="size-5" />
+        </Button>
+
+        <div
+          ref={containerRef}
+          className="flex min-w-0 snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          tabIndex={0}
+          onKeyDown={handleKeyDown}
+          aria-label="Harness slides — use arrow keys or 1–6 to navigate"
+        >
+          {harnesses.map((harness, idx) => {
+            const template = templates.find(
+              (t) => t.name.toLowerCase() === harness.key,
+            );
+            const isActive = harness.key === activeKey;
+            return (
+              <div
+                key={harness.key}
+                ref={(el) => {
+                  slideRefs.current[idx] = el;
+                }}
+                className="w-full flex-shrink-0 snap-center"
+                role="group"
+                aria-roledescription="harness"
+                aria-current={isActive ? "true" : undefined}
+                aria-label={harness.name}
+              >
+                <HarnessSlide
+                  harness={harness}
+                  template={template}
+                  isActive={isActive}
+                  onSelect={onSelect}
+                />
+              </div>
+            );
+          })}
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-lg"
           onClick={() => scrollToIndex(activeIndex + 1)}
           disabled={activeIndex === harnesses.length - 1}
           aria-label="Next harness"
-          className="px-1 font-display text-base leading-none text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+          className="justify-self-end border-[hsl(var(--feature-catalog))]/40 bg-black/30 text-[hsl(var(--feature-catalog))] hover:bg-[hsl(var(--feature-catalog))]/10 hover:border-[hsl(var(--feature-catalog))]/70 disabled:border-border disabled:text-muted-foreground"
         >
-          ›
-        </button>
-      </div>
-
-      <div
-        ref={containerRef}
-        className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        tabIndex={0}
-        onKeyDown={handleKeyDown}
-        aria-label="Harness slides — use arrow keys or 1–6 to navigate"
-      >
-        {harnesses.map((harness, idx) => {
-          const template = templates.find(
-            (t) => t.name.toLowerCase() === harness.key,
-          );
-          const isActive = harness.key === activeKey;
-          return (
-            <div
-              key={harness.key}
-              ref={(el) => {
-                slideRefs.current[idx] = el;
-              }}
-              className="w-full flex-shrink-0 snap-center"
-              role="group"
-              aria-roledescription="harness"
-              aria-current={isActive ? "true" : undefined}
-              aria-label={harness.name}
-            >
-              <HarnessSlide
-                harness={harness}
-                template={template}
-                isActive={isActive}
-                onSelect={onSelect}
-              />
-            </div>
-          );
-        })}
+          <ChevronRightIcon className="size-5" />
+        </Button>
       </div>
 
       {/* Dot indicators — decorative, mouse-only (aria-hidden + tabIndex=-1).

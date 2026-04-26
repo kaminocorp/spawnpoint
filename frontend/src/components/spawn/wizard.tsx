@@ -383,7 +383,7 @@ export function Wizard({
   }
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto min-w-0 w-full max-w-[112rem] 2xl:max-w-[128rem] space-y-8">
       <RpgHeader harness={harness} template={template} state={state} />
       <RpgBody
         harness={harness}
@@ -415,7 +415,7 @@ function GalleryWizardShell({ templates }: { templates: AgentTemplate[] }) {
   const router = useRouter();
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto min-w-0 w-full max-w-[96rem] space-y-6">
       <header className="border-b border-border pb-4">
         <div className="font-display text-xs uppercase tracking-widest text-muted-foreground/60">
           [ SELECT YOUR HARNESS ]
@@ -518,7 +518,7 @@ function HarnessStep({
             {harness?.name ?? template.name}
           </div>
           <div className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70">
-            adapter · hand-written · deploy · fly.io
+            from · {harness?.vendor ?? "—"} · adapter · hand-written
           </div>
         </div>
       </div>
@@ -550,8 +550,8 @@ function HarnessStep({
             </p>
           )}
           <dl className="space-y-1 font-mono text-xs">
+            <SpecRow label="FROM" value={harness?.vendor ?? "—"} />
             <SpecRow label="ADAPTER" value="hand-written" />
-            <SpecRow label="DEPLOY" value="fly.io" />
             <SpecRow label="TEMPLATE" value={template.id} />
           </dl>
         </div>
@@ -809,7 +809,7 @@ function FactionPicker({
       <div
         role="radiogroup"
         aria-label="Provider"
-        className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+        className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:grid-cols-1"
       >
         {PROVIDERS.map((p) => {
           const active = p.value === value;
@@ -822,19 +822,19 @@ function FactionPicker({
               aria-checked={active}
               onClick={() => onChange(p.value)}
               className={
-                "flex flex-col items-start gap-1.5 border bg-card px-3 py-3 text-left transition " +
+                "flex min-w-0 flex-col items-start gap-1.5 border bg-card px-3 py-3 text-left transition " +
                 (active
                   ? "border-[hsl(var(--feature-adapter))] bg-[hsl(var(--feature-adapter))]/10 opacity-100"
                   : "border-border opacity-40 hover:opacity-100 hover:border-[hsl(var(--feature-adapter))]/60")
               }
             >
-              <div className="flex w-full items-center justify-between">
-                <span className="font-display text-sm font-bold uppercase tracking-widest text-foreground">
+              <div className="flex w-full min-w-0 items-start justify-between gap-2">
+                <span className="min-w-0 font-display text-sm font-bold uppercase tracking-[0.18em] text-foreground">
                   {p.label}
                 </span>
                 <span
                   className={
-                    "font-display text-base " +
+                    "shrink-0 font-display text-base " +
                     (active
                       ? "text-[hsl(var(--feature-adapter))]"
                       : "text-muted-foreground")
@@ -843,7 +843,9 @@ function FactionPicker({
                   {f.glyph}
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground">{f.tagline}</p>
+              <p className="max-w-[20ch] text-xs text-muted-foreground">
+                {f.tagline}
+              </p>
             </button>
           );
         })}
@@ -1232,6 +1234,7 @@ function RpgBody({
 }) {
   const hk: HarnessKey = harness?.key ?? "hermes";
   const isReview = state.current === "review";
+  const isWideLoadoutStep = state.current === "tools" || state.current === "deployment";
 
   return (
     <div className="space-y-6">
@@ -1249,9 +1252,23 @@ function RpgBody({
         On desktop (lg:grid with explicit col-start), the visual order is
         LEFT | CENTER | RIGHT regardless of DOM order.
       */}
-      <div className="space-y-6 lg:grid lg:grid-cols-[220px_1fr_300px] lg:gap-6 lg:space-y-0 lg:items-start">
+      <div
+        className={[
+          "space-y-6 lg:grid lg:gap-6 lg:space-y-0 lg:items-start",
+          isWideLoadoutStep
+            ? "lg:grid-cols-[160px_1fr_280px] xl:grid-cols-[180px_1fr_320px]"
+            : "lg:grid-cols-[220px_1fr_300px]",
+        ].join(" ")}
+      >
         {/* RIGHT: active step form — first in DOM, col 3 on desktop */}
-        <div className="lg:col-start-3 lg:row-start-1">
+        <div
+          className={[
+            "min-w-0",
+            isWideLoadoutStep
+              ? "lg:col-start-3 lg:row-start-1"
+              : "lg:col-start-3 lg:row-start-1",
+          ].join(" ")}
+        >
           <RpgRightPanel
             state={state}
             dispatch={dispatch}
@@ -1262,8 +1279,18 @@ function RpgBody({
         </div>
 
         {/* CENTER: large portrait nebula — desktop only */}
-        <div className="hidden flex-col items-center gap-4 lg:flex lg:col-start-2 lg:row-start-1">
-          <div className="aspect-square w-full">
+        <div
+          className={[
+            "hidden flex-col items-center gap-4 lg:col-start-2 lg:row-start-1",
+            "lg:flex",
+          ].join(" ")}
+        >
+          <div
+            className={
+              "aspect-square w-full " +
+              (isWideLoadoutStep ? "max-w-[30rem]" : "")
+            }
+          >
             <NebulaAvatar fill harness={hk} />
           </div>
           <div className="text-center font-display text-[11px] uppercase tracking-widest text-muted-foreground/50">
@@ -1396,7 +1423,7 @@ function rpgStepSummaryRows(
     case "harness":
       return [
         { label: "harness", value: harness?.key ?? template.name },
-        { label: "deploy", value: "fly.io" },
+        { label: "from", value: harness?.vendor ?? "—" },
       ];
     case "identity":
       return [{ label: "callsign", value: state.fields.name || "—" }];

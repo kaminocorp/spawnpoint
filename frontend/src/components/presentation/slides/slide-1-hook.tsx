@@ -58,9 +58,16 @@ export function SlideHook() {
 
   return (
     <div className="relative flex size-full min-h-[70vh] w-full max-w-6xl flex-col items-center justify-center gap-10 px-8">
-      <p className="font-display text-[11px] uppercase tracking-widest text-muted-foreground">
-        [ the deployment problem ]
-      </p>
+      <div className="flex flex-col items-center gap-3">
+        <p className="font-display text-[11px] uppercase tracking-widest text-muted-foreground">
+          [ the deployment problem ]
+        </p>
+        <h2 className="text-center font-display text-3xl font-black uppercase tracking-[0.15em] text-foreground sm:text-5xl">
+          Manageable at one.
+          <br />
+          <span className="text-muted-foreground">Chaos at 250.</span>
+        </h2>
+      </div>
 
       {/* Two-panel comparison */}
       <div className="flex w-full items-start justify-center gap-4">

@@ -53,12 +53,12 @@ export function PatternListInput({
           )
         }
         placeholder={placeholder}
-        rows={4}
+        rows={3}
         aria-invalid={!!error}
         spellCheck={false}
-        className="w-full rounded-sm border border-input bg-background px-2.5 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/40 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive"
+        className="w-full rounded-sm border border-input bg-background px-2.5 py-1.5 font-mono text-[11px] leading-5 text-foreground placeholder:text-muted-foreground/40 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive"
       />
-      <p className="text-xs text-muted-foreground">{hint}</p>
+      <p className="text-[11px] leading-5 text-muted-foreground">{hint}</p>
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   );

@@ -181,7 +181,6 @@ function Capsule({
           animation: active
             ? `${animation} ${STAGGER_MS}ms linear forwards`
             : "none",
-          animationDelay: active ? "0ms" : undefined,
         }}
       >
         <span className="font-mono text-[12px]">{sample.call}</span>

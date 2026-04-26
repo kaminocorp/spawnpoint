@@ -2,6 +2,7 @@
 
 Index - short one-liners:
 
+- [0.13.12 — Presentation Deck Restructure (4 Problem Slides + Tangle/Thesis Redesign) + Tools Inventory Grid + Carousel Icon Buttons + Layout Overflow Fixes](#01312--presentation-deck-restructure-4-problem-slides--tanglethesis-redesign--tools-inventory-grid--carousel-icon-buttons--layout-overflow-fixes-2026-04-27)
 - [0.13.11 — Spawn RPG Redesign: Per-Card Nebulas + Gallery Cleanup + Three-Column Character Layout](#01311--spawn-rpg-redesign-per-card-nebulas--gallery-cleanup--three-column-character-layout-2026-04-27)
 - [0.13.10 — v1.5 Pillar B Post-Review Hardening: Credential Reattachment + Adapter Revocation Policy + Frozenset Audit + 16 Misc Fixes Across BE / FE / Adapter](#01310--v15-pillar-b-post-review-hardening-credential-reattachment--adapter-revocation-policy--frozenset-audit--16-misc-fixes-across-be--fe--adapter-2026-04-27)
 - [0.13.9 — Vercel Build Fix: `pnpm.packageExtensions` — Inject `zod` Peer into `@hookform/resolvers`](#0139--vercel-build-fix-pnpmpackageextensions--inject-zod-peer-into-hookformresolvers-2026-04-27)
@@ -76,6 +77,80 @@ Index - short one-liners:
 - [0.1.0 — Backend Scaffolding & Docs Reconciliation](#010--backend-scaffolding--docs-reconciliation-2026-04-24)
 
 Latest on top. Each release includes detailed entries (**What / Where / Why** changes were made).
+
+--
+
+## 0.13.12 — Presentation Deck Restructure (4 Problem Slides + Tangle/Thesis Redesign) + Tools Inventory Grid + Carousel Icon Buttons + Layout Overflow Fixes (2026-04-27)
+
+Four related passes touching the presentation deck, the spawn tools step, the harness carousel, and a pair of layout overflow bugs. No backend, proto, migration, or sqlc changes. `pnpm -C frontend type-check` and `pnpm -C frontend lint` clean.
+
+### Part 1 — Presentation deck restructure
+
+The old slide 2 ("Five planes. None unify." + TangleWeb backdrop) and the removed `SlideGuardian` and `SlideAdaptive` are replaced by five new slides that tell a tighter "four-problem" story, and the thesis slide is rebuilt as a three-column "Technical Implementation" card.
+
+**`components/presentation/deck.tsx`** — `SlideId` union and `SLIDES` array rebuilt. `SlideTangle` / `SlideGuardian` / `SlideAdaptive` removed; four new slide IDs added in order: `harness` (9 s) → `tools` (9 s) → `deploy` (9 s) → `oversight` (9 s). The `collapsing` tangle-transition prop and the `isCollapsing` derivation block are removed — the collapse animation was only meaningful when tangle was followed immediately by garage, which is no longer the case. `renderSlide` simplified accordingly (no `options` argument).
+
+**`components/presentation/slides/slide-1-hook.tsx`** — added a headline block above the two-panel comparison: `"Manageable at one. / Chaos at 250."` in large display type, with `[ THE DEPLOYMENT PROBLEM ]` kicker. Previously the kicker floated alone with no supporting headline.
+
+**`components/presentation/slides/slide-2-tangle.tsx`** — "Five planes. None unify." headline replaced by a four-card problem overview ("Find. Deploy. Equip. Govern. / Four problems. No unified tooling.") using a `PROBLEMS` data array and a `ProblemCard` component with staggered `tangle-in` animation. TangleWeb stays as the `-z-10` backdrop. `@keyframes tangle-in` and `prefers-reduced-motion` override injected via `<style>`. The `collapsing` prop is retained on the component signature (it is still forwarded from callers that may pass it) but has no observable effect on the new layout.
+
+**`components/presentation/slides/slide-2a-harness.tsx`** — new. "PROBLEM 1 OF 4 — Hundreds of harnesses. No clear standard." Twelve harness nodes (LangGraph, CrewAI, AutoGen, Hermes, Swarm, Agno, SuperAGI, AutoGPT, SmolAgents, MetaGPT, Haystack, Dify) arranged on a fixed SVG viewport. Five `CONNECTED` nodes draw animated dashed lines to a central `[ ADMIN ] ?` block. Nodes fade in with staggered `setTimeout` (100 ms base, 75 ms per node). `prefers-reduced-motion` disables `harn-flow` animation via injected `<style>`.
+
+**`components/presentation/slides/slide-2b-deploy.tsx`** — new. "PROBLEM 3 OF 4 — Pick an infra. Then try to leave." Seven deployment targets (Bare Metal, AWS, Mac mini, GCP, Hetzner, Azure, Fly.io) on a spoke layout, each with two descriptive properties. Lines to center fade in per-target. Same `setTimeout`-stagger pattern as 2a.
+
+**`components/presentation/slides/slide-2c-tools.tsx`** — new. "PROBLEM 2 OF 4 — Skills. MCPs. Permissions. Scattered everywhere." Bidirectional flow diagram: four skill-source nodes on the left (GitHub, X/Twitter, npm, HuggingFace) and five access-gate nodes on the right (Google Drive, Dropbox, Notion, Gmail, Slack), animated in two phases — sources at 200 ms, gates at 900 ms. Opposing animated `stroke-dashoffset` directions (`tools-flow-l` / `tools-flow-r`) visualize left-to-center and center-to-right flows. Column labels (`skill sources` / `access gates`) in the bottom corners.
+
+**`components/presentation/slides/slide-2d-oversight.tsx`** — new. "PROBLEM 4 OF 4 — Who has what? Nobody knows." Five-row fleet table with columns AGENT / OWNER / TOOLS / ACCESS / LAST AUDIT. Every TOOLS and ACCESS cell is `???`; AUDIT values range from `"never"` to `"8 months ago"` to `"unknown"`. Rows fade in sequentially (250 ms base, 200 ms per row). A closing row `"+ 245 more agents · all unknown"` fades in after the last row.
+
+**`components/presentation/slides/slide-6-thesis.tsx`** — redesigned from "Governance-as-a-Service" three-tier stacked architecture diagram (Control Plane → API Engine → Agent Infrastructure with arrow connectors) to "Technical Implementation" three-column layout. `COLUMNS` data array: Tech Stack (catalog accent) / Today (deploy accent) / Tomorrow (adapter accent), each with sub-groups (BACKEND / FRONTEND / DATA & AUTH; HARNESS / DEPLOYMENT / GOVERNANCE). `TierBox` and `ArrowConnector` replaced by `ColumnCard` with `group → items` badge layout. Footer copy: "one proto IDL · buf generate → Go + TS · single source of truth" → "open · extensible · production-ready". Stagger delay reduced from 920 ms to 760 ms to match the shorter column count.
+
+**`components/presentation/scenes/opus-pipeline.tsx`** — collapsed split `animation` + `animationDelay` style props into a single `animation` shorthand with delay baked in (e.g. `"opus-crystallize 600ms ease-out 150ms forwards"`). Functionally identical; eliminates the browser's need to reconcile two style properties per crystal.
+
+**`components/presentation/scenes/policy-checkpoint.tsx`** — removed `animationDelay: active ? "0ms" : undefined` from the capsule style. The `0ms` delay is the browser default — setting it explicitly produced no change but added noise to the style object.
+
+**`components/presentation/audio/audio-bed.tsx`** — removed the `key` prop from the `SlideCue` component signature. The `key` prop on a component is a React reconciliation hint, not a regular prop — it never reaches the component's props object. The caller was passing it to force audio remount, but the value was silently discarded. Removed to close the misleading API surface; callers that need remount behaviour must use `key` on the JSX element, not as a prop.
+
+### Part 2 — Tools step inventory grid
+
+The tools step previously rendered toolsets as a vertical `space-y-3` list of wide row cards. Replaced with a compact 2-column inventory grid of square tiles, matching the visual language of RPG item grids.
+
+**`components/spawn/steps/tools-step.tsx`**:
+
+- **Loading skeleton** — 3-item stack replaced by 6-item `grid grid-cols-2 gap-2` of `h-24` skeleton tiles.
+- **Toolset grid** — `space-y-3` list replaced by `grid grid-cols-2 items-start gap-2`. Header copy "EQUIP TOOLSETS" → "INVENTORY". Footer counts shortened ("no toolsets equipped" → "nothing equipped", "1 toolset equipped" → "1 equipped", etc.).
+- **`ToolsetCard` — active cards** redesigned as centered icon tiles: a `size-9` icon box (equipped: tinted, unequipped: muted), 2-line clamped `font-display` name below, a `size-1.5` dot + "equipped" / "equip" label. The old `<Button size="xs">[ ✓ EQUIPPED ]</Button>` toggle is gone; the entire tile is now a `<button>` that toggles on click. Equipped border: `border-[hsl(var(--feature-tools))]/60`; unequipped: `border-border/40`.
+- **`ToolsetCard` — OAuth-locked cards** simplified to small icon-only tiles at 40% opacity with a `LockIcon` below the icon. Previously these rendered a full-width row with an explanatory paragraph.
+- **`renderToolIcon(tool, className)`** — new function mapping `toolsetKey` / `displayName` / `category` to Lucide icons: `browser` → `GlobeIcon`, `clarify` → `MessageSquareIcon`, `code` → `CodeIcon`, `cron` → `Clock3Icon`, `delegat` → `NetworkIcon`, `file` → `FolderIcon`, `shell` → `TerminalIcon`, compute category → `CodeIcon`, info category → `ShieldIcon`, default → `ShieldIcon`.
+- **Scope drawer** — padding tightened to `p-2.5`, `space-y-4` → `space-y-2`. Error text scaled to `font-mono text-[9px]`.
+- **`CredentialField`** — input height `h-7`, text `text-[10px]`; eye-toggle buttons shrunk from `size-4` to `size-3`; label shrunk from `text-[11px]` to `text-[9px]`; env var display simplified from `[ CREDENTIAL · ENV / VAR ]` to just `ENV_VAR`. Removed the two explanatory paragraphs ("Forwarded once to the agent's secret store" and the now-resolved "STASH WIRING IN PILLAR B PHASE 4.5" warning — credential reattachment shipped in 0.13.10).
+- **`ScopeFields`** — outer `space-y-4` → `space-y-2`; "no operator-configurable scope" label shrunk to `text-[9px]` and copy simplified to "no scope required"; unknown-key fallback shrunk to `text-[9px]` / "not yet wired".
+- **Dead comments removed** — multi-paragraph JSDoc blocks and inline phase-deviation notes (Phase 4 deviations, plan §3 references) are gone; the deviation they documented is fully resolved as of 0.13.10.
+
+### Part 3 — Carousel icon buttons
+
+**`components/spawn/harness-carousel.tsx`** — previous navigation was plain `‹` / `›` text characters in unstyled `<button>` elements. Replaced with `<Button variant="outline" size="icon-lg">` from the design system, each containing a `ChevronLeftIcon` / `ChevronRightIcon` (Lucide, `size-5`). Buttons are styled with feature-catalog accent: `border-[hsl(var(--feature-catalog))]/40 bg-black/30 text-[hsl(var(--feature-catalog))] hover:bg-[hsl(var(--feature-catalog))]/10`. Disabled state falls back to plain border/muted. Scroll container moved into the center column of a `grid grid-cols-[auto_minmax(0,1fr)_auto]` three-column layout so the buttons sit flush against the card edges at any viewport width. The counter (`n / total`) moved above the grid row, centered. `min-w-0` added to the scroll container to prevent grid blowout.
+
+**`components/spawn/harness-slide.tsx`** — avatar slot changed from fixed responsive heights (`h-48 sm:h-56 md:h-64`) to a responsive aspect-ratio box (`aspect-[5/6] min-h-[15rem] max-h-[42vh]`, `lg:aspect-[4/5] lg:min-h-[17rem] lg:max-h-[48vh]`, `xl:min-w-[18rem]`) so the portrait scales naturally with the card's column width in the new carousel grid. Active slides now render `<NebulaAvatar>` regardless of locked state (previously locked slides forced `AvatarFallback` even when active — the lock overlay already communicates unavailability visually). Spec rows: "VENDOR" → "FROM" (locked), "VENDOR" removed and "FROM · {vendor}" added (unlocked), "DEPLOY · fly.io" row removed from unlocked (deploy target is set in the wizard's DEPLOYMENT step, not pinned to the harness card).
+
+### Part 4 — Harness vendor surface in wizard copy
+
+**`components/spawn/wizard.tsx`**:
+
+- `GalleryWizardShell` and the post-selection `<Wizard>` wrapper both gain a `mx-auto min-w-0 w-full max-w-[96rem]` / `max-w-[112rem] 2xl:max-w-[128rem]` constraint so the layout is centered on very wide displays rather than stretching edge-to-edge.
+- `HarnessStep` confirmed-pane subtitle: `"adapter · hand-written · deploy · fly.io"` → `"from · {harness.vendor} · adapter · hand-written"`. Spec row list: `DEPLOY · fly.io` removed, `FROM · {vendor}` added before ADAPTER.
+- `rpgStepSummaryRows` for the HARNESS step: `{ label: "deploy", value: "fly.io" }` → `{ label: "from", value: harness?.vendor ?? "—" }`.
+- `FactionPicker` radio group: `sm:grid-cols-3` dropped to `lg:grid-cols-1` to avoid the three provider buttons collapsing to unreadable widths inside the narrower RPG right panel. Button layout gets `min-w-0`; label row uses `items-start` and `gap-2`; tagline constrained to `max-w-[20ch]`; glyph gets `shrink-0`.
+- `isWideLoadoutStep` variable (`state.current === "tools" || state.current === "deployment"`) gates a narrower `RpgBody` grid on those steps: `lg:grid-cols-[160px_1fr_280px] xl:grid-cols-[180px_1fr_320px]` instead of the standard `[220px_1fr_300px]`, giving the two-column inventory and the deployment form more center space.
+
+### Part 5 — Layout overflow fixes
+
+**`frontend/src/app/(app)/layout.tsx`** — `min-w-0` added to the `grid-bg flex-1 p-6` content div. Without it, a wide child (e.g. the spawn wizard at `max-w-[128rem]`) could force the flex container past the sidebar inset's intended width on certain viewport sizes.
+
+**`components/ui/sidebar.tsx`** — `min-w-0` added to `SidebarInset`. Same root cause: the `flex w-full flex-1` container did not collapse below its content's natural width, allowing overflowing children to push the layout horizontally.
+
+**`components/spawn/scope-inputs/pattern-list-input.tsx`** — `rows={4}` → `rows={3}`; textarea and hint text scaled from `text-xs` to `text-[11px] leading-5` to match the tightened scope drawer density.
+
+**`components/spawn/scope-inputs/working-directory.tsx`** — input gets `h-8 text-xs`; hint paragraph scaled from `text-xs` to `text-[11px] leading-5`.
 
 --
 
