@@ -35,6 +35,7 @@ uniform float uTime;
 uniform float uPixelRatio;
 
 varying float vAlpha;
+varying float vSeed;
 
 ${SIMPLEX_NOISE_GLSL}
 
@@ -82,20 +83,26 @@ void main() {
   vec4 mvPosition = modelViewMatrix * vec4(displaced, 1.0);
   gl_Position = projectionMatrix * mvPosition;
 
-  // Distance-attenuated point size. Sized so 18000 additive particles at
-  // camera distance z=6 read as pinpricks (≈3 px), not fluffy clouds.
+  // Distance-attenuated point size. Pinpricks (~3 px) at camera z=6;
+  // density comes from particle count, not point footprint.
   gl_PointSize = 1.0 * uPixelRatio * (8.0 / -mvPosition.z);
 
-  // Per-phase alpha. With ~18000 additive points overlapping, anything
-  // above ~0.4 baseline saturates to white. Morph still brightens vs
-  // drift/hold to read as "active."
+  // Per-phase alpha. Smoothstep the morph-tail down to hold's level over
+  // the last 14% of morph so the morph→hold boundary has no visible step
+  // (which previously read as a brightness glitch right as the formation
+  // arrived). Hold flickers gently to read as alive.
+  float baseHold = 0.36;
   if (uPhase == 1) {
-    vAlpha = 0.45;
+    float morphPeak = 0.50;
+    float settle = smoothstep(0.86, 1.0, uPhaseProgress);
+    vAlpha = mix(morphPeak, baseHold, settle);
   } else if (uPhase == 2) {
     float flicker = sin(uTime * 0.4 + morphSeed * 6.2831853) * 0.04;
-    vAlpha = 0.32 + flicker;
+    vAlpha = baseHold + flicker;
   } else {
-    vAlpha = 0.32;
+    vAlpha = baseHold;
   }
+
+  vSeed = morphSeed;
 }
 `;

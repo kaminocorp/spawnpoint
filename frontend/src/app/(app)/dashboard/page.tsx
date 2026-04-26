@@ -159,7 +159,7 @@ export default function DashboardPage() {
             </li>
           </ul>
           <div className="mt-4">
-            <Button variant="default" size="sm" render={<Link href="/agents" />}>
+            <Button variant="default" size="sm" render={<Link href="/spawn" />}>
               › OPEN CATALOG
             </Button>
           </div>
@@ -228,7 +228,7 @@ function EmptyFleet() {
         boots and reports healthy.
       </p>
       <div className="pt-1">
-        <Button variant="default" size="sm" render={<Link href="/agents" />}>
+        <Button variant="default" size="sm" render={<Link href="/spawn" />}>
           › DEPLOY FIRST AGENT
         </Button>
       </div>

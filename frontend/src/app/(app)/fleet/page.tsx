@@ -242,7 +242,7 @@ function EmptyState() {
           logs.
         </p>
         <div className="pt-1">
-          <Button variant="default" size="sm" render={<Link href="/agents" />}>
+          <Button variant="default" size="sm" render={<Link href="/spawn" />}>
             › OPEN CATALOG
           </Button>
         </div>

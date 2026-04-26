@@ -1,5 +1,5 @@
-export const PARTICLE_COUNT = 18000;
-export const PARTICLE_COUNT_MOBILE = 6000;
+export const PARTICLE_COUNT = 28000;
+export const PARTICLE_COUNT_MOBILE = 9000;
 
 export const SHAPE_NAMES = [
   "chevron",

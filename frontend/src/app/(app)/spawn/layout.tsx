@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Agents — Corellia",
+  title: "Spawn — Corellia",
 };
 
-export default function AgentsLayout({
+export default function SpawnLayout({
   children,
 }: {
   children: React.ReactNode;

@@ -68,8 +68,37 @@ export default function SignInPage() {
         </p>
       </header>
 
-      <div className="w-full max-w-sm">
-        <TerminalContainer title="AUTHENTICATE">
+      <div className="relative w-full max-w-sm">
+        {/*
+         * Refraction halo — sits behind the card, picks up the swarm
+         * canvas via backdrop-filter (blur + saturation amplification),
+         * and fades to transparent past the card's edge via a radial
+         * mask. Bright particle clusters passing behind the card region
+         * smear into a colored bloom around the card's perimeter — the
+         * "light fracturing" register. -z-[1] places it above the
+         * swarm (-z-10) and the readability vignette (-z-[5]) so its
+         * backdrop-filter has both to work with, but below the card
+         * itself (z-auto in normal flow). The wrapper is position:
+         * relative without z-index, so it does not establish a
+         * stacking context — the halo participates in the root
+         * stacking context at depth -1.
+         */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -inset-12 -z-[1]"
+          style={{
+            backdropFilter: "blur(40px) saturate(200%)",
+            WebkitBackdropFilter: "blur(40px) saturate(200%)",
+            maskImage:
+              "radial-gradient(ellipse at center, rgba(0,0,0,0.85) 30%, transparent 75%)",
+            WebkitMaskImage:
+              "radial-gradient(ellipse at center, rgba(0,0,0,0.85) 30%, transparent 75%)",
+          }}
+        />
+        <TerminalContainer
+          title="AUTHENTICATE"
+          className="border-white/15! bg-black/40! shadow-[0_8px_32px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl backdrop-saturate-150"
+        >
           <form
             onSubmit={onSubmit}
             className="space-y-4"

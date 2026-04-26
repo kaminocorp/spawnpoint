@@ -23,7 +23,7 @@ type NavItem = {
 
 const items: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", ready: true },
-  { href: "/agents", label: "Agents", ready: true },
+  { href: "/spawn", label: "Spawn", ready: true },
   { href: "/fleet", label: "Fleet", ready: true },
   { href: "/settings", label: "Settings", ready: false },
 ];
