@@ -1797,8 +1797,23 @@ infrastructure topologies.
 
 ### 33.5 `/spawn` — RPG Character Creation (the showcase)
 
-See §34 for the full pattern. Schematic grid background + green nebula
-glow on the active step + step-by-step terminal containers.
+The spawn surface is split across **two routes**:
+
+- **`/spawn`** — the **roster** page. Six harness cards (1 active, 5
+  locked) per `agents-ui-mods.md` §3.5; layout is `grid-cols-1
+  md:grid-cols-2 xl:grid-cols-3`. The active card carries a live 3D
+  nebula avatar (`<NebulaAvatar>`); locked cards render the static SVG
+  fallback (`<AvatarFallback>`) per the performance ceiling decision —
+  exactly **one** `<canvas>` element on the page at any time. CTA on
+  active cards is `› SELECT`, which routes to:
+- **`/spawn/[templateId]`** — the **wizard**. See §34. The 5-step
+  character-creation flow lives here as a full route (not a modal),
+  with the harness's nebula avatar at ~180px anchoring Step 1.
+
+Both routes share the schematic grid background and feature-color
+accents per §5.4. The roster's vocabulary is `[ AVAILABLE HARNESSES ]`
+(not "Catalog" / "Templates"); locked cards read `[ LOCKED ]` rather
+than a disabled-button affordance.
 
 ### 33.6 `/adapters/[id]` — Docker Schematic
 
@@ -1844,20 +1859,25 @@ filling out a form.
 ### 34.1 Structure
 
 Five steps, each in its own terminal container, only one active at a
-time:
+time. The shipped step list (per `agents-ui-mods.md` decision 19)
+collapses provider + key + model into a single `MODEL` panel and adds
+a deployment-posture step that absorbs M5's coming knobs:
 
 ```
-[ STEP 1 // PICK HARNESS ]   ── cyan accent
-[ STEP 2 // NAME AGENT ]     ── green accent
-[ STEP 3 // PICK PROVIDER ]  ── violet accent
-[ STEP 4 // PASTE API KEY ]  ── rose accent
-[ STEP 5 // PICK MODEL ]     ── violet accent
-[ STEP 6 // DEPLOY ]         ── green primary CTA
+[ STEP 1 // HARNESS ]        ── catalog cyan accent
+[ STEP 2 // IDENTITY ]       ── secrets pink accent
+[ STEP 3 // MODEL ]          ── adapter violet accent
+[ STEP 4 // DEPLOYMENT ]     ── deploy blue accent
+[ STEP 5 // REVIEW ]         ── running green primary CTA
 ```
 
 The active step's container glows with the step's accent color via the
-shadow pattern from §9. Inactive steps render at `opacity-40` —
-reachable but visually receded.
+shadow pattern from §9. Inactive-but-confirmed steps stay at full
+opacity with a ghost `[ EDIT ]` button; pending steps render at
+`opacity-40 pointer-events-none` — visually present but not yet
+reachable. Each step also surfaces an `ACTIVE` / `CONFIRMED` /
+`PENDING` text tag in its `meta` slot so state is scannable without
+relying on color alone.
 
 ### 34.2 Acknowledgement Pattern
 
@@ -1901,16 +1921,28 @@ gating label:
 </div>
 ```
 
-After click, the page transitions to a streaming state: each Fly API
-call surfaces as a status line in monospace with a pulse-dot indicator,
-mirroring `cmd/smoke-deploy`'s log output. On `state == started`, redirect
-to `/agent/[id]`.
+After click, the wizard chrome unmounts and is replaced by a fixed-
+height streaming-log panel. v1 ships **synthesized** lines — a
+client-side `setInterval` at 600 ms emitting four decorative steps
+(`creating fly app… / setting secrets… / launching machine… / awaiting
+health-check…`) while the `spawnAgent` RPC fires in parallel. Real
+per-step BE events arrive in M5+ via streaming RPCs; until then the
+log is informational, not load-bearing for the redirect. On RPC
+success: redirect to **`/fleet`** (matches M4 behavior — the new agent
+appears in the fleet table as it transitions `pending → running`). On
+RPC error: the log flips to its `failed` accent, appends `› error:
+<message>`, and offers `› BACK TO REVIEW` which re-mounts the wizard
+with all five steps still confirmed and editable.
 
-### 34.4 Spawn-N Variant
+### 34.4 Spawn-N (deferred)
 
-Blueprint §10's "Deploy N" demo moment uses the same flow but with a
-count input on Step 6 and a name-prefix input on Step 2. The deploy
-phase shows a progress bar (§22) above a live-filling fleet table.
+Blueprint §10's "Deploy N" demo moment is **not** part of the v1
+wizard — `agents-ui-mods.md` decision 11 carved single-spawn-only.
+`spawnNAgents` stays on the wire (M4 already shipped it) but is
+unreached from this UI. If a fan-out shortcut is needed it returns
+later as a fleet-page action (e.g. "duplicate this agent ×N"),
+composing with M5's bulk-apply pattern rather than as a wizard
+variant.
 
 ---
 

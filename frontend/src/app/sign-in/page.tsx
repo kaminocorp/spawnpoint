@@ -52,17 +52,9 @@ export default function SignInPage() {
       />
 
       <header className="flex flex-col items-center gap-2">
-        <div className="flex items-center gap-3">
-          <span
-            className="font-display text-2xl text-[hsl(var(--status-running))]"
-            aria-hidden
-          >
-            ›
-          </span>
-          <h1 className="font-display text-3xl font-bold uppercase tracking-[0.3em] text-foreground">
-            CORELLIA
-          </h1>
-        </div>
+        <h1 className="font-display text-3xl font-black uppercase tracking-[0.3em] text-foreground">
+          CORELLIA
+        </h1>
         <p className="font-display text-[10px] uppercase tracking-widest text-muted-foreground">
           CONTROL PLANE — AGENT FLEET
         </p>

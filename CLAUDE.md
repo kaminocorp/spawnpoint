@@ -48,6 +48,10 @@ Frontend and backend communicate **exclusively via Connect-go RPCs** over HTTP/1
 
 Frontend uses Supabase client **only for auth** (sign-in, session). All application data flows through Connect RPCs. No direct SQL, no Supabase REST for app data. See stack.md §4 and rule §11.10.
 
+### Frontend route map (App Router)
+
+`frontend/src/app/(app)/` holds the authenticated surface. Public route is `frontend/src/app/sign-in/`. The roster lives at **`/spawn`** (renamed from `/agents` in 0.9.0; the redirect shim was removed in 0.9.2 — old bookmarks now 404). The character-creation wizard is **`/spawn/[templateId]`** — server component unwraps the async `params`, hands the id to the client `<Wizard>` in `components/spawn/wizard.tsx`. Other authenticated routes: `/dashboard`, `/fleet`, `/settings`. **There is no `<DeployModal>`** — the M4 deploy-modal was deleted in 0.9.2; the wizard is the sole spawn entry point.
+
 ### Database connection — two URLs, both Direct Connection
 
 Both `DATABASE_URL` and `DATABASE_URL_DIRECT` point at Supabase's **Direct Connection** host (`db.<project-ref>.supabase.co:5432`, IPv6). The split is *role and lifecycle*, not host:

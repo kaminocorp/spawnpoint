@@ -2,6 +2,7 @@
 
 Index - short one-liners:
 
+- [0.9.2 — Spawn Page Redesign Phase 6: Cleanup + Docs Reconciliation (Modal + Shim Deleted, design-system.md §34 Reset)](#092--spawn-page-redesign-phase-6-cleanup--docs-reconciliation-modal--shim-deleted-design-systemmd-34-reset-2026-04-26)
 - [0.9.1 — Spawn Page Redesign Phase 5: Wizard Fields Wired to `spawnAgent` + Streaming-Log Surface](#091--spawn-page-redesign-phase-5-wizard-fields-wired-to-spawnagent--streaming-log-surface-2026-04-26)
 - [0.9.0 — Spawn Page Redesign Phases 1–4: `/agents` → `/spawn` Rename + `<NebulaAvatar>` + Roster Page + Wizard Shell](#090--spawn-page-redesign-phases-14-agents--spawn-rename--nebulaavatar--roster-page--wizard-shell-2026-04-26)
 - [0.8.3 — Login Animation Cosmetic Pass: Seamless Settle + Density Bump + Pearlescent Silver Palette](#083--login-animation-cosmetic-pass-seamless-settle--density-bump--pearlescent-silver-palette-2026-04-26)
@@ -37,6 +38,51 @@ Latest on top. Each release has a tight index followed by detail entries (**What
 
 ---
 
+## 0.9.2 — Spawn Page Redesign Phase 6: Cleanup + Docs Reconciliation (Modal + Shim Deleted, design-system.md §34 Reset) (2026-04-26)
+
+Closes the eight-resolved-Q `agents-ui-mods.md` plan: Phase 6 takes out the orphan code Phases 1–5 left behind and reconciles the two docs that diverged from implementation along the way. All FE-only: zero backend, proto, schema, env, or dependency change. Type-check + lint + build all green; `next build` route table no longer lists `/agents`. Patch version (not minor) per the 0.5.1 / 0.7.3 / 0.7.5 / 0.9.1 precedent for non-product structural follow-up *within* a milestone-bracketing minor: 0.9.0 booked the visual flip + new wizard route, 0.9.1 booked the functional wire-up, 0.9.2 books the cleanup. No new product surface, no new RPC, no schema/migration. Plan: `docs/executing/agents-ui-mods.md` §4 Phase 6. Completion notes: `docs/completions/agents-ui-mods-phase-6.md`.
+
+- **`frontend/src/components/agents/deploy-modal.tsx` deleted** (492 LOC). The M4 deploy-modal — the `<Dialog>`-based spawn entry shipped in 0.7.0 — was orphan code from 0.9.0 onwards once the `/agents` → `/spawn` rename redirected the only caller. Phase 5 (0.9.1) deliberately scoped *around* the modal because the wizard's schemas had been lifted from it verbatim and the duplication was scheduled to evaporate the moment the modal was deleted. 0.9.2 deletes the modal; the duplication evaporates as planned (the wizard now owns the canonical copy of `PROVIDERS`, `sharedFields`, the API-key inline copy, and the `oneSchema` shape). The empty `frontend/src/components/agents/` directory disappears with the deletion (git tracks files, not directories — `git rm` removes the entry).
+- **`frontend/src/app/(app)/agents/page.tsx` deleted** (5-line `redirect("/spawn")` shim from Phase 1, 0.9.0). Q12's resolution carved one release of redirect courtesy; 0.9.0 + 0.9.1 covered that window. From 0.9.2 onward, **`/agents` 404s** rather than 308-redirects. Acceptable because (a) the route never lived in production with users on it — the rename happened the same day the new surface shipped, (b) the redirect shim's stated lifetime was "one release" per the operator's explicit resolution, (c) internal `<Link href="/agents">` references were swept in Phase 1 (`dashboard/page.tsx` ×2 + `fleet/page.tsx` ×1) and have been pointing at `/spawn` ever since. Empty `frontend/src/app/(app)/agents/` directory disappears with the deletion.
+- **`CLAUDE.md` — added six-line "Frontend route map (App Router)" subsection.** Pinned under the contract-boundary subsection. Names the two spawn routes (`/spawn` roster + `/spawn/[templateId]` wizard), notes the rename + shim removal, lists the other authenticated routes for completeness, and explicitly records that **there is no `<DeployModal>`** — the wizard is the sole spawn entry point. Surface kept minimal on purpose: CLAUDE.md is not a route catalog, this is the floor that keeps a future contributor from reaching for the deleted modal. The rest of CLAUDE.md is untouched per its own opening rule ("live code is authoritative; this file stays still") — doc churn stays tight.
+- **`docs/refs/design-system.md` §33.5 + §34.1 + §34.3 + §34.4 reconciled with implementation.** Four subsections rewritten where the prescribed shape diverged from what shipped in Phases 1–5:
+  - **§33.5** was a one-liner pointing at §34. Replaced with a self-contained note covering both spawn routes — the roster (`/spawn`) and the wizard (`/spawn/[templateId]`) — with the active/locked card distinction (one canvas page-wide per decision 21), the `[ AVAILABLE HARNESSES ]` vocabulary (Q10), and the `[ LOCKED ]` non-button affordance per blueprint §11.4.
+  - **§34.1** had the original 6-step layout (`PICK HARNESS → NAME AGENT → PICK PROVIDER → PASTE API KEY → PICK MODEL → DEPLOY`). Replaced with the shipped 5-step layout (`HARNESS → IDENTITY → MODEL → DEPLOYMENT → REVIEW`) per decision 19. Feature-color accents per the plan's Phase-4 spec: `catalog cyan / secrets pink / adapter violet / deploy blue / running green`. Added the `ACTIVE` / `CONFIRMED` / `PENDING` text-tag note from Phase 4 — meta-slot tagging is what makes step state scannable without color, which the original §34.1 omitted.
+  - **§34.3** described the M4 redirect target as `/agent/[id]`, which never shipped — M4 has always redirected to `/fleet`. Rewrote to describe the actual streaming-log surface from Phase 5: synthesized lines on a 600 ms `setInterval`, RPC fires in parallel, decorative not load-bearing for the redirect, error path flips to `failed` accent + `› BACK TO REVIEW` button. Redirect target corrected to `/fleet`.
+  - **§34.4** was the Spawn-N variant (count input on Step 6, name-prefix on Step 2). Decision 11 dropped Spawn-N from the wizard scope. Renamed the section "Spawn-N (deferred)" and rewrote it to record the deferral + the deferred-decisions framing (returns later as a fleet-page action composing with M5's bulk-apply, not a wizard variant).
+  - **§34.2** (the `Confirm` button pattern) is unchanged — it shipped verbatim.
+
+### Behavior change (known)
+
+- **`/agents` returns 404** on direct navigation. Previously 308-redirected to `/spawn`. The bookmark-courtesy lifetime was one release per Q12; 0.9.0 + 0.9.1 covered it.
+- **`<DeployModal>` is gone from the codebase.** No caller imports it; no UI surfaces it. The wizard is the only spawn entry point.
+- **`next build` route table** lists `/spawn` (static) + `/spawn/[templateId]` (dynamic); `/agents` is absent. `/spawn/[templateId]` is the only `ƒ` (dynamic) route in the (app) tree.
+- **`type-check + lint + build`** all green.
+
+### Stale-cache gotcha worth recording
+
+The first `type-check` after `git rm` of `agents/page.tsx` failed with `.next/types/validator.ts(42,39): error TS2307: Cannot find module '../../src/app/(app)/agents/page.js'`. Same pattern documented in 0.9.0 Phase 1 ("the first `type-check` after the `git mv` failed because `.next/types/validator.ts` still referenced `agents/layout.js` — `rm -rf .next` before re-running"). Fix is identical: `rm -rf .next` and re-run. Recurring pattern — every route deletion needs a `.next` clear before validation.
+
+### Resolves
+
+- **Phase 6 of the `agents-ui-mods.md` plan.** All six phases shipped end-to-end: route rename + nebula avatar + roster page + wizard shell + functional fields + cleanup.
+- **Q12's redirect-shim window** (carved in 0.9.0 as "one release only, then deleted").
+- **Phase 5's "modal stays in the tree as orphan code awaiting Phase-6 deletion" deferral** (0.9.1).
+
+### Known pending work
+
+- **Manual UI smoke pass** owed per the 4-check Phase-6-specific list in `docs/completions/agents-ui-mods-phase-6.md` (verify `/agents` 404s; verify `deploy-modal` returns zero source hits; sidebar nav highlights correctly on `/spawn` and `/spawn/[templateId]`). Phase-5's 10-check user-flow list is *unchanged* — Phase 6 deletes orphan code, so user-visible behavior is identical.
+
+### Supersedes
+
+- **0.9.0 Phase 1's redirect shim** — `/agents` no longer redirects, it 404s. Q12's one-release lifetime exhausted across 0.9.0 + 0.9.1.
+- **0.9.1's "modal stays in the tree as orphan code"** — the modal is gone.
+- **`design-system.md` §34.1's original 6-step layout** — replaced with the shipped 5-step layout per plan decision 19.
+- **`design-system.md` §34.3's `/agent/[id]` redirect target** — corrected to `/fleet`. The agent-detail route was never built; the M4 spawn flow has always landed on the fleet view.
+- **`design-system.md` §34.4's "Spawn-N Variant" as a wizard mode** — replaced with the deferral note per plan decision 11.
+
+---
+
 ## 0.9.1 — Spawn Page Redesign Phase 5: Wizard Fields Wired to `spawnAgent` + Streaming-Log Surface (2026-04-26)
 
 Closes the spawn-redesign regression window 0.9.0 left open: the `/spawn/[templateId]` wizard goes from "navigable shell with stub bodies" to "functional spawn flow that actually deploys an agent." All FE-only: zero backend, proto, schema, env, or dependency change. Type-check + lint + build all green. Patch version (not minor) per the 0.5.1 / 0.7.3 / 0.7.5 precedent for non-product structural follow-up *within* a milestone-bracketing minor: 0.9.0 already booked the visual-identity flip + new wizard route; 0.9.1 adds no new product surface, no new RPC, no schema/migration — it just puts real fields under the Phase-4 step shell and points the deploy CTA at the same `spawnAgent` RPC the M4 modal has been calling since 0.7.0. The deploy-modal wire path is now reachable from the spawn page again, this time as a multi-step wizard. Plan: `docs/executing/agents-ui-mods.md` §4 Phase 5. Completion notes: `docs/completions/agents-ui-mods-phase-5.md`.
@@ -65,22 +111,6 @@ Closes the spawn-redesign regression window 0.9.0 left open: the `/spawn/[templa
 
 - **Phase 5 of the eight-resolved-Q `agents-ui-mods.md` plan.** Plan §4 Phase 5 exit criteria all met at the `type-check + lint + build` boundary; the two runtime gates (successful end-to-end deploy + deliberately failed deploy producing a streaming-log error line) are pinned for the next dev-server boot per the v1 manual-smoke posture.
 - **0.9.0's `Phase 4 closes navigation; Phase 5 closes the flow` deferral.** The wizard route is now functionally complete.
-
-### Known pending work
-
-- **Phase 6 close-out** — owns: (a) `deploy-modal.tsx` deletion (resolves the schema + provider-list duplication), (b) `/agents` redirect-shim deletion (one release per Q12), (c) `CLAUDE.md` frontend-layout note update (one line: spawn page is `/spawn`, wizard is `/spawn/[templateId]`), (d) `design-system.md` §33.5 + §34 reconciliation (paragraphs that diverged in implementation, e.g. step regrouping per decision 19), (e) full validation matrix from plan §7. Tracked separately as Phase 6.
-- **Manual UI smoke pass** owed per the 10-check list in `docs/completions/agents-ui-mods-phase-5.md`. Build pipeline catches shape errors, not feature behaviour.
-- **`spawnNAgents` RPC stays on the wire but unreached from any UI.** Q5 dropped it from the wizard scope; if "deploy 5" demos need the shortcut back, decision 11 framed it as a future fleet-page bulk action that composes with M5's bulk-apply pattern, not a wizard variant.
-- **Synthetic streaming-log lines** are decorative (decision 14). When BE-side streaming arrives in M5+, the `<DeployLog>` component swaps `setInterval`-driven `SYNTHETIC_LINES` for real RPC-stream events.
-- **Provider→proto translation duplicated** between modal and wizard. Resolves when Phase 6 deletes the modal.
-- **Wizard state is in-memory only.** Refresh resets to Step 1 (decision 8). No localStorage / draft persistence (decision 20). Closing the tab during a long config session loses progress; the API-key footgun is the reason — making the entire wizard ephemeral is the simplest way to honour "API key never persists outside the in-flight RPC" without a special-case for one field.
-
-### Supersedes
-
-- **0.9.0's Phase-4 `<StubBody>` placeholders for Steps 2 / 3 / 4 / 5** — replaced with real react-hook-form + zod field surfaces. Step 1's `<HarnessStep>` is unchanged from Phase 4.
-- **0.9.0's no-op `› DEPLOY AGENT` button** — now fires `spawnAgent` and transitions to the streaming-log surface.
-- **0.7.0's M4 deploy-modal as the live spawn entry point** — superseded by the wizard flow. The modal stays in the tree as orphan code until Phase 6 deletes it; the M4 wire contract is byte-equivalent through both surfaces in the meantime.
-- **0.9.0's *Known regression window* on `› SELECT` landing on a navigable-but-no-op wizard** — closed: the wizard now actually deploys.
 
 ---
 
