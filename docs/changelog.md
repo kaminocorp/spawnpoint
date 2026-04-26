@@ -2,6 +2,7 @@
 
 Index - short one-liners:
 
+- [0.8.0 — Frontend Mods: Chrome Alignment + Avatar Dropdown + Logo Treatment + Destroyed-Filter](#080--frontend-mods-chrome-alignment--avatar-dropdown--logo-treatment--destroyed-filter-2026-04-26)
 - [0.7.7 — `fly.toml`: `min_machines_running` 0 → 1 (Always-Warm Control Plane)](#077--flytoml-min_machines_running-0--1-always-warm-control-plane-2026-04-26)
 - [0.7.6 — Env Var Rename: `FLY_API_TOKEN` → `FLY_SPAWN_TOKEN` (Stop `flyctl` Shadowing the Operator's Deploy Identity)](#076--env-var-rename-fly_api_token--fly_spawn_token-stop-flyctl-shadowing-the-operators-deploy-identity-2026-04-26)
 - [0.7.5 — M4 Phase 8 Hardening: Transactional Spawn Writes + Handler-Level Sentinel Mapping Tests + v1.5 Deploy-Target-Credentials Breadcrumbs](#075--m4-phase-8-hardening-transactional-spawn-writes--handler-level-sentinel-mapping-tests--v15-deploy-target-credentials-breadcrumbs-2026-04-26)
@@ -31,6 +32,45 @@ Latest on top. Each release has a tight index followed by detail entries (**What
 
 ---
 
+## 0.8.0 — Frontend Mods: Chrome Alignment + Avatar Dropdown + Logo Treatment + Destroyed-Filter (2026-04-26)
+
+Four operator-driven UX fixes from first sustained use of the M4 spawn flow, shipped in one pass. All FE-only: zero backend, proto, schema, env, or dependency change. Type-check + lint clean. Minor version (not patch) because (a) the chrome surface — top bar height, sidebar logo, avatar dropdown — changes for every signed-in user on every page, and (b) the dashboard/fleet semantic for "destroyed" rows shifts (audit artefact, not active fleet member). Plan: `docs/executing/frontend-mods.md`. Completion notes: `docs/completions/frontend-mods.md`.
+
+### Index
+
+- **`app-top-bar.tsx:68` — `h-12 → h-14`.** Top bar grows from 48px → 56px so its `border-b` sits at the same Y as the sidebar's CORELLIA section. Companion change in `app-sidebar.tsx`: `SidebarHeader` overridden to `h-14 p-0` (defaults are `p-2` + inner `py-2.5`, which produced a variable height ~56–60px); inner div fills via `flex h-full items-center px-4`. The two chrome strips now line up deterministically; `cn()`'s tailwind-merge resolves the override correctly.
+- **`app-top-bar.tsx` — avatar dropdown gains Profile + Settings items above Sign out.** Both routed to `/settings` via `<Link>` — there's no `/profile` route in v1, and per architecture rule §11.4 *deferred features are stubbed as real interface implementations, not as fake UI buttons*; landing on the real `<ComingSoon>` placeholder is honest. Lucide `UserIcon` + `SettingsIcon` (already in the icon set; no new dep). `<DropdownMenuSeparator>` divides them from Sign out — destructive-ish action gets its own visual lane. The render-prop pattern (`<DropdownMenuItem render={<Link href=…/>}>`) keeps Next.js client-side navigation; same Base UI convention used elsewhere in the chrome.
+- **`app-top-bar.tsx` — `<DropdownMenuLabel>` wrapped in `<DropdownMenuGroup>`.** Surfaced as a runtime error after the new items mounted: Base UI's `MenuPrimitive.GroupLabel` requires a `MenuPrimitive.Group` ancestor; the bare label happened to work pre-mod but the new render path tripped the context check. New `DropdownMenuGroup` import; one wrapper element.
+- **`app-sidebar.tsx` — logo redesign.** Removed the `›` chevron prefix (read as a nav-item bullet, not a brand mark); CORELLIA wordmark restyled `text-base font-black uppercase tracking-[0.3em]` (was `text-sm font-bold tracking-widest`). The weight bump (700 → 900) and tracking widen (0.1em → 0.3em) is the visual delta that makes it stop reading as a label and start reading as a logo. **Collapsed-mode `C` monogram** added so the icon-mode header isn't visually empty (the `›` previously held that role).
+- **`fleet/page.tsx` — hide-destroyed filter, default off.** New `showDestroyed` state + `visibleInstances` / `destroyedCount` derivations. Toggle button in the header strip alongside POLLING and N REGISTERED — renders only when `destroyedCount > 0` (zero noise for fresh workspaces). Format `[✓] SHOW DESTROYED (N)` matches the design-system terminal aesthetic. `N REGISTERED` count now reflects `visibleInstances.length`, not the raw total — toggling instantly updates both the table and the count. **Polling logic unchanged**: `polling` still derives from the unfiltered `state.instances`, so a destroyed row that gets filtered out doesn't change whether *any* row is non-terminal.
+- **`dashboard/page.tsx` — FLEET TOTAL excludes `status === "destroyed"`.** One-line filter on the telemetry tile. The other three tiles (RUNNING, PENDING, FAILED) already filter by status, so no change needed. The FLEET STATUS matrix below the strip still surfaces a DESTROYED row if any exist — countable on demand, not hidden, but not headlining.
+
+### Behavior change (known)
+
+- **Top bar is 8px taller** across every signed-in page; content area below absorbs the delta via `flex-1`.
+- **Avatar dropdown has three items** (was one). Profile + Settings both navigate to `/settings`.
+- **Sidebar shows CORELLIA without a chevron prefix**, in heavier/wider type. Collapsed mode shows `C`.
+- **Fleet table hides destroyed instances by default.** Toggle in the header strip surfaces them on demand; toggle is invisible when there are no destroyed instances.
+- **Dashboard FLEET TOTAL drops by however many destroyed rows the org has.** RUNNING / PENDING / FAILED tiles unchanged.
+
+### Resolves
+
+- **`docs/executing/frontend-mods.md` items 1–4.** All four asks shipped.
+
+### Known pending work
+
+- **No automated test for the chrome alignment.** v1 has no Playwright; verification was visual. The override is explicit enough (`h-14 p-0` on `SidebarHeader`) that an upstream shadcn padding change wouldn't drift silently — a future reviewer would notice the override exists for a reason.
+- **Profile menu item points at `/settings`.** Acceptable v1 stand-in; a real `/profile` route is a future-milestone item.
+- **Fleet filter is not URL-persisted.** Refresh resets to "hide destroyed." Correct for v1's session-length workflow; lift into `useSearchParams` if/when audit deep-linking matters.
+
+### Supersedes
+
+- **0.7.1's logo treatment** for the CORELLIA wordmark — the `›` prefix + `text-sm font-bold tracking-widest` is replaced by the heavier, wider, chevron-less treatment.
+- **0.7.0's fleet header strip semantic for N REGISTERED** — was raw `state.instances.length`, now `visibleInstances.length`. Reflects "agents currently visible to you," not "agents in the org's history."
+- **0.7.0's dashboard FLEET TOTAL definition** — was "all rows ever created," now "all non-destroyed rows." Closer to the operator's mental model of "fleet."
+
+---
+
 ## 0.7.7 — `fly.toml`: `min_machines_running` 0 → 1 (Always-Warm Control Plane) (2026-04-26)
 
 One-line config change in `backend/fly.toml:15`: `min_machines_running = 0` → `1`. The control plane no longer cold-starts on the first request after idle; one machine stays warm at all times. Auto-stop + auto-start remain on for any *additional* machines a future scale-up adds — the floor is 1, not the ceiling. Trades the idle-cost savings of the previous "scale to zero" posture for predictable first-request latency (relevant now that the FE is on Vercel and the BE is the user-facing surface, not a localhost endpoint). Patch version: zero code, zero RPC, zero schema, one TOML line. Takes effect on next `fly deploy` from `backend/`; `fly scale count 1 -a corellia` reconciles the live machine state immediately if needed.
@@ -48,8 +88,6 @@ Surfaced when `fly deploy` from `backend/` returned `unauthorized` against `core
 Closes the three M4 Phase 8 hardening items 0.7.0 parked in *Known pending work* and re-flagged in 0.7.3, plus drops the two v1.5 deploy-target-credentials breadcrumbs that `docs/executing/deploy-target-credentials.md` flagged as "worth committing before they evaporate." Patch version (not minor) per the 0.5.1 / 0.7.3 precedent for non-product structural follow-up: zero new product surface, zero new RPC, zero schema/migration/env-var change. The Spawn write path becomes atomic, the public sentinel→Connect-code wire contract becomes test-pinned, and v1.5's per-user deploy-target work has its first two breadcrumbs in code + spec rather than in a one-off design doc.
 
 The transactional-spawn-writes work is the only one with a real runtime effect. The handler tests are pure documentation-via-code of a contract that already held empirically. The breadcrumbs are forward-looking: they don't change v1 behavior, only what the next milestone in this area will inherit.
-
-### Index
 
 - **`backend/internal/agents/transactor.go` — new (~75 LOC).** Two interfaces and one production type. **`SpawnTx`** is the narrow exported view of `*db.Queries` Spawn touches *inside* the tx — `InsertAgentInstance` + `InsertSecret`, nothing else. Reads (template lookup, deploy-target lookup) and post-Fly writes (deploy-ref set) stay outside the tx via the wider `agentQueries` view, so they don't belong in `SpawnTx`. Exported (not the package-private `agentQueries`) so external implementations — production `PgxTransactor`, test fakes — can name the type in their fn signature without reaching into agents-internal types. **`Transactor`** is the lifter interface (`WithSpawnTx(ctx, fn func(SpawnTx) error) error`) — named for purpose, not a generic `WithTx`, so the call site reads as "this is a spawn-scope tx" without a comment. **`PgxTransactor`** is the production implementation: thin lifter over `pgxpool.Pool`, calls `BeginTx` → `fn(db.New(tx))` → `Commit` on success or `Rollback` on error. Pool ownership stays with `cmd/api/main.go`; the transactor borrows it per-call. Rollback errors are logged at warn and dropped — the *fn* error is what the caller is reacting to; obscuring it with a downstream rollback failure would hide the root cause. `pgx.ErrTxClosed` on rollback is silently absorbed (legitimate when the context cancellation already unwound the tx).
 - **`backend/internal/agents/service.go` — `Spawn` rewritten to use `WithSpawnTx`** (decision 27 step 6, deferred at M4 ship). `Service` struct gains a `txr Transactor` field; `NewService` widens to a 4-arg constructor. The two `s.queries.Insert{AgentInstance,Secret}` calls move inside one `s.txr.WithSpawnTx(ctx, func(q SpawnTx) error { ... })` block; the Fly call (step 8) stays outside the closure per decision 27. **Pre-Phase-8 a process crash between the two inserts could leave an instance row visible without an audit row, or vice versa** — the only honest atomic shape for the paired write is one tx, and now it has one. Result of the closure (the inserted `db.AgentInstance`) is captured via a closed-over outer `var instance db.AgentInstance`. The 11-step order of decision 27 is otherwise unchanged.

@@ -30,6 +30,7 @@ const POLL_MS = 3000;
 
 export default function FleetPage() {
   const [state, setState] = useState<State>({ kind: "loading" });
+  const [showDestroyed, setShowDestroyed] = useState(false);
 
   const fetchInstances = useCallback(async () => {
     try {
@@ -66,8 +67,20 @@ export default function FleetPage() {
     return () => clearInterval(id);
   }, [state, fetchInstances]);
 
+  const visibleInstances =
+    state.kind === "ready"
+      ? showDestroyed
+        ? state.instances
+        : state.instances.filter((i) => i.status !== "destroyed")
+      : [];
+
+  const destroyedCount =
+    state.kind === "ready"
+      ? state.instances.filter((i) => i.status === "destroyed").length
+      : 0;
+
   const count =
-    state.kind === "ready" ? state.instances.length :
+    state.kind === "ready" ? visibleInstances.length :
     state.kind === "empty" ? 0 : null;
 
   const polling =
@@ -86,6 +99,21 @@ export default function FleetPage() {
           </h1>
         </div>
         <div className="flex items-center gap-3 font-display text-[10px] uppercase tracking-widest text-muted-foreground">
+          {state.kind === "ready" && destroyedCount > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowDestroyed((v) => !v)}
+                className="flex items-center gap-1.5 border border-border px-2 py-1 font-display text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
+              >
+                <span className="font-mono text-foreground">
+                  [{showDestroyed ? "✓" : " "}]
+                </span>
+                SHOW DESTROYED ({destroyedCount})
+              </button>
+              <span className="text-muted-foreground/50">·</span>
+            </>
+          )}
           {polling && (
             <>
               <span className="size-1.5 rounded-full bg-[hsl(var(--status-pending))] animate-telemetry" />
@@ -101,7 +129,7 @@ export default function FleetPage() {
       {state.kind === "empty" && <EmptyState />}
       {state.kind === "error" && <ErrorState message={state.message} />}
       {state.kind === "ready" && (
-        <FleetTable instances={state.instances} onChanged={fetchInstances} />
+        <FleetTable instances={visibleInstances} onChanged={fetchInstances} />
       )}
     </div>
   );

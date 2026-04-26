@@ -33,16 +33,16 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border">
-        <div className="flex items-center gap-2 px-2 py-2.5">
+      <SidebarHeader className="h-14 border-b border-sidebar-border p-0">
+        <div className="flex h-full items-center px-4">
+          <span className="font-display text-base font-black uppercase tracking-[0.3em] text-foreground group-data-[collapsible=icon]:hidden">
+            CORELLIA
+          </span>
           <span
             aria-hidden
-            className="font-display text-base text-[hsl(var(--status-running))]"
+            className="hidden font-display text-base font-black uppercase tracking-widest text-foreground group-data-[collapsible=icon]:inline"
           >
-            ›
-          </span>
-          <span className="font-display text-sm font-bold uppercase tracking-widest text-foreground group-data-[collapsible=icon]:hidden">
-            CORELLIA
+            C
           </span>
         </div>
       </SidebarHeader>

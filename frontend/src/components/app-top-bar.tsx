@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOutIcon } from "lucide-react";
+import { LogOutIcon, SettingsIcon, UserIcon } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -65,7 +67,7 @@ export function AppTopBar({ workspaceName, userName, email }: Props) {
   }
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-background px-3">
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-3">
       <SidebarTrigger />
       <div className="flex items-center gap-2">
         <span className="font-display text-[10px] uppercase tracking-widest text-muted-foreground/60">
@@ -97,14 +99,29 @@ export function AppTopBar({ workspaceName, userName, email }: Props) {
           }
         />
         <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel className="space-y-0.5">
-            <div className="font-display text-xs uppercase tracking-wider text-foreground">
-              {userName || email}
-            </div>
-            <div className="font-mono text-[10px] text-muted-foreground">
-              {email}
-            </div>
-          </DropdownMenuLabel>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="space-y-0.5">
+              <div className="font-display text-xs uppercase tracking-wider text-foreground">
+                {userName || email}
+              </div>
+              <div className="font-mono text-[10px] text-muted-foreground">
+                {email}
+              </div>
+            </DropdownMenuLabel>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem render={<Link href="/settings" />}>
+            <UserIcon />
+            <span className="font-display text-xs uppercase tracking-wider">
+              Profile
+            </span>
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<Link href="/settings" />}>
+            <SettingsIcon />
+            <span className="font-display text-xs uppercase tracking-wider">
+              Settings
+            </span>
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={signOut}>
             <LogOutIcon />
