@@ -29,9 +29,11 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from threading import Lock
 from typing import Optional
+from urllib.parse import urlsplit, urlunsplit
 
 from . import scope as scope_mod
 
@@ -40,18 +42,31 @@ log = logging.getLogger("corellia_guard.hook")
 
 # ── Tool-name → toolset routing ──────────────────────────────────────────────
 #
-# The plugin enforces only the three non-native scopes (URL allowlist on
-# `web`, command allowlist on `terminal`, path allowlist on `file`). Every
-# other Hermes tool name is allowed by the plugin — the operator's gating
-# happens at the `platform_toolsets.cli` config level.
+# The plugin enforces only the non-native scopes the catalog declares: URL
+# allowlist on `web` and `browser`, command allowlist on `terminal`, path
+# allowlist on `file`. Every other Hermes tool name is allowed by the
+# plugin — the operator's gating happens at the `platform_toolsets.cli`
+# config level.
 #
-# Known Hermes tool-name patterns (from `hermes_cli/tools/*` at the pinned
-# digest); maintained as a curated map rather than a prefix match so a
-# rename upstream cannot silently bypass enforcement (we'd see an unknown
-# tool name and allow, but at least the deny on the renamed-old name keeps
-# working until upstream catches up).
+# These frozensets are pinned against the Hermes digest declared in
+# adapters/hermes/Dockerfile; an audit log of the discovered tool names
+# lives in `docs/refs/hermes-tool-name-audit.md`. A rename upstream
+# requires bumping the Hermes pin, re-running the audit, and updating
+# these sets in lockstep — the `_SHELL_PATTERN_DENY` safeguard below
+# catches the most dangerous fail-open case (shell-shaped tools renamed
+# out of `_TERMINAL_TOOLS`).
 
-_WEB_TOOLS = frozenset({"web_search", "web_fetch", "browser_navigate"})
+# `web_search` is intentionally NOT routed through the URL matcher: its
+# `query` argument is a search string, not a user-controlled URL — the
+# upstream search provider's domain is fixed by the toolset itself. URL
+# enforcement applies to `web_fetch` (operator-supplied URL).
+_WEB_TOOLS = frozenset({"web_fetch"})
+
+# `browser_navigate` lives on the `browser` toolset, which the catalog
+# scopes via its own url_allowlist (separate from `web`'s allowlist). A
+# shared route through `_WEB_TOOLS` would have enforced the wrong scope.
+_BROWSER_TOOLS = frozenset({"browser_navigate"})
+
 _TERMINAL_TOOLS = frozenset(
     {"shell_exec", "terminal_exec", "execute_command", "run_command"}
 )
@@ -65,6 +80,19 @@ _FILE_TOOLS = frozenset(
         "list_directory",
         "search_files",
     }
+)
+
+# Defense-in-depth: tool names that LOOK like shell or filesystem
+# primitives but are not in our explicit frozensets. These are the
+# fail-open class the §5 review flagged — if Hermes renames `shell_exec`
+# to `bash_exec`, the explicit set misses it and the call would
+# pass-through. This regex matches the common shell/filesystem-primitive
+# shape and forces such a tool through the terminal command-allowlist.
+# Pure-prefix mismatches stay pass-through (we cannot enforce against
+# tools we don't recognise without breaking unrelated toolsets).
+_SHELL_SHAPED_RE = re.compile(
+    r"^(?:bash|sh|shell|exec|run|invoke|spawn)(?:[_.][\w]+)?$",
+    re.IGNORECASE,
 )
 
 
@@ -83,10 +111,20 @@ class ScopeCache:
         self._lock = Lock()
         self._mtime: Optional[float] = None
         self._scope: scope_mod.Scope = scope_mod.Scope.deny_all()
+        # Sticky deny-all override: when the daemon hits hard revocation
+        # (sustained 401, immediate 403), `force_deny_all()` flips this
+        # to True. `get()` short-circuits to the empty scope until a
+        # successful poll lands and `clear_force_deny()` lifts it. This
+        # prevents the on-disk last-known-good from being served after
+        # the control plane signalled "this token is dead".
+        self._force_deny: bool = False
         # Initial load — fail-safe if missing.
         self._reload_locked()
 
     def get(self) -> scope_mod.Scope:
+        # Hard-revocation override takes priority over the on-disk cache.
+        if self._force_deny:
+            return scope_mod.Scope.deny_all()
         try:
             mtime = self._path.stat().st_mtime
         except FileNotFoundError:
@@ -101,16 +139,53 @@ class ScopeCache:
                 return self._scope
 
         with self._lock:
-            if self._mtime is None or mtime > self._mtime:
+            # `!=` rather than `>` so an mtime that moves backwards (NTP
+            # skew, clock adjustment, file restored from backup) still
+            # triggers a reload — `>` would silently miss the change.
+            if self._mtime is None or mtime != self._mtime:
                 self._reload_locked()
             return self._scope
 
+    def force_deny_all(self) -> None:
+        """Imperative deny-all. Used by the poll daemon when the manifest
+        endpoint signals hard revocation (sustained 401/403). Sets a sticky
+        flag that `get()` checks BEFORE the on-disk cache, so the operator's
+        revocation takes effect immediately and persists across mtime-based
+        reload cycles. `clear_force_deny()` is called by the daemon's next
+        successful poll, which restores normal cache behaviour."""
+        with self._lock:
+            self._scope = scope_mod.Scope.deny_all()
+            self._mtime = None
+            self._force_deny = True
+            log.warning(
+                "corellia_guard: scope cache forced to deny-all (revocation signal)"
+            )
+
+    def clear_force_deny(self) -> None:
+        """Lift the sticky deny-all flag. Called by the daemon after a
+        successful poll — at that point the BE has accepted the token
+        again, so the on-disk scope is once more authoritative."""
+        with self._lock:
+            if self._force_deny:
+                log.info(
+                    "corellia_guard: revocation cleared — resuming normal scope cache"
+                )
+            self._force_deny = False
+
     def _reload_locked(self) -> None:
+        # Race-window-safe reload: capture mtime BEFORE reading. If the
+        # writer atomically replaces the file between our read and a
+        # post-read stat, we'd cache the stale parsed scope under the new
+        # mtime and miss the next change. Reading mtime-before-read means
+        # the worst case is one extra reload (when a writer races us — we
+        # read the new content but record its old-mtime, so next call
+        # detects the disagreement and reloads again).
         try:
+            mtime_before = self._path.stat().st_mtime
             data = self._path.read_text()
             raw = json.loads(data)
             self._scope = scope_mod.Scope.from_dict(raw)
-            self._mtime = self._path.stat().st_mtime
+            self._mtime = mtime_before
             log.info(
                 "corellia_guard: scope.json loaded (manifest_version=%d, toolsets=%s)",
                 self._scope.manifest_version,
@@ -155,10 +230,26 @@ def make_pre_tool_call(cache: ScopeCache):
 
         if tool_name in _WEB_TOOLS:
             return _enforce_web(scope, tool_name, args)
+        if tool_name in _BROWSER_TOOLS:
+            return _enforce_browser(scope, tool_name, args)
         if tool_name in _TERMINAL_TOOLS:
             return _enforce_terminal(scope, tool_name, args)
         if tool_name in _FILE_TOOLS:
             return _enforce_file(scope, tool_name, args)
+        # Defense-in-depth: a tool whose NAME shape suggests shell access
+        # (`bash_exec`, `shell.run`, `invoke_command`, …) but isn't in our
+        # explicit `_TERMINAL_TOOLS` set is treated as terminal. This covers
+        # the upstream-rename fail-open class (Hermes renames `shell_exec`
+        # → `bash_exec` between digest pins) without fully default-denying
+        # every unknown tool name (which would break unrelated toolsets).
+        # A loud log marks the case for the next pin audit.
+        if tool_name and _SHELL_SHAPED_RE.match(tool_name):
+            log.warning(
+                "corellia_guard: shell-shaped tool name %r not in explicit "
+                "_TERMINAL_TOOLS set — enforcing as terminal (audit Hermes pin)",
+                tool_name,
+            )
+            return _enforce_terminal(scope, tool_name, args)
         # Unknown tool name — plugin has nothing to enforce. The toolset is
         # gated at config.yaml level if it shouldn't be running at all.
         return None
@@ -171,11 +262,29 @@ def make_pre_tool_call(cache: ScopeCache):
 
 def _enforce_web(scope: scope_mod.Scope, tool_name: str, args: dict):
     web = scope.for_toolset("web")
-    url = _coerce_str(args.get("url") or args.get("query") or args.get("href"))
+    # Drop `query` from the URL fallback chain — `web_search` previously
+    # passed its search string through this matcher (causing every benign
+    # search to fail the URL allowlist). `web_search` is no longer in
+    # `_WEB_TOOLS`; for `web_fetch` the operator-supplied URL lives at
+    # `url` (or `href` for some callers).
+    url = _coerce_str(args.get("url") or args.get("href"))
     if scope_mod.match_url(web, url):
         return None
     return _block(
-        f"corellia_guard: tool {tool_name!r} blocked — URL {url!r} not in allowlist."
+        f"corellia_guard: tool {tool_name!r} blocked — URL {_redact_url(url)!r} not in `web` allowlist."
+    )
+
+
+def _enforce_browser(scope: scope_mod.Scope, tool_name: str, args: dict):
+    """Browser-toolset enforcement uses the `browser` scope's url_allowlist,
+    which is independent of `web`'s allowlist. Routing browser navigation
+    through `web` would have enforced the wrong allowlist."""
+    br = scope.for_toolset("browser")
+    url = _coerce_str(args.get("url") or args.get("href"))
+    if scope_mod.match_url(br, url):
+        return None
+    return _block(
+        f"corellia_guard: tool {tool_name!r} blocked — URL {_redact_url(url)!r} not in `browser` allowlist."
     )
 
 
@@ -184,7 +293,7 @@ def _enforce_terminal(scope: scope_mod.Scope, tool_name: str, args: dict):
     command = _coerce_command(args)
     if not scope_mod.match_command(term, command):
         return _block(
-            f"corellia_guard: tool {tool_name!r} blocked — command {command!r} not in allowlist."
+            f"corellia_guard: tool {tool_name!r} blocked — command {_redact_command(command)!r} not in allowlist."
         )
     cwd = _coerce_str(args.get("cwd") or args.get("working_directory") or "")
     if cwd and not scope_mod.match_working_dir(term, cwd):
@@ -227,3 +336,37 @@ def _coerce_command(args: dict) -> str:
 
 def _block(message: str) -> dict:
     return {"action": "block", "message": message}
+
+
+# Maximum length we echo back into the rejection message. Longer commands
+# are truncated to keep query-string-style credentials out of the agent's
+# stdout + the LLM's next turn (the rejection message round-trips through
+# the harness into the model's context).
+_REJECTION_VALUE_MAX = 200
+
+
+def _redact_url(url: str) -> str:
+    """Strip query strings (commonly carry `?token=…`, `?api_key=…`) before
+    echoing a URL into the rejection log. Empty or malformed URLs pass
+    through unchanged so the operator still sees what was rejected."""
+    if not url:
+        return url
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return url
+    if not parts.query:
+        return url
+    return urlunsplit(
+        (parts.scheme, parts.netloc, parts.path, "<redacted>", "")
+    )
+
+
+def _redact_command(command: str) -> str:
+    """Truncate long commands so a `curl https://x?token=…` rejection
+    doesn't push the secret into the agent's context window."""
+    if not command:
+        return command
+    if len(command) <= _REJECTION_VALUE_MAX:
+        return command
+    return command[:_REJECTION_VALUE_MAX] + "…<truncated>"

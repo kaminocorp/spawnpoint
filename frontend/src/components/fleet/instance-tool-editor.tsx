@@ -220,9 +220,29 @@ function EditorBody({
 
   // Catalog filtered to "available to add" — already-equipped toolsets are
   // hidden from the dropdown so the operator can't double-equip.
+  //
+  // Credential-bearing toolsets (`requiredEnvVars.length > 0`) are excluded
+  // from the inspector's add list: in-flight credential capture has its own
+  // UX surface (key rotation modal) that lands in v1.6. The BE's
+  // SetInstanceGrants reattaches credential refs from prior grants for
+  // existing rows, so editing scope on an already-equipped credential-bearing
+  // toolset works correctly — it's only *adding new* ones from the inspector
+  // that's gated. The wizard remains the spawn-time entry point for
+  // credential-bearing toolsets.
   const stagedToolIds = new Set(staged.map((g) => g.toolId));
   const addable = data.catalog.filter(
-    (t) => t.enabledForOrg && !t.oauthOnly && !stagedToolIds.has(t.id),
+    (t) =>
+      t.enabledForOrg &&
+      !t.oauthOnly &&
+      t.requiredEnvVars.length === 0 &&
+      !stagedToolIds.has(t.id),
+  );
+  const credLocked = data.catalog.filter(
+    (t) =>
+      t.enabledForOrg &&
+      !t.oauthOnly &&
+      t.requiredEnvVars.length > 0 &&
+      !stagedToolIds.has(t.id),
   );
 
   function patchScope(rowKey: string, scope: Record<string, unknown>) {
@@ -365,6 +385,30 @@ function EditorBody({
               >
                 + {t.displayName}
               </Button>
+            ))}
+          </div>
+        </TerminalContainer>
+      )}
+
+      {credLocked.length > 0 && (
+        <TerminalContainer title="REQUIRES CREDENTIAL — V1.6">
+          <p className="font-mono text-xs text-muted-foreground">
+            These toolsets need a secret value (e.g. API key) at equip time.
+            In-flight credential capture from the inspector lands in v1.6.
+            Equip them through the spawn wizard for now.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {credLocked.map((t) => (
+              <span
+                key={t.id}
+                className="inline-flex items-center gap-1 border border-border bg-card px-2 py-1 font-mono text-[11px] text-muted-foreground"
+              >
+                <LockIcon className="size-3" />
+                {t.displayName}
+                <span className="ml-1 font-display text-[10px] uppercase tracking-widest text-muted-foreground/60">
+                  · {t.requiredEnvVars.join(" / ")}
+                </span>
+              </span>
             ))}
           </div>
         </TerminalContainer>
@@ -613,9 +657,41 @@ function asString(v: unknown): string {
   return typeof v === "string" ? v : "";
 }
 
-function shallowJsonEqual(
-  a: Record<string, unknown>,
-  b: Record<string, unknown>,
-): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
+/**
+ * Order-insensitive structural compare used by the propagation-tier diff.
+ *
+ * `JSON.stringify` honours insertion order, which means an object spread
+ * (`{...prev, foo: bar}`) can produce a stringification that differs from the
+ * server-canonical order even when the contents are identical — the editor
+ * would then mis-classify a no-op edit as `plugin-tick`. This walks the trees
+ * and compares values directly: arrays element-wise (order-sensitive — patterns
+ * are positional), objects key-by-key (order-insensitive). Primitive equality
+ * uses ===; nested objects/arrays recurse.
+ *
+ * Inputs are scope JSON values which are bounded (≤64 patterns × ≤200 chars
+ * per the BE scope_validator); recursion depth and cost are negligible.
+ */
+function shallowJsonEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b)) return false;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!shallowJsonEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    const ao = a as Record<string, unknown>;
+    const bo = b as Record<string, unknown>;
+    const aKeys = Object.keys(ao);
+    const bKeys = Object.keys(bo);
+    if (aKeys.length !== bKeys.length) return false;
+    for (const k of aKeys) {
+      if (!Object.prototype.hasOwnProperty.call(bo, k)) return false;
+      if (!shallowJsonEqual(ao[k], bo[k])) return false;
+    }
+    return true;
+  }
+  return false;
 }

@@ -25,9 +25,12 @@ const CORE_SIGMA = 0.098;
 export function AvatarFallback({
   harness,
   size,
+  fill,
 }: {
   harness: HarnessKey;
-  size: number;
+  size?: number;
+  /** Fill the parent container instead of a fixed square. */
+  fill?: boolean;
 }) {
   const palette = paletteFor(harness);
   const haloId = `nebula-fallback-halo-${harness}`;
@@ -38,8 +41,8 @@ export function AvatarFallback({
       role="presentation"
       aria-hidden
       viewBox="-1.2 -1.2 2.4 2.4"
-      width={size}
-      height={size}
+      width={fill ? "100%" : size}
+      height={fill ? "100%" : size}
       className="block"
     >
       <defs>

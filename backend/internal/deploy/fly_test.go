@@ -923,6 +923,116 @@ func TestHealth_ChatEnabled_BadExternalRef(t *testing.T) {
 	}
 }
 
+// -----------------------------------------------------------------------------
+// Restart — v1.5 Pillar B Phase 7
+//
+// Pins the lease → restart → wait sequence on every `started` machine, that
+// non-`started` machines are skipped, and that any flaps error short-circuits
+// the loop (partial restart of a multi-replica app surfaces an error rather
+// than silently succeeding).
+
+func TestFlyDeployTarget_Restart_HappyPath(t *testing.T) {
+	fake := newFakeFlaps()
+	fake.machines = []*fly.Machine{
+		{ID: "m-started-1", State: "started"},
+		{ID: "m-stopped", State: "stopped"},
+		{ID: "m-started-2", State: "started"},
+		{ID: "m-pending", State: "starting"},
+	}
+	target := newFlyTargetForTest(fake)
+
+	if err := target.Restart(context.Background(), "fly-app:test-app"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got, want := fake.callCount("List"), 1; got != want {
+		t.Errorf("List calls: got %d, want %d", got, want)
+	}
+	if got, want := fake.callCount("Restart"), 2; got != want {
+		t.Errorf("Restart calls: got %d, want %d (only `started` machines should be restarted)", got, want)
+	}
+	if got, want := fake.callCount("AcquireLease"), 2; got != want {
+		t.Errorf("AcquireLease calls: got %d, want %d (one per restarted machine)", got, want)
+	}
+	if got, want := fake.callCount("ReleaseLease"), 2; got != want {
+		t.Errorf("ReleaseLease calls: got %d, want %d (one per restarted machine)", got, want)
+	}
+	if got, want := fake.callCount("Wait"), 2; got != want {
+		t.Errorf("Wait calls: got %d, want %d (one per restarted machine)", got, want)
+	}
+}
+
+func TestFlyDeployTarget_Restart_BadExternalRef(t *testing.T) {
+	fake := newFakeFlaps()
+	target := newFlyTargetForTest(fake)
+
+	if err := target.Restart(context.Background(), "not-a-fly-ref"); err == nil {
+		t.Fatal("want parse error, got nil")
+	}
+	if got := fake.callCount("List"); got != 0 {
+		t.Errorf("List should not be called on parse error; got %d calls", got)
+	}
+}
+
+func TestFlyDeployTarget_Restart_ListError(t *testing.T) {
+	fake := newFakeFlaps()
+	fake.listErr = fmt.Errorf("flaps unavailable")
+	target := newFlyTargetForTest(fake)
+
+	err := target.Restart(context.Background(), "fly-app:test-app")
+	if err == nil {
+		t.Fatal("want error from List failure, got nil")
+	}
+	if fake.callCount("Restart") != 0 {
+		t.Errorf("no Restart should be issued when List failed")
+	}
+}
+
+func TestFlyDeployTarget_Restart_FlapsErrorShortCircuits(t *testing.T) {
+	fake := newFakeFlaps()
+	fake.machines = []*fly.Machine{
+		{ID: "m-started-1", State: "started"},
+		{ID: "m-started-2", State: "started"},
+	}
+	fake.restartErr = fmt.Errorf("simulated flaps Restart failure")
+	target := newFlyTargetForTest(fake)
+
+	err := target.Restart(context.Background(), "fly-app:test-app")
+	if err == nil {
+		t.Fatal("want error from Restart failure, got nil")
+	}
+	// First machine acquires lease + attempts Restart (which fails). Loop
+	// short-circuits; second machine never reaches Restart. Lease for the
+	// first machine still releases via defer.
+	if got := fake.callCount("Restart"); got != 1 {
+		t.Errorf("Restart calls: got %d, want 1 (loop should short-circuit on first error)", got)
+	}
+	if got := fake.callCount("AcquireLease"); got != 1 {
+		t.Errorf("AcquireLease calls: got %d, want 1", got)
+	}
+	if got := fake.callCount("ReleaseLease"); got != 1 {
+		t.Errorf("ReleaseLease calls: got %d, want 1 (defer should still release on Restart failure)", got)
+	}
+}
+
+func TestFlyDeployTarget_Restart_NoStartedMachinesIsNoop(t *testing.T) {
+	fake := newFakeFlaps()
+	fake.machines = []*fly.Machine{
+		{ID: "m-stopped", State: "stopped"},
+		{ID: "m-pending", State: "starting"},
+	}
+	target := newFlyTargetForTest(fake)
+
+	if err := target.Restart(context.Background(), "fly-app:test-app"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := fake.callCount("Restart"); got != 0 {
+		t.Errorf("Restart calls: got %d, want 0 (no started machines)", got)
+	}
+}
+
+// -----------------------------------------------------------------------------
+
 func contains(haystack []string, needle string) bool {
 	for _, s := range haystack {
 		if s == needle {

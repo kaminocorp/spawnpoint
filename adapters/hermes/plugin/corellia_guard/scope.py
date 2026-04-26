@@ -121,10 +121,14 @@ def match_command(scope: ToolsetScope | None, command: str) -> bool:
     """True iff `command` matches any regex in scope.command_allowlist.
 
     `re.search` (not `re.match`) — patterns are anchored by the operator
-    when they want anchoring (`^ls(\\s|$)`)."""
+    when they want anchoring (`^ls(\\s|$)`).
+
+    Default-deny: empty/None command short-circuits to False so an
+    upstream argument-extraction miss (e.g. tool emits args.cmd_v2 we
+    don't read) does not match a permissive pattern like `.*`."""
     if scope is None:
         return False
-    if not isinstance(command, str):
+    if not isinstance(command, str) or not command:
         return False
     if not scope.command_allowlist:
         return False
@@ -143,8 +147,13 @@ def match_command(scope: ToolsetScope | None, command: str) -> bool:
 def match_path(scope: ToolsetScope | None, path: str) -> bool:
     """True iff `path` matches any glob in scope.path_allowlist.
 
-    fnmatch is used over pathlib.PurePath.match because it understands `**`
-    and is consistent with url_allowlist's matcher."""
+    Uses Python's `fnmatch.fnmatchcase`. Note: fnmatch does NOT distinguish
+    `*` from `**` — both match any character sequence including `/`. So
+    `/workspace/*` and `/workspace/**` admit the same set of paths
+    (everything under `/workspace/`). This is more permissive than the
+    pathlib-style `**`-recursive convention; operators should treat the
+    allowlist as an explicit prefix-+-glob whitelist rather than relying
+    on a single-vs-double-star distinction."""
     if scope is None:
         return False
     if not isinstance(path, str) or not path:
@@ -192,8 +201,15 @@ def _normalize_url_for_match(url: str) -> str:
     """Strip scheme so an allowlist of `*.acme.com` matches both
     `https://wiki.acme.com` and `http://wiki.acme.com/path`. The allowlist
     is host-/path-shaped, not scheme-shaped — schemes are governed at the
-    toolset level (e.g., `web` provider only emits HTTP(S))."""
+    toolset level (e.g., `web` provider only emits HTTP(S)).
+
+    Scheme detection is case-insensitive (`Https://...`, `HTTP://...` and
+    canonical `https://...` all strip correctly); the body of the URL is
+    returned unchanged so subsequent fnmatch comparisons remain
+    case-sensitive on the host (matching operator intent: `*.acme.com`
+    only matches lower-case hosts)."""
+    lower = url.lower()
     for prefix in ("https://", "http://"):
-        if url.startswith(prefix):
+        if lower.startswith(prefix):
             return url[len(prefix):]
     return url

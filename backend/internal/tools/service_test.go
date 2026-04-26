@@ -201,6 +201,10 @@ func TestValidateScope_UnknownFieldsIgnored(t *testing.T) {
 type fakeToolQueries struct {
 	tool         db.Tool
 	toolErr      error
+	// toolByID overrides single-tool lookup with a per-id map. Set this when
+	// a test exercises GetTool against multiple tool ids in one call (e.g.
+	// SetInstanceGrants with two grants pointing at different tools).
+	toolByID     map[uuid.UUID]db.Tool
 	tools        []db.Tool
 	listErr      error
 	curationRows []db.ListOrgToolCurationRow
@@ -218,12 +222,19 @@ type fakeToolQueries struct {
 	revokedAll     int // count of RevokeAllActiveToolGrants calls
 	bumpedVersion  int // count of BumpManifestVersion calls
 	auditAppends   []db.InsertToolGrantAuditParams // Phase 7 — captures audit row writes
+	auditErr       error                           // injectable failure for audit-write idempotency tests
 
 	// scripted insert error: trips on the Nth insert (1-indexed).
 	insertFailOn int
 }
 
-func (f *fakeToolQueries) GetToolByID(_ context.Context, _ uuid.UUID) (db.Tool, error) {
+func (f *fakeToolQueries) GetToolByID(_ context.Context, id uuid.UUID) (db.Tool, error) {
+	if f.toolByID != nil {
+		if t, ok := f.toolByID[id]; ok {
+			return t, nil
+		}
+		return db.Tool{}, pgx.ErrNoRows
+	}
 	return f.tool, f.toolErr
 }
 func (f *fakeToolQueries) ListToolsForHarness(_ context.Context, _ db.ListToolsForHarnessParams) ([]db.Tool, error) {
@@ -276,7 +287,7 @@ func (f *fakeToolQueries) GetAgentInstanceOrgGuard(_ context.Context, arg db.Get
 }
 func (f *fakeToolQueries) InsertToolGrantAudit(_ context.Context, arg db.InsertToolGrantAuditParams) error {
 	f.auditAppends = append(f.auditAppends, arg)
-	return nil
+	return f.auditErr
 }
 
 // ─── service ─────────────────────────────────────────────────────────────────
@@ -618,5 +629,151 @@ func TestListAvailableForOrg_EmptyAdapterVersionResolves(t *testing.T) {
 	}
 	if len(rows) != 1 {
 		t.Errorf("expected 1 row, got %d", len(rows))
+	}
+}
+
+// ─── Phase 7 hardening — credential reattachment + audit-failure-doesn't-rollback ───
+
+// TestSetInstanceGrants_ReattachesCredentialFromPriorGrant pins the v1.5 Pillar
+// B post-review fix (changelog 0.13.9): when the FE sends an empty
+// credential_storage_ref on edit, the BE must reattach from the prior active
+// grant for the same tool. Without this, every inspector save on a credential-
+// bearing toolset would silently strip the stored credential reference (or
+// trip ErrCredentialMissing on tools with required_env_vars).
+func TestSetInstanceGrants_ReattachesCredentialFromPriorGrant(t *testing.T) {
+	orgID := uuid.New()
+	instanceID := uuid.New()
+	grantedBy := uuid.New()
+
+	tool := db.Tool{
+		ID:              uuid.New(),
+		ToolsetKey:      "web",
+		ScopeShape:      []byte(`{"url_allowlist":{"type":"pattern_list","description":"URLs","default_deny":true}}`),
+		RequiredEnvVars: []string{"EXA_API_KEY"},
+	}
+	priorRef := "fly:" + instanceID.String() + ":EXA_API_KEY"
+	q := &fakeToolQueries{
+		toolByID:   map[uuid.UUID]db.Tool{tool.ID: tool},
+		guardOrgID: orgID,
+		grantRows: []db.ListInstanceToolGrantsRow{{
+			ID:                   uuid.New(),
+			AgentInstanceID:      instanceID,
+			ToolID:               tool.ID,
+			CredentialStorageRef: &priorRef,
+			ToolsetKey:           tool.ToolsetKey,
+		}},
+	}
+	svc := tools.NewService(q, tools.WithTransactor(&fakeTransactor{q: q}))
+
+	// Caller sends scope edit with empty CredentialStorageRef — the FE never
+	// re-sends the opaque ref it doesn't have access to.
+	_, _, err := svc.SetInstanceGrants(context.Background(), instanceID, orgID, grantedBy, []tools.GrantInput{
+		{ToolID: tool.ID, ScopeJSON: json.RawMessage(`{"url_allowlist":["*.acme.com"]}`)},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(q.insertedGrants) != 1 {
+		t.Fatalf("expected 1 insert, got %d", len(q.insertedGrants))
+	}
+	got := q.insertedGrants[0].CredentialStorageRef
+	if got == nil || *got != priorRef {
+		t.Fatalf("credential_storage_ref reattachment broken: got %v, want pointer to %q", got, priorRef)
+	}
+}
+
+// TestSetInstanceGrants_ExplicitCredentialOverridesPrior: when the caller
+// supplies a non-empty CredentialStorageRef, that takes precedence over any
+// prior. (Future-proofs for the v1.6 in-flight credential rotation flow.)
+func TestSetInstanceGrants_ExplicitCredentialOverridesPrior(t *testing.T) {
+	orgID := uuid.New()
+	instanceID := uuid.New()
+
+	tool := db.Tool{
+		ID:              uuid.New(),
+		ToolsetKey:      "web",
+		ScopeShape:      []byte(`{}`),
+		RequiredEnvVars: []string{"EXA_API_KEY"},
+	}
+	priorRef := "fly:old:EXA_API_KEY"
+	newRef := "fly:new:EXA_API_KEY"
+	q := &fakeToolQueries{
+		toolByID:   map[uuid.UUID]db.Tool{tool.ID: tool},
+		guardOrgID: orgID,
+		grantRows: []db.ListInstanceToolGrantsRow{{
+			ID:                   uuid.New(),
+			AgentInstanceID:      instanceID,
+			ToolID:               tool.ID,
+			CredentialStorageRef: &priorRef,
+			ToolsetKey:           tool.ToolsetKey,
+		}},
+	}
+	svc := tools.NewService(q, tools.WithTransactor(&fakeTransactor{q: q}))
+
+	_, _, err := svc.SetInstanceGrants(context.Background(), instanceID, orgID, uuid.New(), []tools.GrantInput{
+		{ToolID: tool.ID, CredentialStorageRef: newRef},
+	})
+	if err != nil {
+		t.Fatalf("unexpected: %v", err)
+	}
+	got := q.insertedGrants[0].CredentialStorageRef
+	if got == nil || *got != newRef {
+		t.Fatalf("explicit credential ref ignored: got %v, want %q", got, newRef)
+	}
+}
+
+// TestSetInstanceGrants_NoPriorAndNoCredentialErrors pins that adding a brand-
+// new credential-bearing toolset (prior empty, incoming empty) still trips
+// ErrCredentialMissing — the gate is not weakened by the reattachment path.
+func TestSetInstanceGrants_NoPriorAndNoCredentialErrors(t *testing.T) {
+	orgID := uuid.New()
+	tool := db.Tool{
+		ID:              uuid.New(),
+		ToolsetKey:      "web",
+		ScopeShape:      []byte(`{}`),
+		RequiredEnvVars: []string{"EXA_API_KEY"},
+	}
+	q := &fakeToolQueries{
+		toolByID:   map[uuid.UUID]db.Tool{tool.ID: tool},
+		guardOrgID: orgID,
+		// no prior grants
+	}
+	svc := tools.NewService(q, tools.WithTransactor(&fakeTransactor{q: q}))
+
+	_, _, err := svc.SetInstanceGrants(context.Background(), uuid.New(), orgID, uuid.New(), []tools.GrantInput{
+		{ToolID: tool.ID},
+	})
+	if !errors.Is(err, tools.ErrCredentialMissing) {
+		t.Fatalf("expected ErrCredentialMissing, got %v", err)
+	}
+}
+
+// TestSetInstanceGrants_AuditFailureDoesNotRollback pins the contract documented
+// at service.go's auditAppend: audit-write failure is logging-only and must NOT
+// roll back the surrounding business write. A bad audit table state should not
+// prevent operators from changing tool grants.
+func TestSetInstanceGrants_AuditFailureDoesNotRollback(t *testing.T) {
+	orgID := uuid.New()
+	tool := db.Tool{
+		ID:         uuid.New(),
+		ToolsetKey: "code_execution",
+		ScopeShape: []byte(`{}`),
+	}
+	q := &fakeToolQueries{
+		toolByID:   map[uuid.UUID]db.Tool{tool.ID: tool},
+		guardOrgID: orgID,
+		auditErr:   errors.New("simulated audit-table outage"),
+	}
+	svc := tools.NewService(q, tools.WithTransactor(&fakeTransactor{q: q}))
+
+	_, _, err := svc.SetInstanceGrants(context.Background(), uuid.New(), orgID, uuid.New(), []tools.GrantInput{
+		{ToolID: tool.ID},
+	})
+	if err != nil {
+		t.Fatalf("audit failure leaked into business return: %v", err)
+	}
+	if q.revokedAll != 1 || len(q.insertedGrants) != 1 || q.bumpedVersion != 1 {
+		t.Errorf("business write did not commit despite audit failure: revokes=%d inserts=%d bumps=%d",
+			q.revokedAll, len(q.insertedGrants), q.bumpedVersion)
 	}
 }

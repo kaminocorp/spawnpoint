@@ -2,6 +2,8 @@
 
 Index - short one-liners:
 
+- [0.13.11 — Spawn RPG Redesign: Per-Card Nebulas + Gallery Cleanup + Three-Column Character Layout](#01311--spawn-rpg-redesign-per-card-nebulas--gallery-cleanup--three-column-character-layout-2026-04-27)
+- [0.13.10 — v1.5 Pillar B Post-Review Hardening: Credential Reattachment + Adapter Revocation Policy + Frozenset Audit + 16 Misc Fixes Across BE / FE / Adapter](#01310--v15-pillar-b-post-review-hardening-credential-reattachment--adapter-revocation-policy--frozenset-audit--16-misc-fixes-across-be--fe--adapter-2026-04-27)
 - [0.13.9 — Vercel Build Fix: `pnpm.packageExtensions` — Inject `zod` Peer into `@hookform/resolvers`](#0139--vercel-build-fix-pnpmpackageextensions--inject-zod-peer-into-hookformresolvers-2026-04-27)
 - [0.13.8 — v1.5 Pillar B Phase 7: Fleet Inspector Tool Editor + `RestartAgentInstance` + `tool_grant_audit` + Manifest Rate-Limit (Pillar B Complete)](#0138--v15-pillar-b-phase-7-fleet-inspector-tool-editor--restartagentinstance--tool_grant_audit--manifest-rate-limit-pillar-b-complete-2026-04-27)
 - [0.13.7 — README Demo Video: `capture:video` Script (Puppeteer + ffmpeg → MP4)](#0137--readme-demo-video-capturevideo-script-puppeteer--ffmpeg--mp4-2026-04-27)
@@ -76,6 +78,170 @@ Index - short one-liners:
 Latest on top. Each release includes detailed entries (**What / Where / Why** changes were made).
 
 --
+
+## 0.13.11 — Spawn RPG Redesign: Per-Card Nebulas + Gallery Cleanup + Three-Column Character Layout (2026-04-27)
+
+Two complementary visual passes on the spawn flow. The first fixes a structural oddity in the carousel: the nebula was a single canvas overlay floating outside every slide's DOM, with a static SVG permanently underneath — producing a layered "animated-sticker-on-a-poster" look instead of each card owning its own living portrait. The second redesigns the post-selection wizard into an RPG character screen: large nebula centered as the agent portrait, confirmed steps scrolling left, active configuration form on the right.
+
+`pnpm -C frontend type-check` and `pnpm -C frontend lint` clean; no backend, proto, or migration changes.
+
+### Part 1 — Per-card nebulas in the carousel
+
+**Root cause.** The carousel mounted one `<NebulaAvatar>` canvas absolutely above the scroll container and measured its position via a `useLayoutEffect` probe on the first slide. Every slide rendered `<AvatarFallback>` (static SVG) at all times. The animated canvas sat on top of whichever slide was centred, blending onto its static SVG twin — visually an overlay, not an integrated portrait.
+
+**`components/spawn/avatar-fallback.tsx`** — added `fill?: boolean` prop. When set, the SVG renders at `width="100%" height="100%"` instead of the fixed `size` square, so it fills whatever container the parent provides. `size` is now optional (callers that still pass it work unchanged).
+
+**`components/spawn/nebula-avatar.tsx`** — added `fill?: boolean` prop that swaps the container's inline `width/height` style for `w-full h-full` Tailwind classes. Fixed the loading-state branch: previously rendered `null` while the `IntersectionObserver` hadn't fired yet (causing a one-frame blank flash on slide transition); now renders `<AvatarFallback>` during that window so the static-to-animated transition is seamless. `AvatarFallback` receives `fill` forwarded through so both layers are consistently sized.
+
+**`components/spawn/harness-slide.tsx`** — each slide now owns its avatar outright. Avatar slot changed from content-sized (`padding + 240px AvatarFallback`) to a responsive fixed height (`h-48 sm:h-56 md:h-64`). Inside the slot: active + unlocked slides render `<NebulaAvatar fill harness={harness.key} />`, all other slides render `<AvatarFallback fill harness={harness.key} />`. Locked overlay is unchanged. Removed the `avatarSlotRef` prop (was the carousel's layout probe; no longer needed). Removed the `Ref` import. Added `NebulaAvatar` import; kept `AvatarFallback` for inactive/locked branches.
+
+**`components/spawn/harness-carousel.tsx`** — stripped the overlay machinery entirely: removed the `overlayTopPx` state, `probeSlotRef` and `wrapperRef` refs, the `useLayoutEffect` that measured the slot offset, the `<NebulaAvatar>` overlay div, and the `useLayoutEffect` import. Removed `NebulaAvatar` and `HarnessKey` imports (no longer needed here). Removed `avatarSlotRef` from the first slide. The scroll container is now a direct child of the section instead of being nested inside a `relative` wrapper div. Since scroll-snap shows exactly one slide at a time, only one canvas is ever mounted in the carousel at once — same effective one-active-canvas constraint as the old overlay, but with each card being self-contained.
+
+Updated the carousel comment block to document the new per-slide ownership model (decision 21 annotation revised: "scroll-snap ensures only one slide is visible at a time, so only one canvas is ever mounted in the carousel at once").
+
+### Part 2 — Wizard RPG character layout
+
+**`components/spawn/wizard.tsx`** — all changes are presentational; reducer logic, form validation, RPC calls, deploy flow, and step data are unchanged.
+
+**`GalleryWizardShell` simplified.** Removed the five `pointer-events-none opacity-40 inert` step shells (IDENTITY / MODEL / TOOLS / DEPLOYMENT / REVIEW) that previously sat below the carousel. The gallery is now just a header + `<HarnessCarousel>`. Clicking `› SELECT` navigates to `/spawn/[templateId]` as before.
+
+**`StepShell` deleted.** The old confirmed-wizard render iterated `STEPS.map(StepShell)` to produce a vertical accordion. `StepShell` is gone; the RPG layout replaces the entire stack.
+
+**`RpgHeader` (new).** Centered title block rendered above the three-column body. Shows `[ HARNESS NAME ]` as a muted kicker, the agent callsign in large display type (or `[ DESIGNATION PENDING ]` dimmed before the identity step is confirmed), and `STEP N // LABEL` beneath. Live-updates as the operator types their callsign.
+
+**`RpgBody` (new).** Three-column grid layout (`lg:grid-cols-[220px_1fr_300px]`). DOM order is RIGHT → CENTER → LEFT so that on mobile (block stacking) the active form appears first and the history panel appears below. On desktop, explicit `lg:col-start-*` overrides DOM order: left column gets confirmed history, center gets the large nebula, right gets the active step form. A compact 176px nebula (`h-44 w-44`) renders above the form on mobile via `lg:hidden`; the full portrait is `hidden lg:flex` (IO never fires on a `display:none` element, so at most one canvas mounts at any time).
+
+**`RpgLeftPanel` + `RpgConfirmedEntry` + `rpgStepSummaryRows` (new).** Left column renders confirmed steps in order, each as a compact entry: step label in its accent colour, key/value rows from `rpgStepSummaryRows`, and a small `[edit]` button (except harness — locked to the URL — and the review step). `rpgStepSummaryRows` maps each step to a short summary:
+- HARNESS → `harness · hermes`, `deploy · fly.io`
+- IDENTITY → `callsign · <name>`
+- MODEL → `faction · Anthropic`, `class · <model>`, `sigil · ••••••••<tail>`
+- TOOLS → `toolsets · N equipped`
+- DEPLOYMENT → `region`, `size`, `replicas`
+
+On REVIEW, the left panel narrows to HARNESS + IDENTITY + MODEL only (the "who you are" columns from the reference layout); tools and deployment move to the right panel.
+
+**`RpgRightPanel` (new).** Dispatches by `state.current`. For IDENTITY through DEPLOYMENT: wraps the existing `StepBody` call in a `TerminalContainer` (`STEP N // LABEL`, accent, `ACTIVE` meta). For REVIEW: renders `ReviewRightContent` instead.
+
+**`ReviewRightContent` (new).** Owns the placement-check `useEffect` (moved from the now-unused `ReviewStep`). Renders a `TerminalContainer` titled `LOADOUT` containing a `ConfirmedSummary` of all tools + deployment rows, then `<ReadyToLaunch>` with the placement result and deploy button. The `CharacterSheet` component (which embedded its own 180px nebula) is no longer called from the wizard flow — the center portrait replaces it entirely.
+
+**`IdentityForm` simplified.** Removed the `flex flex-col gap-5 sm:flex-row` container that held a 64px `<NebulaAvatar>` thumbnail beside the callsign input. The form is now a plain `space-y-2` stack: label → input → operator-label row → error. Removed `harness` from the function signature and its call site in `IdentityStep` (was only used to render the now-removed thumbnail). Added `HarnessKey` import for the `RpgBody` nebula typing.
+
+**`STEP_ACCENT_CSS` constant (new).** Maps each `StepKey` to its CSS variable string (`hsl(var(--feature-catalog))` etc.) for use in `RpgConfirmedEntry` step labels without duplicating the `TerminalContainer` accent map.
+
+## 0.13.10 — v1.5 Pillar B Post-Review Hardening: Credential Reattachment + Adapter Revocation Policy + Frozenset Audit + 16 Misc Fixes Across BE / FE / Adapter (2026-04-27)
+
+Comprehensive remediation pass after the four-track senior review of the just-shipped v1.5 Pillar B (Phases 1–7). The review's per-layer scores were BE 9.0 / FE 9.2 / Adapter 8.0 / Cross-cutting 7.5; the cross-cutting reviewer flagged one BLOCKER (FE drops the credential value on submit and the BE has no reattachment from prior grants — silently strips credentials on every inspector save and breaks the `web` toolset entirely from the wizard) plus three HIGH adapter concerns (frozenset-vs-Hermes-vocabulary drift, infinite last-known-good on 401, untested register() single-flight). This entry rolls all 19 findings (1 BLOCKER, 3 HIGH, 13 MEDIUM, 2 LOW/NIT) into one release alongside ~50 LOC of new test coverage and the missing operator runbook entry.
+
+`cd backend && go vet ./... && go test ./... && go build ./...` all green; `pnpm -C frontend type-check && lint && build` green; `pytest adapters/hermes/plugin/corellia_guard/tests/` is **73 / 73 passing** (49 → 73 — 24 new cases). No proto, sqlc, or migration schema change. One migration file edited (DOWN-direction comment + revert digest correction; no goose-up needed in prod).
+
+### BLOCKER: BE credential reattachment (cross-cutting review §12)
+
+The Phase 7 completion-note (§5 deviation 3) claimed "the BE re-runs the existing tx; the credential storage refs are reattached server-side from the prior active grants when the tool id matches." That claim was **never implemented in code** — `RevokeAllActiveToolGrants` deleted the prior rows and `InsertInstanceToolGrant` wrote whatever the FE sent (which the FE deliberately leaves empty, per Phase 4 deviation 1's "STASH WIRING IN PILLAR B PHASE 4.5" notice that 4.5 never delivered). Effect: every inspector save on a credential-bearing toolset (`web` / `image_gen` / `tts` / `homeassistant`) silently nulled `credential_storage_ref`; every wizard spawn of those toolsets failed with `ErrCredentialMissing` after Fly app creation, triggering the rollback-destroy and surfacing a generic "internal error" toast.
+
+- **`backend/internal/tools/service.go`** — `SetInstanceGrants` reworked. Before opening the tx, calls `ListInstanceToolGrants(instanceID)` to build a `prior map[uuid.UUID]string` keyed by `tool_id` → `credential_storage_ref` (only entries with non-nil/non-empty refs). The pre-tx validation loop now resolves each grant's effective credential via `g.CredentialStorageRef ?? prior[g.ToolID]` and stores the resolved value in a parallel `resolved []string` slice. Inside the tx, inserts use `resolved[i]` instead of `g.CredentialStorageRef`, so the BE-managed ref carries forward across edits. The `ErrCredentialMissing` gate now fires only when both incoming AND prior are empty (genuine "this is a brand-new credential-bearing toolset and you haven't supplied one" — covered by inspector preflight below). Operator's mental model: "I'm still equipping the same toolset, just with new scope" — the credential is preserved.
+- **`backend/internal/tools/service_test.go`** — fakeToolQueries widened: `toolByID map[uuid.UUID]db.Tool` for tests that exercise multiple tools in one call (the new reattachment path); `auditErr` injectable failure for the rollback-doesn't-revert pin (LOW finding §9 from BE review). Three new tests:
+  - `TestSetInstanceGrants_ReattachesCredentialFromPriorGrant` — prior grant has `fly:<instance>:EXA_API_KEY`; FE sends empty; BE writes `fly:<instance>:EXA_API_KEY`. Locks the contract.
+  - `TestSetInstanceGrants_ExplicitCredentialOverridesPrior` — explicit non-empty FE ref takes precedence over prior. Future-proofs the v1.6 in-flight credential rotation flow.
+  - `TestSetInstanceGrants_NoPriorAndNoCredentialErrors` — brand-new credential-bearing toolset with neither prior nor incoming → `ErrCredentialMissing` still fires. The reattachment doesn't weaken the gate.
+  - `TestSetInstanceGrants_AuditFailureDoesNotRollback` — `auditErr` set; service returns success; revoke + insert + version-bump still committed. Pins the documented "audit is logging-only" contract.
+
+### Adapter HIGH: frozenset audit + tool-name routing fixes (Adapter review §5, §6)
+
+- **`docs/refs/hermes-tool-name-audit.md`** — new audit log. Documents the canonical Hermes 0.x tool-name surface at the pinned digest (`sha256:d4ee57f254aabbe10e41c49533bbf3eb98e6b026463c42843a07588e45ddd338`), including which tool routes to which `corellia_guard` frozenset and why (e.g. `web_search` is intentionally pass-through because its `query` arg is not an operator-controlled URL). v1.6 forward pointer: pre-commit hook or pytest fixture that diffs the audit table against `hermes_cli/tools/*` at the live pin and fails on drift.
+- **`adapters/hermes/plugin/corellia_guard/hook.py`** — three routing changes plus a defense-in-depth fail-closed safeguard:
+  - **`web_search` removed from `_WEB_TOOLS`.** Its `query` argument is a search string (e.g. `"weather today"`) that the previous URL-routing matched against the operator's `*.acme.com` allowlist — every benign search failed. The toolset gate at `platform_toolsets.cli` is the safety net; if `web_search` shouldn't run at all, the operator disables `web` entirely. Pinned by `test_web_search_passes_through_plugin`.
+  - **`browser_navigate` moved to its own `_BROWSER_TOOLS` frozenset** routing through `scope.for_toolset("browser")` instead of `scope.for_toolset("web")`. The `browser` catalog row has its own `url_allowlist` independent of `web`'s; routing through `web` enforced the wrong scope. Pinned by `test_browser_navigate_uses_browser_scope` (verifies a URL admitted by `web` is still blocked under `browser`).
+  - **`_SHELL_SHAPED_RE` defense-in-depth.** Tool names that miss every explicit frozenset but match a shell-shape regex (`bash_exec`, `shell.run`, `invoke_command`, …) are forced through the terminal command-allowlist enforcement with a `WARNING` log. This catches the most dangerous fail-open class — Hermes renames `shell_exec` → `bash_exec` between digest pins, the explicit set misses it, the call would otherwise pass-through. Pinned by `test_shell_shaped_unknown_name_routes_to_terminal`.
+  - Argument extraction: dropped `query` from the URL fallback chain in `_enforce_web` so the change above takes effect even if someone re-adds `web_search` to `_WEB_TOOLS`.
+
+### Adapter HIGH: 401-revocation policy (Adapter review §4, §9)
+
+The Phase 5 `_poll_loop` previously logged 401 and retried indefinitely, preserving last-known-good. That's correct posture for transient TLS / DNS blips, but a deliberate token revocation (operator killed the instance's grants) never propagated — the agent kept enforcing stale scope forever.
+
+- **`adapters/hermes/plugin/corellia_guard/__init__.py`** — `_poll_loop` rewritten with a per-status decision tree. New constant `_AUTH_DENY_AFTER_CONSECUTIVE_401 = 3`: after three consecutive 401 responses, the daemon calls `cache.force_deny_all()` and continues polling at backoff cadence (so a re-grant restores enforcement). Threshold rationale: at backoff cap (60s) this is ~3 minutes before deny-all kicks in, slow enough to absorb a single transient blip but fast enough to satisfy "operator clicked revoke and expects it to take effect within minutes." A 403 (instance not found / explicitly revoked at the BE) flips to deny-all immediately on the first response. Successful polls clear the deny-all sticky flag via `cache.clear_force_deny()`, restoring normal behaviour without requiring a process restart. The 304-as-HTTPError quirk of urllib's default opener is handled inline so the revocation policy only runs on real errors.
+- **`adapters/hermes/plugin/corellia_guard/__init__.py`** — `If-None-Match` header re-quotes bare-token ETags defensively. RFC 7232 requires quoted ETag values; the BE always emits them quoted, but if any intermediary ever strips quotes the plugin now re-applies them rather than send a non-compliant header.
+- **`adapters/hermes/plugin/corellia_guard/hook.py`** — `ScopeCache` gains `_force_deny: bool` flag + `force_deny_all()` / `clear_force_deny()` methods. `get()` short-circuits to `Scope.deny_all()` when the flag is set, BEFORE the on-disk mtime check — so the override survives across reload cycles where the disk file is still permissive. The flag is sticky until explicitly cleared, preventing the "401 → mtime-unchanged → reload from disk → permissive again" failure mode.
+
+### Adapter HIGH: register() single-flight test coverage (Adapter review §7)
+
+- **`adapters/hermes/plugin/corellia_guard/tests/test_register_idempotent.py`** — new (~80 LOC). Three tests:
+  - `test_register_double_call_spawns_one_daemon` — calls `register(ctx)` twice with monkeypatched `_start_poll_daemon`; verifies one spawn, both ctxs receive the hook, both ctxs share the same hook closure (intentional — sub-agents share the cache).
+  - `test_register_concurrent_calls_spawn_one_daemon` — 8 threads racing through `register()` produce one daemon spawn, all 8 ctxs get hooks. Pins the `_REGISTER_LOCK` is doing its job.
+  - `test_register_skips_daemon_when_env_missing` — with `CORELLIA_TOOL_MANIFEST_URL` / `CORELLIA_INSTANCE_TOKEN` unset, no `corellia_guard.poll` thread is constructed; hook still attaches; warning log fires. Locks the local-dev quiet path.
+
+### Adapter MEDIUM: matcher hardening (Adapter review §1, §2, §3, §8)
+
+- **`adapters/hermes/plugin/corellia_guard/scope.py`** — `_normalize_url_for_match` now lower-cases for scheme detection (`Https://wiki.acme.com`, `HTTP://...` and canonical `https://...` all strip correctly). Pinned by `test_url_matcher_mixed_case_scheme`. Body of URL is returned unchanged so host comparisons stay case-sensitive (matches operator intent: `*.acme.com` only matches lower-case hosts).
+- **`adapters/hermes/plugin/corellia_guard/scope.py`** — `match_command` short-circuits to False on empty/None command (was: would fall through to regex loop and a permissive `.*` would match an empty command). Closes the asymmetry vs `match_url` / `match_path`.
+- **`adapters/hermes/plugin/corellia_guard/scope.py`** — `match_path` docstring corrected: Python's `fnmatch` does NOT distinguish `*` from `**` (both match any chars including `/`). Operators should treat the allowlist as explicit prefix-+-glob whitelist, not rely on a single-vs-double-star distinction. Migration to `pathlib.PurePosixPath.match` is queued for v1.6 if operator confusion crops up.
+- **`adapters/hermes/plugin/corellia_guard/hook.py`** — `ScopeCache._reload_locked` reworked for the stat-after-read race window. Reads `mtime_before` BEFORE the file content; if the daemon's atomic `os.replace` lands between content-read and the prior post-read stat, the new code caches the new content under the old (mtime_before) value, and the next `get()` detects the disagreement and triggers another reload. Worst case: one extra reload on a contended write. Previously the race silently masked one TTL window of stale-but-valid enforcement.
+- **`adapters/hermes/plugin/corellia_guard/hook.py`** — `ScopeCache.get()` triggers reload on `mtime != self._mtime` (was: `mtime > self._mtime`). NTP corrections, file restored from backup, or any other mtime regression now reload correctly. Pinned by `test_reload_on_mtime_regression`.
+- **`adapters/hermes/plugin/corellia_guard/hook.py`** — rejection messages redact URL query strings (`_redact_url`) and truncate long commands (`_redact_command`, 200-char cap). The block message round-trips through Hermes into the agent's stdout AND into the LLM's next turn (via the conversation history); without redaction, a `web_fetch(url="...?token=secret")` rejection would push the credential into the model's context. Pinned by `test_rejection_redacts_url_query_string` and `test_rejection_truncates_long_command`.
+
+### Adapter test coverage expansion
+
+- **`adapters/hermes/plugin/corellia_guard/tests/test_poll_daemon.py`** — new (~140 LOC). Eight cases. Exercises `_poll_once` against `unittest.mock.patch`-replaced `urllib.request.urlopen`:
+  - 200 with body → `scope.json` atomically written, ETag returned.
+  - 304 → existing ETag preserved, `scope.json` NOT touched.
+  - 401 → propagates to caller (loop's per-status handler picks it up).
+  - `_manifest_to_scope_doc` projection: valid + malformed entries; toolsets without governable shape silently dropped; missing `manifest_version` → defaults to 0.
+  - `_ttl_seconds` clamping: bogus / too-low / too-high values all land within the 5–300 second envelope.
+- **`adapters/hermes/plugin/corellia_guard/tests/test_scope_reload.py`** — three new cases: `test_reload_on_mtime_regression`, `test_unparseable_then_recovers` (bad JSON → fixed JSON picks up on next stat), `test_force_deny_all_takes_effect_immediately` (revocation override survives across cache reload cycles).
+- **`adapters/hermes/plugin/corellia_guard/tests/test_url_matcher.py`** — `test_url_matcher_mixed_case_scheme` (parametrized over five scheme casings).
+- **`adapters/hermes/plugin/corellia_guard/tests/test_hook_dispatch.py`** — five new cases (`test_web_fetch_*` × 2, `test_web_search_passes_through_plugin`, `test_browser_navigate_uses_browser_scope`, `test_shell_shaped_unknown_name_routes_to_terminal`, `test_rejection_redacts_url_query_string`, `test_rejection_truncates_long_command`). The original `test_web_search_*` cases were renamed to `test_web_fetch_*` to reflect the new routing.
+
+### FE MEDIUM: cred-required preflight + diff stability + rollback hygiene
+
+- **`frontend/src/components/fleet/instance-tool-editor.tsx`** — addable-toolset filter widened to exclude `requiredEnvVars.length > 0`; new `credLocked` array drives a "REQUIRES CREDENTIAL — V1.6" terminal-container with locked chips and explanatory copy ("Equip them through the spawn wizard for now"). The BE's reattachment fix means *editing scope* on an already-equipped credential-bearing grant works (the inspector's existing GrantRow renders normally for those); only *adding new* ones from the inspector is gated, where in-flight credential capture has its own UX surface scheduled for v1.6.
+- **`frontend/src/components/fleet/instance-tool-editor.tsx`** — `shallowJsonEqual` rewritten as a proper recursive value-by-value comparator (arrays element-wise / order-sensitive — patterns are positional; objects key-by-key / order-insensitive). Replaces `JSON.stringify`-based diff which mis-classified key-order changes as `plugin-tick`. Bounded inputs (≤64 patterns × ≤200 chars per BE scope_validator) keep the recursive cost negligible.
+- **`frontend/src/components/spawn/wizard.tsx`** — `onDeploy` rollback hardened. Catalog fetch (`fetchToolIdsByKey`) hoisted ABOVE `spawnAgent` so a catalog round-trip failure errors before any Fly resource exists, closing the post-spawn orphan window. On grant-write failure, `destroyAgentInstance` rollback failure is no longer silently swallowed: failure surfaces a `console.error` plus a streaming-log warning line ("rollback destroy failed — manual cleanup may be required") so orphan Fly apps become visible to the operator and to Sentry-class telemetry.
+- **`frontend/src/components/spawn/wizard.tsx`** — three stale section comments fixed (header docstring "Five-step" → "Six-step"; `STEP 4 // DEPLOYMENT` → `STEP 5 // DEPLOYMENT`; `STEP 5 // REVIEW` → `STEP 6 // REVIEW`). Cosmetic but had been confusing readers — the runtime ordinals were already derived from `STEP_META` so behaviour was correct, the labels were drifted from the v1.5 Pillar B six-step layout.
+
+### FE MEDIUM: regex grammar drift + Promise.allSettled
+
+- **`frontend/src/components/spawn/scope-inputs/command-allowlist.tsx`** — `validateCommandAllowlist` extended with a string-level RE2-incompatibility check: rejects patterns containing `(?=`, `(?!`, `(?<=`, `(?<!`, or backreferences `\1..\9` with a clear "RE2 (server-side) does not support …" message. Catches the most common JS-regex-vs-Go-RE2 drift cases without a full RE2 parse (false-positives are recoverable via the BE's save error). Hint copy updated to "Go RE2 syntax — no lookahead/lookbehind, no backreferences" so operators are warned upfront.
+- **`frontend/src/components/settings/org-tool-curation.tsx`** — `Promise.all` → `Promise.allSettled` on the per-adapter catalog fetch. v1.5 has one Hermes adapter so practical impact is nil, but the moment a second adapter ships, a single failed catalog fetch would have nuked the whole page. Failed adapters now render in an `ADAPTER CATALOG UNAVAILABLE` terminal-container with a per-adapter error band + retry button; healthy adapters still render. Type widened on `FetchState["ready"]` with optional `failures: SectionFailure[]`.
+
+### BE MEDIUM: FlyDeployTarget.Restart test coverage
+
+- **`backend/internal/deploy/fly_test.go`** — five new tests for the Phase 7 `Restart` method (which the original Phase 7 completion-note implied existed but only tested the fake plumbing on the agents-side):
+  - `TestFlyDeployTarget_Restart_HappyPath` — three machines, one stopped, one starting, two started; verifies only the started ones get `AcquireLease` + `Restart` + `Wait` + `ReleaseLease`.
+  - `TestFlyDeployTarget_Restart_BadExternalRef` — parse error short-circuits before any Flaps call.
+  - `TestFlyDeployTarget_Restart_ListError` — Flaps unreachable on List → no Restart attempted.
+  - `TestFlyDeployTarget_Restart_FlapsErrorShortCircuits` — first machine's Restart fails; loop short-circuits without touching the second machine; lease still releases via defer. Pins the "partial restart of multi-replica is a defect, not silent best-effort" intent.
+  - `TestFlyDeployTarget_Restart_NoStartedMachinesIsNoop` — all-stopped fleet returns nil with zero Restart calls.
+
+### BE LOW: audit hygiene
+
+- **`backend/internal/tools/service.go`** — `auditAppend` failure log now includes `org_id` / `instance_id` / `tool_id` (formatted as UUID strings) alongside `actor_user_id`. Operators investigating dropped audit rows can correlate to the entity. Nullable pointers are dereferenced once and stringified to avoid `0xc0…`-shaped log output.
+
+### Ops: env documentation + Phase 5 DOWN correction (forward-only)
+
+- **`.env.example`** — new `CORELLIA_API_URL` entry added under a "Tools governance (v1.5 Pillar B)" section. This is the master gate that wires the manifest issuer at `main.go:79`; without it, tools governance silently disables (spawn skips manifest-token issuance, plugin daemon refuses to start). New deployers reading the committed template no longer accidentally ship without enforcement.
+- **`backend/migrations/20260427200000_phase5_down_correction.sql`** — **new (forward-only)**. Migration `20260427180000` (Phase 5) ships a buggy DOWN block that reverts the `harness_adapters` row to the M-chat digest (`e31cc422…`) when — because Phases 2 + 5 deployed as one image (changelog 0.13.6) — the correct post-Phase-5 revert state is Phase 2's UP digest (`b8a6371d…`). Applied migrations are immutable (an earlier draft of this entry edited 180000's DOWN in place; that's the schema/codebase-drift hazard, reverted). The fix is a NEW forward-only migration:
+  - **UP**: idempotent re-pin of the row to `b8a6371d…` (already there in production; the explicit statement self-heals any out-of-band drift and makes the desired post-correction state legible at the SQL level).
+  - **DOWN**: explicitly sets the row to `b8a6371d…` (the corrected revert target). An operator running `goose down 1` from the head with this migration applied lands at the "Phase 5 reverted, Phase 2 still in effect" state without touching the immutable historical record. Continuing `goose down` past 180000 still hits the buggy DOWN and lands at `e31cc422…` — but at that point the operator has explicitly chosen the full-rollback path that 170000's DOWN delivers anyway, so the buggy intermediate is no longer load-bearing.
+  - Operator action: `goose -dir backend/migrations postgres "$DATABASE_URL_DIRECT" up` is safe and effectively a no-op against the production row (already at `b8a6371d…`); the migration is in the tree to make the corrected DOWN-direction available going forward.
+
+### Why this isn't a bigger version bump
+
+All changes are additive or hardening — no proto change, no schema change, no FE/BE contract change. The credential reattachment is functionally a bug fix in `SetInstanceGrants`'s prior behaviour (the documented contract didn't match the implementation; the implementation was strictly worse than the documented contract; this aligns them). Operators should pull, run `cd backend && go test ./... && pytest adapters/hermes/...` to re-verify, and (optionally) push a fresh adapter image with the Phase 7 hardening — the pinned digest in production from 0.13.6 doesn't include the matcher / poll-loop fixes, so a v1.5.1 adapter image bump migration is the natural follow-on (separate operator gate, not part of this entry). Until that bump, the matcher/redaction/revocation fixes are inert in production but correct for any new spawn that pulls a freshly-built adapter image.
+
+### Forward pointers (v1.6 candidates flagged but not addressed)
+
+- **In-flight credential editor in the inspector** (FE review §4, MEDIUM) — the cred-required preflight gates the unsafe path; the actual editor with key rotation + "are you sure" modal is v1.6.
+- **Unbounded rate-limit map growth** over process lifetime (BE review §5, LOW) — acceptable at v1.5 single-machine scale; v1.6 swap to LRU or Redis.
+- **Audit reader UI at `/settings/audit`** (cross-cutting review NIT) — rows accumulate now; reader UI is v1.6.
+- **Frozenset drift detection** as a CI check (Adapter review §5) — manual audit log shipped today (`docs/refs/hermes-tool-name-audit.md`); automation queued.
+- **Push-on-change manifest invalidation** (Phase 7 plan §1.2 deferral) — pull-with-TTL only today; SSE / WebSocket is v1.6+.
+
+### Test counts
+
+- BE: `go test ./internal/tools/` adds 4 cases (37 → 41); `go test ./internal/deploy/` adds 5 (Restart suite). All packages still pass.
+- Adapter: pytest 49 → 73 (+24 new cases across `test_url_matcher`, `test_hook_dispatch`, `test_scope_reload`, `test_register_idempotent` (new file), `test_poll_daemon` (new file)).
+- FE: type-check / lint / build all green; no rendering test framework wired (per stack.md §13), so behavioural tests for the inspector preflight and the diff comparator land alongside the v1.6 Vitest harness.
+
+---
 
 ## 0.13.9 — Vercel Build Fix: `pnpm.packageExtensions` — Inject `zod` Peer into `@hookform/resolvers` (2026-04-27)
 

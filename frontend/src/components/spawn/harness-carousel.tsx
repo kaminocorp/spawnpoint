@@ -1,34 +1,24 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { HarnessSlide } from "@/components/spawn/harness-slide";
-import { NebulaAvatar } from "@/components/spawn/nebula-avatar";
 import type { AgentTemplate } from "@/gen/corellia/v1/agents_pb";
-import type { HarnessKey } from "@/lib/spawn/mood-palettes";
 import type { HarnessEntry } from "@/lib/spawn/harnesses";
 
 /**
  * Horizontal scroll-snap carousel for the harness selection gallery.
  *
- * Architecture (redesign-spawn.md decisions 2, 3, 8, 9):
- *
- * - CSS `scroll-snap-type: x mandatory` on the container; each slide is
- *   `scroll-snap-align: center` at `width: 100%`. No carousel library —
- *   native CSS + a small IntersectionObserver driver + arrow buttons.
- * - IO-based active-slide tracking is the source of truth (not the snap
- *   geometry, which diverges across Safari iOS < 16). Threshold 0.5 reliably
- *   selects the centred full-width slide.
+ * - CSS `scroll-snap-type: x mandatory`; each slide is `scroll-snap-align: center`
+ *   at `width: 100%`. No carousel library — native CSS + IntersectionObserver + arrows.
+ * - IO-based active-slide tracking (threshold 0.5 = only the centred slide qualifies).
  * - Arrow keys move ±1; Home/End jump to ends; 1–6 jump to slide by number.
- * - Tab order: [prev button] → [scroll container] → [active SELECT button]
- *   → [next button]. Non-active SELECT buttons are `tabIndex={-1}` so focus
- *   stays on the visible slide.
- * - `prefers-reduced-motion: reduce` collapses to a vertical grid (the same
- *   layout shipped in Phase 1). Palette transitions are instant cuts in CSS.
+ * - Tab order: [prev] → [scroll container] → [active SELECT] → [next].
+ * - `prefers-reduced-motion: reduce` collapses to a vertical grid.
  *
- * Phase 3 adds `<NebulaAvatar>` for the centred slide (an absolute-positioned
- * canvas overlay over the active slot — not inside HarnessSlide — so the
- * one-canvas-per-page ceiling is never breached).
+ * Each `<HarnessSlide>` owns its own `<NebulaAvatar>` canvas when active and
+ * unlocked. Scroll-snap ensures only one slide is visible at a time, so only
+ * one canvas is ever mounted in the carousel at once.
  */
 
 function useReducedMotion(): boolean {
@@ -70,12 +60,6 @@ export function HarnessCarousel({
   const reduceMotion = useReducedMotion();
   const containerRef = useRef<HTMLDivElement>(null);
   const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
-  // Probe slide measures the avatar slot's offsetTop relative to the wrapper
-  // so the canvas overlay tracks any structural change to slide chrome
-  // (header height, py-* padding) without a hardcoded `top-[49px]`.
-  const probeSlotRef = useRef<HTMLDivElement>(null);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const [overlayTopPx, setOverlayTopPx] = useState<number | null>(null);
 
   const activeIndex = harnesses.findIndex((h) => h.key === activeKey);
 
@@ -100,24 +84,6 @@ export function HarnessCarousel({
     slideRefs.current.forEach((s) => s && observer.observe(s));
     return () => observer.disconnect();
   }, [harnesses, onActiveChange]);
-
-  // Measure the avatar slot's vertical offset relative to the overlay's
-  // positioning context (`wrapperRef`). All slides share the same chrome,
-  // so a single probe is enough; remeasure on resize. useLayoutEffect runs
-  // before paint so the canvas mounts at the right `top` on the first frame.
-  useLayoutEffect(() => {
-    function measure() {
-      const slot = probeSlotRef.current;
-      const wrapper = wrapperRef.current;
-      if (!slot || !wrapper) return;
-      const top = slot.getBoundingClientRect().top -
-        wrapper.getBoundingClientRect().top;
-      setOverlayTopPx(top);
-    }
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [reduceMotion]);
 
   function scrollToIndex(idx: number) {
     const clamped = Math.max(0, Math.min(idx, harnesses.length - 1));
@@ -207,78 +173,39 @@ export function HarnessCarousel({
         </button>
       </div>
 
-      {/* Scroll container wrapper — `relative` so the canvas overlay can be
-          positioned within it without being inside any slide's DOM subtree.
-          The overlay is a sibling of the scroll container, not a child of it,
-          so it is never clipped by `overflow-x: auto` on the container. */}
-      <div ref={wrapperRef} className="relative">
-        {/* Scroll container
-            snap-x snap-mandatory → scroll-snap-type: x mandatory
-            overscroll-x-contain  → overscroll-behavior-x: contain (Safari fix)
-            scrollbar hidden via [scrollbar-width:none] (Firefox) +
-            [&::-webkit-scrollbar]:hidden (Chrome/Safari)
-        */}
-        <div
-          ref={containerRef}
-          className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          tabIndex={0}
-          onKeyDown={handleKeyDown}
-          aria-label="Harness slides — use arrow keys or 1–6 to navigate"
-        >
-          {harnesses.map((harness, idx) => {
-            const template = templates.find(
-              (t) => t.name.toLowerCase() === harness.key,
-            );
-            const isActive = harness.key === activeKey;
-            // First slide doubles as the layout probe — its avatar slot is
-            // measured to position the canvas overlay. Every slide shares
-            // the same chrome, so one probe is enough.
-            return (
-              <div
-                key={harness.key}
-                ref={(el) => {
-                  slideRefs.current[idx] = el;
-                }}
-                className="w-full flex-shrink-0 snap-center"
-                role="group"
-                aria-roledescription="harness"
-                aria-current={isActive ? "true" : undefined}
-                aria-label={harness.name}
-              >
-                <HarnessSlide
-                  harness={harness}
-                  template={template}
-                  isActive={isActive}
-                  onSelect={onSelect}
-                  avatarSlotRef={idx === 0 ? probeSlotRef : undefined}
-                />
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Single canvas overlay — always at the centre of the scroll viewport.
-            Vertical offset is measured from the first slide's avatar slot
-            (see `useLayoutEffect` above), so structural changes to slide
-            chrome (header height, padding) propagate without code edits here.
-            Slides always render <AvatarFallback> as a layout placeholder;
-            this canvas sits on top of it, blending additively with the dark
-            bg-black/40 background the card provides (decision 21 — one canvas,
-            page-wide, never inside slide DOM to avoid double-mount on swipe).
-            pointer-events-none keeps the SELECT button in the footer clickable.
-            Hidden until measured to avoid a one-frame top:0 flash. */}
-        {overlayTopPx !== null && (
-          <div
-            className="pointer-events-none absolute left-1/2 -translate-x-1/2"
-            style={{ top: overlayTopPx }}
-          >
-            <NebulaAvatar
-              harness={harnesses[0].key as HarnessKey}
-              targetHarness={activeKey as HarnessKey}
-              size={240}
-            />
-          </div>
-        )}
+      <div
+        ref={containerRef}
+        className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        aria-label="Harness slides — use arrow keys or 1–6 to navigate"
+      >
+        {harnesses.map((harness, idx) => {
+          const template = templates.find(
+            (t) => t.name.toLowerCase() === harness.key,
+          );
+          const isActive = harness.key === activeKey;
+          return (
+            <div
+              key={harness.key}
+              ref={(el) => {
+                slideRefs.current[idx] = el;
+              }}
+              className="w-full flex-shrink-0 snap-center"
+              role="group"
+              aria-roledescription="harness"
+              aria-current={isActive ? "true" : undefined}
+              aria-label={harness.name}
+            >
+              <HarnessSlide
+                harness={harness}
+                template={template}
+                isActive={isActive}
+                onSelect={onSelect}
+              />
+            </div>
+          );
+        })}
       </div>
 
       {/* Dot indicators — decorative, mouse-only (aria-hidden + tabIndex=-1).

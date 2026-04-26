@@ -42,6 +42,7 @@ import type {
 import { ModelProvider } from "@/gen/corellia/v1/agents_pb";
 import { createApiClient } from "@/lib/api/client";
 import { HARNESSES, type HarnessEntry } from "@/lib/spawn/harnesses";
+import { type HarnessKey } from "@/lib/spawn/mood-palettes";
 import {
   DEFAULT_DEPLOYMENT_VALUES,
   describeSize,
@@ -50,9 +51,11 @@ import {
 /**
  * `<Wizard>` — Phases 4 + 5 of `docs/executing/agents-ui-mods.md`.
  *
- * Five-step character-creation flow at `/spawn/[templateId]`. Phase 4
- * delivered the shell + gating logic; Phase 5 wires real fields and the
- * `spawnAgent` RPC. The wizard's contract on the wire is identical to
+ * Six-step character-creation flow at `/spawn/[templateId]` — HARNESS →
+ * IDENTITY → MODEL → TOOLS → DEPLOYMENT → REVIEW. Phase 4 delivered the
+ * shell + gating logic; Phase 5 wired real fields and the `spawnAgent`
+ * RPC; v1.5 Pillar B Phase 4 inserted the TOOLS step between MODEL and
+ * DEPLOYMENT. The wizard's contract on the wire is identical to
  * the M4 deploy-modal — same `spawnAgent` request, same redirect to
  * `/fleet` on success. The streaming-log surface (decision 14) is a UI
  * affordance over the same single RPC; no proto change.
@@ -286,6 +289,21 @@ export function Wizard({
       const api = createApiClient();
       const proto = PROVIDERS.find((p) => p.value === state.fields.provider);
       if (!proto) throw new Error(`unknown provider: ${state.fields.provider}`);
+
+      // Resolve toolset → tool_id mapping BEFORE spawn. Hoisting this above
+      // spawnAgent closes the post-spawn orphan window — if the catalog
+      // round-trip failed after spawn, we'd land in the outer catch with a
+      // running Fly app and no rollback. With the lookup hoisted, a catalog
+      // failure errors out before any Fly resource exists, and the operator
+      // sees a clean "could not load toolset catalog" message.
+      const equippedCount = Object.values(state.fields.toolsets).filter(
+        (t) => t.equipped,
+      ).length;
+      let toolIdByKey: Record<string, string> = {};
+      if (equippedCount > 0) {
+        toolIdByKey = await fetchToolIdsByKey(api, template.harnessAdapterId);
+      }
+
       const spawnRes = await api.agents.spawnAgent({
         templateId: template.id,
         name: state.fields.name,
@@ -301,11 +319,7 @@ export function Wizard({
       // spawned instance. Plan §3 Phase 4 deliverable 1: if the grants
       // write fails, the instance is destroyed (single-shot rollback) and
       // the operator is bounced back with an error.
-      const equippedCount = Object.values(state.fields.toolsets).filter(
-        (t) => t.equipped,
-      ).length;
       if (equippedCount > 0) {
-        const toolIdByKey = await fetchToolIdsByKey(api, template.harnessAdapterId);
         const grants = toolsetMapToGrants(state.fields.toolsets, toolIdByKey);
         try {
           await setInstanceToolGrants(api.tools, {
@@ -314,11 +328,31 @@ export function Wizard({
           });
         } catch (grantErr) {
           // Rollback: destroy the instance so a half-configured agent
-          // doesn't leak. Best-effort — surface the original grant
-          // error to the operator regardless.
-          await api.agents
-            .destroyAgentInstance({ id: instance.id })
-            .catch(() => undefined);
+          // doesn't leak. Surface BOTH the original grant error and (on a
+          // failed rollback) the destroy failure — silently swallowing the
+          // rollback failure used to leave orphan Fly apps invisible.
+          try {
+            await api.agents.destroyAgentInstance({ id: instance.id });
+          } catch (rbErr) {
+            const rbMsg = ConnectError.from(rbErr).message;
+            console.error(
+              "wizard: rollback destroyAgentInstance failed; orphan Fly app may exist",
+              rbErr,
+            );
+            // Append a warning to the streaming log so the operator sees
+            // the orphan-cleanup hint immediately. The outer catch flips to
+            // the error state shortly after; this log line carries forward.
+            setDeploy((prev) => {
+              if (prev.kind !== "deploying") return prev;
+              return {
+                kind: "deploying",
+                lines: [
+                  ...prev.lines,
+                  `› warning: rollback destroy failed — manual cleanup may be required (${rbMsg})`,
+                ],
+              };
+            });
+          }
           throw grantErr;
         }
       }
@@ -349,34 +383,15 @@ export function Wizard({
   }
 
   return (
-    <div className="space-y-6">
-      <header className="flex items-end justify-between border-b border-border pb-4">
-        <div>
-          <div className="font-display text-[11px] uppercase tracking-widest text-muted-foreground/60">
-            [ LAUNCHPAD // CONFIGURE ]
-          </div>
-          <h1 className="mt-1 font-display text-2xl font-bold uppercase tracking-widest text-foreground">
-            {(harness?.name ?? template.name).toUpperCase()}
-          </h1>
-        </div>
-        <div className="font-display text-[11px] uppercase tracking-widest text-muted-foreground">
-          STEP {STEP_META[state.current].ordinal} OF {STEPS.length}
-        </div>
-      </header>
-
-      <div className="space-y-4">
-        {STEPS.map((step) => (
-          <StepShell
-            key={step}
-            step={step}
-            state={state}
-            dispatch={dispatch}
-            template={template}
-            harness={harness}
-            onDeploy={onDeploy}
-          />
-        ))}
-      </div>
+    <div className="space-y-8">
+      <RpgHeader harness={harness} template={template} state={state} />
+      <RpgBody
+        harness={harness}
+        template={template}
+        state={state}
+        dispatch={dispatch}
+        onDeploy={onDeploy}
+      />
     </div>
   );
 }
@@ -401,108 +416,26 @@ function GalleryWizardShell({ templates }: { templates: AgentTemplate[] }) {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-end justify-between border-b border-border pb-4">
-        <div>
-          <div className="font-display text-xs uppercase tracking-widest text-muted-foreground/60">
-            [ SELECT YOUR HARNESS ]
-          </div>
-          <h1 className="mt-1 font-display text-2xl font-bold uppercase tracking-widest text-foreground">
-            SPAWN
-          </h1>
+      <header className="border-b border-border pb-4">
+        <div className="font-display text-xs uppercase tracking-widest text-muted-foreground/60">
+          [ SELECT YOUR HARNESS ]
         </div>
+        <h1 className="mt-1 font-display text-2xl font-bold uppercase tracking-widest text-foreground">
+          SPAWN
+        </h1>
       </header>
-
-      <div className="space-y-4">
-        <TerminalContainer title="STEP 1 // HARNESS" accent="catalog" meta="ACTIVE">
-          <HarnessCarousel
-            harnesses={HARNESSES}
-            templates={templates}
-            activeKey={activeKey}
-            onActiveChange={setActiveKey}
-            onSelect={(templateId) => router.replace(`/spawn/${templateId}`)}
-          />
-        </TerminalContainer>
-
-        {(["identity", "model", "tools", "deployment", "review"] as const).map((step) => {
-          const meta = STEP_META[step];
-          return (
-            <div
-              key={step}
-              className="pointer-events-none opacity-40"
-              inert
-            >
-              <TerminalContainer
-                title={`STEP ${meta.ordinal} // ${meta.label}`}
-                accent={meta.accent}
-                meta="PENDING"
-              />
-            </div>
-          );
-        })}
-      </div>
+      <HarnessCarousel
+        harnesses={HARNESSES}
+        templates={templates}
+        activeKey={activeKey}
+        onActiveChange={setActiveKey}
+        onSelect={(templateId) => router.replace(`/spawn/${templateId}`)}
+      />
     </div>
   );
 }
 
-function StepShell({
-  step,
-  state,
-  dispatch,
-  template,
-  harness,
-  onDeploy,
-}: {
-  step: StepKey;
-  state: WizardState;
-  dispatch: React.Dispatch<WizardAction>;
-  template: AgentTemplate;
-  harness: HarnessEntry | undefined;
-  onDeploy: () => void;
-}) {
-  const meta = STEP_META[step];
-  const isCurrent = state.current === step;
-  const isConfirmed = state.confirmed.has(step);
-  const isFuture = !isCurrent && !isConfirmed;
 
-  const title = `STEP ${meta.ordinal} // ${meta.label}`;
-  const stateTag = isCurrent ? "ACTIVE" : isConfirmed ? "CONFIRMED" : "PENDING";
-
-  return (
-    <div
-      className={isFuture ? "pointer-events-none opacity-40" : undefined}
-      // `inert` removes the subtree from the tab order and the a11y
-      // tree, matching the visual disabled state. Without it, ghost
-      // [ EDIT ] buttons in not-yet-confirmed steps remain
-      // keyboard-focusable behind `pointer-events-none`.
-      inert={isFuture || undefined}
-    >
-      <TerminalContainer title={title} accent={meta.accent} meta={stateTag}>
-        <StepBody
-          step={step}
-          state={state}
-          dispatch={dispatch}
-          template={template}
-          harness={harness}
-          isCurrent={isCurrent}
-          isConfirmed={isConfirmed}
-          onDeploy={onDeploy}
-        />
-
-        {isConfirmed && !isCurrent && (
-          <div className="mt-4 flex items-center justify-end gap-2 border-t border-border pt-3">
-            <Button
-              size="xs"
-              variant="ghost"
-              onClick={() => dispatch({ type: "edit", step })}
-            >
-              [ EDIT ]
-            </Button>
-          </div>
-        )}
-      </TerminalContainer>
-    </div>
-  );
-}
 
 type StepBodyProps = {
   step: StepKey;
@@ -647,7 +580,7 @@ type IdentityValues = z.infer<typeof identitySchema>;
 
 const CALLSIGN_PLACEHOLDERS = ["obi-1", "bb-9", "kessel-runner"] as const;
 
-function IdentityStep({ state, dispatch, harness, isCurrent }: StepBodyProps) {
+function IdentityStep({ state, dispatch, isCurrent }: StepBodyProps) {
   if (!isCurrent) {
     return (
       <ConfirmedSummary
@@ -659,7 +592,6 @@ function IdentityStep({ state, dispatch, harness, isCurrent }: StepBodyProps) {
   return (
     <IdentityForm
       defaultValue={state.fields.name}
-      harness={harness}
       onSubmit={(v) => {
         dispatch({ type: "setField", patch: { name: v.name } });
         dispatch({ type: "confirm", step: "identity" });
@@ -670,11 +602,9 @@ function IdentityStep({ state, dispatch, harness, isCurrent }: StepBodyProps) {
 
 function IdentityForm({
   defaultValue,
-  harness,
   onSubmit,
 }: {
   defaultValue: string;
-  harness: HarnessEntry | undefined;
   onSubmit: (v: IdentityValues) => void;
 }) {
   const form = useForm<IdentityValues>({
@@ -688,33 +618,24 @@ function IdentityForm({
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-4">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-        <div className="flex shrink-0 items-center justify-center bg-black/40 p-1.5">
-          {harness ? (
-            <NebulaAvatar harness={harness.key} size={64} />
-          ) : (
-            <div className="size-16 border border-border" />
-          )}
+      <div className="space-y-2">
+        <div className="font-display text-[11px] uppercase tracking-widest text-muted-foreground/70">
+          [ ASSIGN CALLSIGN ]
         </div>
-        <div className="flex-1 space-y-2">
-          <div className="font-display text-[11px] uppercase tracking-widest text-muted-foreground/70">
-            [ ASSIGN CALLSIGN ]
-          </div>
-          <input
-            id="name"
-            autoFocus
-            placeholder={placeholder}
-            aria-invalid={!!errMsg}
-            aria-label="Agent callsign"
-            className="w-full border-0 border-b border-border/60 bg-transparent px-0 py-2 font-display text-2xl uppercase tracking-widest text-foreground placeholder:text-muted-foreground/40 focus:border-[hsl(var(--feature-secrets))] focus:outline-none"
-            {...form.register("name")}
-          />
-          <div className="flex items-center justify-between font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70">
-            <span>OPERATOR LABEL</span>
-            <span className="text-foreground/80">{display}</span>
-          </div>
-          {errMsg && <p className="text-sm text-destructive">{errMsg}</p>}
+        <input
+          id="name"
+          autoFocus
+          placeholder={placeholder}
+          aria-invalid={!!errMsg}
+          aria-label="Agent callsign"
+          className="w-full border-0 border-b border-border/60 bg-transparent px-0 py-2 font-display text-2xl uppercase tracking-widest text-foreground placeholder:text-muted-foreground/40 focus:border-[hsl(var(--feature-secrets))] focus:outline-none"
+          {...form.register("name")}
+        />
+        <div className="flex items-center justify-between font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70">
+          <span>OPERATOR LABEL</span>
+          <span className="text-foreground/80">{display}</span>
         </div>
+        {errMsg && <p className="text-sm text-destructive">{errMsg}</p>}
       </div>
       <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
         <Button size="sm" type="submit">
@@ -982,7 +903,7 @@ function SigilField({
   );
 }
 
-/* ─── STEP 4 // DEPLOYMENT (loadout panel) ────────────────────────── */
+/* ─── STEP 5 // DEPLOYMENT (loadout panel) ────────────────────────── */
 
 const LOADOUT_LABEL_OVERRIDES: DeploymentLabelOverrides = {
   region: "[ THEATRE ]",
@@ -1055,7 +976,7 @@ function deployConfigFromFields(d: DeploymentFormValues): DeployConfig {
   };
 }
 
-/* ─── STEP 5 // REVIEW ────────────────────────────────────────────── */
+/* ─── STEP 6 // REVIEW ────────────────────────────────────────────── */
 
 function ReviewStep({
   state,
@@ -1250,6 +1171,383 @@ function DeployLog({
           </div>
         )}
       </TerminalContainer>
+    </div>
+  );
+}
+
+/* ─── RPG CHARACTER LAYOUT ──────────────────────────────────────── */
+
+const STEP_ACCENT_CSS: Record<StepKey, string> = {
+  harness: "hsl(var(--feature-catalog))",
+  identity: "hsl(var(--feature-secrets))",
+  model: "hsl(var(--feature-adapter))",
+  tools: "hsl(var(--feature-tools))",
+  deployment: "hsl(var(--feature-deploy))",
+  review: "hsl(var(--status-running))",
+};
+
+function RpgHeader({
+  harness,
+  template,
+  state,
+}: {
+  harness: HarnessEntry | undefined;
+  template: AgentTemplate;
+  state: WizardState;
+}) {
+  const harnessName = (harness?.name ?? template.name).toUpperCase();
+  const stepMeta = STEP_META[state.current];
+  return (
+    <div className="border-b border-border pb-5 text-center">
+      <div className="font-display text-[10px] uppercase tracking-widest text-muted-foreground/50">
+        [ {harnessName} ]
+      </div>
+      <h1
+        className={[
+          "mt-1 font-display text-3xl font-bold uppercase tracking-widest",
+          state.fields.name ? "text-foreground" : "text-muted-foreground/40",
+        ].join(" ")}
+      >
+        {state.fields.name ? state.fields.name.toUpperCase() : "[ DESIGNATION PENDING ]"}
+      </h1>
+      <div className="mt-2 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+        STEP {stepMeta.ordinal}{" // "}{stepMeta.label}
+      </div>
+    </div>
+  );
+}
+
+function RpgBody({
+  harness,
+  template,
+  state,
+  dispatch,
+  onDeploy,
+}: {
+  harness: HarnessEntry | undefined;
+  template: AgentTemplate;
+  state: WizardState;
+  dispatch: React.Dispatch<WizardAction>;
+  onDeploy: () => void;
+}) {
+  const hk: HarnessKey = harness?.key ?? "hermes";
+  const isReview = state.current === "review";
+
+  return (
+    <div className="space-y-6">
+      {/* Mobile only: compact nebula above the form */}
+      <div className="flex justify-center lg:hidden">
+        <div className="h-44 w-44">
+          <NebulaAvatar fill harness={hk} />
+        </div>
+      </div>
+
+      {/*
+        Three-column layout.
+        DOM order: RIGHT → CENTER → LEFT — ensures on mobile (block stack)
+        the active form appears first and the history panel appears below.
+        On desktop (lg:grid with explicit col-start), the visual order is
+        LEFT | CENTER | RIGHT regardless of DOM order.
+      */}
+      <div className="space-y-6 lg:grid lg:grid-cols-[220px_1fr_300px] lg:gap-6 lg:space-y-0 lg:items-start">
+        {/* RIGHT: active step form — first in DOM, col 3 on desktop */}
+        <div className="lg:col-start-3 lg:row-start-1">
+          <RpgRightPanel
+            state={state}
+            dispatch={dispatch}
+            template={template}
+            harness={harness}
+            onDeploy={onDeploy}
+          />
+        </div>
+
+        {/* CENTER: large portrait nebula — desktop only */}
+        <div className="hidden flex-col items-center gap-4 lg:flex lg:col-start-2 lg:row-start-1">
+          <div className="aspect-square w-full">
+            <NebulaAvatar fill harness={hk} />
+          </div>
+          <div className="text-center font-display text-[11px] uppercase tracking-widest text-muted-foreground/50">
+            {harness?.name ?? template.name}
+          </div>
+        </div>
+
+        {/* LEFT: confirmed history — last in DOM, col 1 on desktop */}
+        <div className="lg:col-start-1 lg:row-start-1">
+          <RpgLeftPanel
+            state={state}
+            dispatch={dispatch}
+            template={template}
+            harness={harness}
+            isReview={isReview}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RpgLeftPanel({
+  state,
+  dispatch,
+  template,
+  harness,
+  isReview,
+}: {
+  state: WizardState;
+  dispatch: React.Dispatch<WizardAction>;
+  template: AgentTemplate;
+  harness: HarnessEntry | undefined;
+  isReview: boolean;
+}) {
+  // REVIEW: left shows identity-side stats (harness / identity / model).
+  // All other steps: left shows every confirmed step in order.
+  const stepsToShow: StepKey[] = isReview
+    ? (["harness", "identity", "model"] as StepKey[]).filter((s) =>
+        state.confirmed.has(s),
+      )
+    : STEPS.filter((s) => state.confirmed.has(s));
+
+  return (
+    <div className="space-y-4">
+      <div className="font-display text-[10px] uppercase tracking-widest text-muted-foreground/40">
+        [ HISTORY ]
+      </div>
+      {stepsToShow.length === 0 ? (
+        <p className="font-mono text-[11px] text-muted-foreground/40">
+          — awaiting confirmation —
+        </p>
+      ) : (
+        <div className="space-y-4 border-l border-border/30 pl-3">
+          {stepsToShow.map((step) => (
+            <RpgConfirmedEntry
+              key={step}
+              step={step}
+              state={state}
+              dispatch={dispatch}
+              template={template}
+              harness={harness}
+              isReview={isReview}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RpgConfirmedEntry({
+  step,
+  state,
+  dispatch,
+  template,
+  harness,
+  isReview,
+}: {
+  step: StepKey;
+  state: WizardState;
+  dispatch: React.Dispatch<WizardAction>;
+  template: AgentTemplate;
+  harness: HarnessEntry | undefined;
+  isReview: boolean;
+}) {
+  const meta = STEP_META[step];
+  const rows = rpgStepSummaryRows(step, state, harness, template);
+  // Harness can't be re-selected from this route; on review, edits are locked.
+  const canEdit = step !== "harness" && !isReview;
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-1">
+        <span
+          className="font-display text-[10px] uppercase tracking-widest"
+          style={{ color: STEP_ACCENT_CSS[step] }}
+        >
+          {meta.label}
+        </span>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => dispatch({ type: "edit", step })}
+            className="font-display text-[9px] uppercase tracking-widest text-muted-foreground/40 transition-colors hover:text-foreground"
+          >
+            [edit]
+          </button>
+        )}
+      </div>
+      <dl className="space-y-0.5">
+        {rows.map((r) => (
+          <div key={r.label} className="flex gap-2 font-mono text-[11px]">
+            <dt className="shrink-0 text-muted-foreground/50">{r.label}</dt>
+            <dd className="truncate text-foreground/70">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function rpgStepSummaryRows(
+  step: StepKey,
+  state: WizardState,
+  harness: HarnessEntry | undefined,
+  template: AgentTemplate,
+): ReadonlyArray<{ label: string; value: string }> {
+  switch (step) {
+    case "harness":
+      return [
+        { label: "harness", value: harness?.key ?? template.name },
+        { label: "deploy", value: "fly.io" },
+      ];
+    case "identity":
+      return [{ label: "callsign", value: state.fields.name || "—" }];
+    case "model":
+      return [
+        { label: "faction", value: providerLabel(state.fields.provider) },
+        { label: "class", value: state.fields.modelName || "—" },
+        { label: "sigil", value: maskApiKey(state.fields.apiKey) },
+      ];
+    case "tools": {
+      const count = Object.values(state.fields.toolsets).filter(
+        (t) => t.equipped,
+      ).length;
+      return [
+        {
+          label: "toolsets",
+          value: count === 0 ? "none equipped" : `${count} equipped`,
+        },
+      ];
+    }
+    case "deployment":
+      return [
+        { label: "region", value: state.fields.deployment.region },
+        {
+          label: "size",
+          value: describeSize(
+            state.fields.deployment.cpuKind,
+            state.fields.deployment.cpus,
+            state.fields.deployment.memoryMb,
+          ),
+        },
+        {
+          label: "replicas",
+          value: String(state.fields.deployment.desiredReplicas),
+        },
+      ];
+    case "review":
+      return [];
+  }
+}
+
+function RpgRightPanel({
+  state,
+  dispatch,
+  template,
+  harness,
+  onDeploy,
+}: {
+  state: WizardState;
+  dispatch: React.Dispatch<WizardAction>;
+  template: AgentTemplate;
+  harness: HarnessEntry | undefined;
+  onDeploy: () => void;
+}) {
+  const step = state.current;
+  const meta = STEP_META[step];
+
+  if (step === "review") {
+    return (
+      <ReviewRightContent
+        state={state}
+        onDeploy={onDeploy}
+      />
+    );
+  }
+
+  return (
+    <TerminalContainer
+      title={`STEP ${meta.ordinal} // ${meta.label}`}
+      accent={meta.accent}
+      meta="ACTIVE"
+    >
+      <StepBody
+        step={step}
+        state={state}
+        dispatch={dispatch}
+        template={template}
+        harness={harness}
+        isCurrent={true}
+        isConfirmed={false}
+        onDeploy={onDeploy}
+      />
+    </TerminalContainer>
+  );
+}
+
+function ReviewRightContent({
+  state,
+  onDeploy,
+}: {
+  state: WizardState;
+  onDeploy: () => void;
+}) {
+  const [placement, setPlacement] = useState<PlacementState>({ kind: "idle" });
+  const cfg = state.fields.deployment;
+  const cfgKey = JSON.stringify(cfg);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (cancelled) return;
+      setPlacement({ kind: "checking" });
+      try {
+        const api = createApiClient();
+        const res = await api.agents.checkDeploymentPlacement({
+          deployConfig: deployConfigFromFields(cfg),
+        });
+        if (cancelled) return;
+        const result = res.placementResult;
+        if (!result) {
+          setPlacement({ kind: "error", message: "no placement result" });
+          return;
+        }
+        setPlacement({ kind: result.available ? "ok" : "blocked", result });
+      } catch (e) {
+        if (cancelled) return;
+        setPlacement({ kind: "error", message: ConnectError.from(e).message });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfgKey]);
+
+  const deployBlocked =
+    placement.kind === "checking" ||
+    placement.kind === "blocked" ||
+    placement.kind === "error";
+
+  const loadoutRows = [
+    ...toolsetSummaryRows(state.fields.toolsets),
+    ...deploymentSummaryRows(cfg),
+  ];
+
+  const summary =
+    cfg.desiredReplicas === 1
+      ? `Deploying spins up one Fly machine in ${cfg.region} and lands you on the fleet view.`
+      : `Deploying spins up ${cfg.desiredReplicas} Fly machines in ${cfg.region} and lands you on the fleet view.`;
+
+  return (
+    <div className="space-y-4">
+      <TerminalContainer title="LOADOUT" accent="deploy" meta="REVIEW">
+        <ConfirmedSummary rows={loadoutRows} />
+      </TerminalContainer>
+      <ReadyToLaunch
+        placement={placement}
+        onDeploy={onDeploy}
+        blocked={deployBlocked}
+        summary={summary}
+      />
     </div>
   );
 }

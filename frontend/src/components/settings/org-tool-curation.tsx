@@ -56,7 +56,12 @@ export function OrgToolCuration() {
           if (!cancelled) setState({ kind: "ready", sections: [] });
           return;
         }
-        const sections = await Promise.all(
+        // `Promise.allSettled` instead of `Promise.all` — at v1.5 there is
+        // only one Hermes adapter so the practical impact is nil, but as
+        // soon as a second adapter ships, a single failed catalog fetch
+        // would have nuked the whole page. Per-adapter failures now render
+        // as a section-scoped error band; healthy adapters still show.
+        const settled = await Promise.allSettled(
           adapterIds.map(async (id) => {
             const tools = await getOrgToolCuration(api.tools, {
               harnessAdapterId: id,
@@ -64,7 +69,19 @@ export function OrgToolCuration() {
             return { harnessAdapterId: id, tools };
           }),
         );
-        if (!cancelled) setState({ kind: "ready", sections });
+        const sections: CatalogSection[] = [];
+        const failures: SectionFailure[] = [];
+        settled.forEach((res, idx) => {
+          if (res.status === "fulfilled") {
+            sections.push(res.value);
+          } else {
+            failures.push({
+              harnessAdapterId: adapterIds[idx],
+              message: ConnectError.from(res.reason).message,
+            });
+          }
+        });
+        if (!cancelled) setState({ kind: "ready", sections, failures });
       } catch (e) {
         if (!cancelled) {
           setState({ kind: "error", message: ConnectError.from(e).message });
@@ -164,6 +181,35 @@ export function OrgToolCuration() {
             onToggle={onToggle}
           />
         ))}
+      {state.kind === "ready" &&
+        state.failures &&
+        state.failures.length > 0 && (
+          <TerminalContainer
+            title="ADAPTER CATALOG UNAVAILABLE"
+            accent="failed"
+          >
+            <p className="text-sm text-muted-foreground">
+              One or more adapter catalogs could not be loaded. The remaining
+              adapters render above; retry to re-fetch the failed ones.
+            </p>
+            <ul className="mt-2 space-y-1 font-mono text-xs text-foreground">
+              {state.failures.map((f) => (
+                <li key={f.harnessAdapterId}>
+                  <span className="text-muted-foreground">
+                    {f.harnessAdapterId.slice(0, 8)}
+                  </span>
+                  <span className="px-1.5 text-muted-foreground/50">·</span>
+                  {f.message}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 flex justify-end">
+              <Button size="sm" variant="outline" onClick={retry}>
+                › RETRY
+              </Button>
+            </div>
+          </TerminalContainer>
+        )}
     </div>
   );
 }
@@ -173,9 +219,14 @@ type CatalogSection = {
   tools: Tool[];
 };
 
+type SectionFailure = {
+  harnessAdapterId: string;
+  message: string;
+};
+
 type FetchState =
   | { kind: "loading" }
-  | { kind: "ready"; sections: CatalogSection[] }
+  | { kind: "ready"; sections: CatalogSection[]; failures?: SectionFailure[] }
   | { kind: "error"; message: string };
 
 function CatalogSection({

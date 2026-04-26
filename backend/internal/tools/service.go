@@ -196,8 +196,38 @@ func (s *Service) SetInstanceGrants(ctx context.Context, instanceID, orgID, gran
 		return nil, 0, err
 	}
 
+	// Pre-tx: load the prior active grants so we can reattach
+	// credential_storage_ref by tool_id when the caller sends an empty value.
+	//
+	// Why this exists: the wire-shape (`ToolGrantInput.credential_storage_ref`)
+	// arrives empty from both the wizard and the inspector — the FE cannot
+	// reasonably re-fetch a server-side opaque ref it never saw, and per
+	// blueprint §11.6 it must not be mirrored to the FE. Without reattachment,
+	// every inspector save on a credential-bearing toolset would either flip
+	// the gate below to ErrCredentialMissing or (worse) silently strip the
+	// stored credential reference. Reattaching from prior grants mirrors the
+	// "scope changes do not invalidate credentials" intent of the editor flow.
+	//
+	// The prior map is keyed by tool_id rather than grant id so a toolset that
+	// was revoked then re-added in the same save still picks up its previous
+	// credential — matches the operator's mental model ("I'm still equipping
+	// the same toolset, just with new scope").
+	priorGrants, err := s.queries.ListInstanceToolGrants(ctx, instanceID)
+	if err != nil {
+		return nil, 0, err
+	}
+	prior := make(map[uuid.UUID]string, len(priorGrants))
+	for _, pg := range priorGrants {
+		if pg.CredentialStorageRef != nil && *pg.CredentialStorageRef != "" {
+			prior[pg.ToolID] = *pg.CredentialStorageRef
+		}
+	}
+
 	// Pre-tx scope validation. Loads each tool row to fetch scope_shape +
 	// required_env_vars; bad scopes / unknown tools fail before any write.
+	// Resolved credential refs are stashed in `resolved` so the tx loop below
+	// uses the post-reattachment value rather than re-deriving it.
+	resolved := make([]string, len(grants))
 	for i, g := range grants {
 		tool, err := s.GetTool(ctx, g.ToolID)
 		if err != nil {
@@ -206,26 +236,29 @@ func (s *Service) SetInstanceGrants(ctx context.Context, instanceID, orgID, gran
 		if err := ValidateScope(json.RawMessage(tool.ScopeShape), g.ScopeJSON); err != nil {
 			return nil, 0, err
 		}
-		if len(tool.RequiredEnvVars) > 0 && g.CredentialStorageRef == "" {
-			// Phase 4 captures credentials from the wizard; in Phase 3 the
-			// FE writes nothing here, so this gate effectively flags any
-			// pre-Phase-4 attempt to grant a credential-required toolset.
+		credRef := g.CredentialStorageRef
+		if credRef == "" {
+			credRef = prior[g.ToolID] // empty when not present — falls through to the gate
+		}
+		if len(tool.RequiredEnvVars) > 0 && credRef == "" {
+			// No incoming credential AND no prior credential for this tool —
+			// this is the cred-required-but-uncredentialed case. Inspector
+			// preflight should prevent this, but keep the BE gate as the
+			// authoritative boundary.
 			return nil, 0, ErrCredentialMissing
 		}
-		// Defensive: silence unused-loop-index warning by keeping i in scope
-		// (kept here as a breadcrumb for Phase 7 audit-row indexing).
-		_ = i
+		resolved[i] = credRef
 	}
 
 	// Atomic revoke-all → insert-N → bump-version.
-	err := s.txr.WithGrantsTx(ctx, func(tx GrantsTx) error {
+	err = s.txr.WithGrantsTx(ctx, func(tx GrantsTx) error {
 		if err := tx.RevokeAllActiveToolGrants(ctx, instanceID); err != nil {
 			return err
 		}
-		for _, g := range grants {
+		for i, g := range grants {
 			var credRef *string
-			if g.CredentialStorageRef != "" {
-				v := g.CredentialStorageRef
+			if resolved[i] != "" {
+				v := resolved[i]
 				credRef = &v
 			}
 			scope := []byte(g.ScopeJSON)
@@ -327,9 +360,25 @@ func (s *Service) auditAppend(ctx context.Context, actorUserID uuid.UUID, action
 		ToolID:      uuidPtrToPg(toolID),
 		Action:      action,
 	}); err != nil {
+		// Log every nullable FK so an operator investigating dropped audit
+		// rows can correlate back to the entity. Non-nil pointers are
+		// dereferenced via fmt.Sprint to avoid logging "0xc0…" addresses.
+		var orgStr, instStr, toolStr string
+		if orgID != nil {
+			orgStr = orgID.String()
+		}
+		if instanceID != nil {
+			instStr = instanceID.String()
+		}
+		if toolID != nil {
+			toolStr = toolID.String()
+		}
 		slog.Warn("tools: audit append failed",
 			"action", action,
 			"actor_user_id", actorUserID,
+			"org_id", orgStr,
+			"instance_id", instStr,
+			"tool_id", toolStr,
 			"err", err,
 		)
 	}

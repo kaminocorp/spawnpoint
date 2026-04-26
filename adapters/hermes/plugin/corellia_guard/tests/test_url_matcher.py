@@ -41,3 +41,22 @@ def test_url_matcher_none_scope_denies():
 def test_url_matcher_non_string_url_denies():
     scope = ToolsetScope(url_allowlist=["*"])
     assert match_url(scope, None) is False  # type: ignore[arg-type]
+
+
+# Phase 7 hardening (changelog 0.13.9): scheme detection is case-insensitive.
+# Previously `Https://...` and `HTTP://...` failed the lower-case
+# `startswith("https://")` check and the scheme leaked through into the
+# matcher target, causing `*.acme.com` to silently reject mixed-case URLs.
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("https://wiki.acme.com", True),
+        ("HTTPS://wiki.acme.com", True),
+        ("Https://wiki.acme.com", True),
+        ("http://wiki.acme.com", True),
+        ("HTTP://wiki.acme.com", True),
+    ],
+)
+def test_url_matcher_mixed_case_scheme(url, expected):
+    scope = ToolsetScope(url_allowlist=["*.acme.com"])
+    assert match_url(scope, url) is expected

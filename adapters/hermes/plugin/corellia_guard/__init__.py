@@ -65,6 +65,21 @@ _TTL_MAX_SECONDS = 300.0
 _BACKOFF_INITIAL = 5.0
 _BACKOFF_MAX = 60.0
 
+# After this many CONSECUTIVE 401/403 responses from the manifest endpoint,
+# the daemon force-denies the cached scope. The behaviour distinguishes
+# transient blips (network / TLS / DNS — manifest endpoint *unreachable*,
+# preserves last-known-good per Phase 5 acceptance gate) from a deliberate
+# revocation by the control plane (token rejected — last-known-good would
+# silently keep enforcing grants the operator just removed).
+#
+# Threshold: 3 polls. With the default TTL clamped at the 5s floor by
+# backoff, this is at most ~3×60s = 3 minutes before deny-all kicks in,
+# which is the right order of magnitude for "operator clicked revoke and
+# expects it to take effect within minutes" without flapping on a single
+# transient 401. A 403 (instance not found, deliberately revoked) flips
+# to deny-all immediately.
+_AUTH_DENY_AFTER_CONSECUTIVE_401 = 3
+
 
 def register(ctx) -> None:  # noqa: ANN001 — Hermes injects untyped ctx
     """Plugin entry point. Hermes calls this per AIAgent instantiation."""
@@ -141,11 +156,19 @@ def _start_poll_daemon(cache: ScopeCache) -> None:
 def _poll_loop(cache: ScopeCache, url: str, token: str, instance_id: str) -> None:
     """Polling loop: TTL on success, exponential backoff on error.
 
-    Fail-safe: on any error, the previous scope.json on disk is left
-    untouched and the cache continues serving last-known-good. Stale
-    manifest never relaxes enforcement (Phase 5 acceptance gate)."""
+    Fail-safe: on a transient error (network, 5xx, malformed body), the
+    previous scope.json on disk is left untouched and the cache continues
+    serving last-known-good. Stale manifest never relaxes enforcement
+    (Phase 5 acceptance gate).
+
+    Hard revocation: a 403 (instance not found / deliberately revoked)
+    immediately forces the cache to deny-all. Sustained 401 (token
+    rejected over `_AUTH_DENY_AFTER_CONSECUTIVE_401` polls) does the same
+    — distinguishes transient TLS blips from a real "operator killed
+    this token" event."""
     backoff = _BACKOFF_INITIAL
     etag = ""  # most recent ETag we saw; sent as If-None-Match
+    consecutive_401 = 0
 
     while True:
         try:
@@ -153,7 +176,50 @@ def _poll_loop(cache: ScopeCache, url: str, token: str, instance_id: str) -> Non
             if new_etag is not None:
                 etag = new_etag
             backoff = _BACKOFF_INITIAL
+            consecutive_401 = 0
+            # A successful poll means the token is accepted — lift any
+            # sticky deny-all that a prior 401/403 burst installed. The
+            # next `get()` resumes serving the on-disk scope.
+            cache.clear_force_deny()
             time.sleep(_ttl_seconds())
+        except urllib.error.HTTPError as e:
+            if e.code == 403:
+                log.error(
+                    "corellia_guard: manifest endpoint returned 403 — instance "
+                    "or token revoked. Forcing scope to deny-all immediately."
+                )
+                cache.force_deny_all()
+                # Continue polling at backoff cadence so a re-grant restores
+                # enforcement; do NOT exit the loop.
+                time.sleep(backoff)
+                backoff = min(_BACKOFF_MAX, backoff * 2)
+                continue
+            if e.code == 401:
+                consecutive_401 += 1
+                if consecutive_401 >= _AUTH_DENY_AFTER_CONSECUTIVE_401:
+                    log.error(
+                        "corellia_guard: %d consecutive 401s from manifest "
+                        "endpoint — forcing scope to deny-all (token revoked).",
+                        consecutive_401,
+                    )
+                    cache.force_deny_all()
+                else:
+                    log.warning(
+                        "corellia_guard: manifest endpoint returned 401 (%d/%d) — "
+                        "preserving last-known-good scope.",
+                        consecutive_401,
+                        _AUTH_DENY_AFTER_CONSECUTIVE_401,
+                    )
+                time.sleep(backoff)
+                backoff = min(_BACKOFF_MAX, backoff * 2)
+                continue
+            log.warning(
+                "corellia_guard: manifest poll HTTP %d — backoff %.0fs",
+                e.code,
+                backoff,
+            )
+            time.sleep(backoff)
+            backoff = min(_BACKOFF_MAX, backoff * 2)
         except Exception as e:  # pragma: no cover — defensive
             log.warning(
                 "corellia_guard: manifest poll error (%s) — backoff %.0fs",
@@ -168,16 +234,28 @@ def _poll_once(
     cache: ScopeCache, url: str, token: str, instance_id: str, etag: str
 ) -> Optional[str]:
     """Single poll. Returns the new ETag (str) on 200 + write,
-    the existing ETag on 304, or None on transport error."""
+    the existing ETag on 304, or None on transport error.
+
+    HTTPErrors (401, 403, 4xx, 5xx) are NOT caught here — they propagate
+    up to `_poll_loop` so the auth-revocation policy can fire on the
+    correct status codes. Transport-level errors (urllib.error.URLError
+    other than HTTPError, OSError) propagate to the generic `Exception`
+    catch in the loop and preserve last-known-good."""
     body = json.dumps({"instance_id": instance_id}).encode()
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
     if etag:
-        headers["If-None-Match"] = etag
+        # RFC 7232: If-None-Match value must be quoted unless it's the
+        # bare `*` wildcard. The control-plane manifest endpoint emits
+        # quoted ETags (per Phase 2 ServeHTTP), but defensively re-quote
+        # if we ever see a bare-token one to keep intermediaries happy.
+        headers["If-None-Match"] = etag if etag.startswith('"') else f'"{etag}"'
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
 
+    # 304s arrive as HTTPError under urllib's default handler — handle
+    # them inline so the caller's success counter still advances.
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             status = resp.status
@@ -186,11 +264,7 @@ def _poll_once(
     except urllib.error.HTTPError as e:
         if e.code == 304:
             return etag
-        if e.code == 401:
-            log.error(
-                "corellia_guard: manifest endpoint returned 401 — token rejected. "
-                "Will retry; check CORELLIA_INSTANCE_TOKEN."
-            )
+        # Re-raise — _poll_loop's per-status handler picks it up.
         raise
 
     if status == 304:

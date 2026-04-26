@@ -1,8 +1,7 @@
 "use client";
 
-import type { Ref } from "react";
-
 import { AvatarFallback } from "@/components/spawn/avatar-fallback";
+import { NebulaAvatar } from "@/components/spawn/nebula-avatar";
 import { Button } from "@/components/ui/button";
 import type { AgentTemplate } from "@/gen/corellia/v1/agents_pb";
 import type { HarnessEntry } from "@/lib/spawn/harnesses";
@@ -11,40 +10,28 @@ import type { HarnessEntry } from "@/lib/spawn/harnesses";
  * One harness card — the atomic unit of both the carousel and the
  * `prefers-reduced-motion` grid fallback.
  *
- * The slide always renders `<AvatarFallback>` regardless of `isActive`. The
- * carousel overlays a single `<NebulaAvatar>` canvas as a sibling of the
- * scroll container (not inside any slide's DOM), so the one-canvas-per-page
- * ceiling holds across swipes (decision 21).
+ * Each slide owns its avatar: the active unlocked slide renders a live
+ * `<NebulaAvatar>` canvas; locked and off-screen slides show the static
+ * `<AvatarFallback>`. Since scroll-snap shows exactly one slide at a time,
+ * only one canvas is ever mounted in the carousel at once.
  *
- * `isActive` only controls whether the `› SELECT` button is in the Tab order
- * (`tabIndex={0}` when active, `tabIndex={-1}` otherwise) — focus stays
- * confined to the visible slide. The carousel reads `isActive` for `aria-current`
- * but does not vary slide chrome; the canvas overlay is positioned by
- * measuring the avatar slot via `avatarSlotRef`, not by recomputing geometry
- * inside the slide.
+ * `isActive` controls both the avatar branch and whether `› SELECT` is in
+ * the Tab order (`tabIndex={0}` when active, `tabIndex={-1}` otherwise).
  *
  * Locked slides show a `[ LOCKED ]` overlay and a `disabled` `› SELECT`
- * button (per redesign-spawn.md decision 4 — not hidden, just inert).
+ * button (decision 4 — not hidden, just inert).
  */
 export function HarnessSlide({
   harness,
   template,
   isActive,
   onSelect,
-  avatarSlotRef,
 }: {
   harness: HarnessEntry;
   /** Defined when the harness has a live AgentTemplate; undefined = locked. */
   template?: AgentTemplate;
   isActive: boolean;
   onSelect: (templateId: string) => void;
-  /**
-   * Optional ref attached to the avatar-slot div. The carousel uses it to
-   * measure the slot's offset from the scroll container so the overlaid
-   * `<NebulaAvatar>` canvas tracks structural changes to slide chrome
-   * (header height, padding) without a magic-number `top-[Xpx]`.
-   */
-  avatarSlotRef?: Ref<HTMLDivElement>;
 }) {
   const isLocked = !template;
   const chevronTone = isLocked
@@ -81,11 +68,12 @@ export function HarnessSlide({
         </span>
       </header>
 
-      <div
-        ref={avatarSlotRef}
-        className="relative flex items-center justify-center bg-black/40 px-3 py-3"
-      >
-        <AvatarFallback harness={harness.key} size={240} />
+      <div className="relative h-48 bg-black/40 sm:h-56 md:h-64">
+        {isActive && !isLocked ? (
+          <NebulaAvatar fill harness={harness.key} />
+        ) : (
+          <AvatarFallback fill harness={harness.key} />
+        )}
         {isLocked && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/20">
             <span className="select-none font-display text-sm uppercase tracking-widest text-muted-foreground/70">

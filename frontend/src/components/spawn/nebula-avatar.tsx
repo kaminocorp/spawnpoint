@@ -77,19 +77,14 @@ export function NebulaAvatar({
   harness,
   targetHarness,
   size = 240,
+  fill,
   className,
 }: {
   harness: HarnessKey;
-  /**
-   * When provided, `NebulaScene` lerps its palette toward this harness's
-   * palette over ~400ms (redesign-spawn.md Phase 3 / decision 3).
-   * Used by `<HarnessCarousel>` to crossfade between harnesses as the
-   * active slide changes — a single canvas is mounted at the carousel
-   * centre slot and `targetHarness` updates on each IO-detected swipe.
-   * Omitting this prop (default) leaves behaviour byte-identical to today.
-   */
   targetHarness?: HarnessKey;
   size?: number;
+  /** Fill the parent container instead of a fixed square. */
+  fill?: boolean;
   className?: string;
 }) {
   const reduceMotion = useMatchMedia("(prefers-reduced-motion: reduce)");
@@ -138,14 +133,16 @@ export function NebulaAvatar({
   return (
     <div
       ref={containerRef}
-      className={className}
-      style={{ width: size, height: size }}
+      className={fill ? ["w-full h-full", className].filter(Boolean).join(" ") : className}
+      style={fill ? undefined : { width: size, height: size }}
     >
       {showFallback ? (
-        <AvatarFallback harness={harness} size={size} />
+        <AvatarFallback harness={harness} size={size} fill={fill} />
       ) : shouldRenderScene ? (
         <NebulaScene palette={palette} targetPalette={targetPalette} />
-      ) : null}
+      ) : (
+        <AvatarFallback harness={harness} size={size} fill={fill} />
+      )}
     </div>
   );
 }
