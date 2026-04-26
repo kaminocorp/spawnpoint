@@ -11,5 +11,14 @@
   },
   "devDependencies": {
     "puppeteer-core": "^22.0.0"
+  },
+  "pnpm": {
+    "packageExtensions": {
+      "@hookform/resolvers": {
+        "peerDependencies": {
+          "zod": "*"
+        }
+      }
+    }
   }
 }

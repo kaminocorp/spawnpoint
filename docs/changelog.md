@@ -2,6 +2,7 @@
 
 Index - short one-liners:
 
+- [0.13.9 — Vercel Build Fix: `pnpm.packageExtensions` — Inject `zod` Peer into `@hookform/resolvers`](#0139--vercel-build-fix-pnpmpackageextensions--inject-zod-peer-into-hookformresolvers-2026-04-27)
 - [0.13.8 — v1.5 Pillar B Phase 7: Fleet Inspector Tool Editor + `RestartAgentInstance` + `tool_grant_audit` + Manifest Rate-Limit (Pillar B Complete)](#0138--v15-pillar-b-phase-7-fleet-inspector-tool-editor--restartagentinstance--tool_grant_audit--manifest-rate-limit-pillar-b-complete-2026-04-27)
 - [0.13.7 — README Demo Video: `capture:video` Script (Puppeteer + ffmpeg → MP4)](#0137--readme-demo-video-capturevideo-script-puppeteer--ffmpeg--mp4-2026-04-27)
 - [0.13.6 — v1.5 Pillar B Operator Gate: Adapter Image Push + Migrations Applied + Tools Governance Activated](#0136--v15-pillar-b-operator-gate-adapter-image-push--migrations-applied--tools-governance-activated-2026-04-27)
@@ -75,6 +76,17 @@ Index - short one-liners:
 Latest on top. Each release includes detailed entries (**What / Where / Why** changes were made).
 
 --
+
+## 0.13.9 — Vercel Build Fix: `pnpm.packageExtensions` — Inject `zod` Peer into `@hookform/resolvers` (2026-04-27)
+
+Fixes a Vercel Turbopack build failure introduced by `@hookform/resolvers@5.x`, which imports `zod/v4/core` at the module level but does not declare `zod` as a peer dependency. pnpm's strict isolation therefore never symlinked zod into the resolver's sibling packages, so Turbopack could not resolve the import even though `zod@4.3.6` was installed in the workspace.
+
+- **`package.json`** (root) — added `pnpm.packageExtensions["@hookform/resolvers"].peerDependencies = { "zod": "*" }`. This is pnpm's canonical mechanism for patching missing peer declarations in third-party packages without forking them. After `pnpm install`, the lockfile resolution key for the resolver changes from `...(react-hook-form@7.73.1...)` to `...(react-hook-form@7.73.1...)(zod@4.3.6)`, and zod is correctly linked into the resolver's node_modules.
+- **`pnpm-lock.yaml`** — regenerated; `@hookform/resolvers` entry updated to include `zod@4.3.6` in its resolution key. No other dependency changes.
+
+No product behaviour changed. `pnpm -C frontend build` is green locally and the Vercel deployment should now succeed.
+
+---
 
 ## 0.13.8 — v1.5 Pillar B Phase 7: Fleet Inspector Tool Editor + `RestartAgentInstance` + `tool_grant_audit` + Manifest Rate-Limit (Pillar B Complete) (2026-04-27)
 
