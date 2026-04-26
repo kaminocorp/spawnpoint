@@ -1,13 +1,3 @@
-import { SparklesIcon } from "lucide-react";
-
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-
 type Props = {
   name: string;
   description: string;
@@ -16,24 +6,39 @@ type Props = {
 
 export function ComingSoonHarnessCard({ name, description, vendor }: Props) {
   return (
-    <Card className="opacity-75">
-      <CardHeader>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="halftone-bg flex size-9 items-center justify-center rounded-md text-muted-foreground">
-              <SparklesIcon className="size-4" />
-            </div>
-            <CardTitle>{name}</CardTitle>
-          </div>
-          <Badge variant="secondary">Coming Soon</Badge>
+    <article className="flex flex-col border border-border bg-card opacity-70">
+      <header className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <div className="flex items-center gap-2">
+          <span
+            className="font-display text-xs leading-none text-muted-foreground/50"
+            aria-hidden
+          >
+            ›
+          </span>
+          <span className="font-display text-xs uppercase tracking-wider text-muted-foreground">
+            {name}
+          </span>
         </div>
-      </CardHeader>
-      <CardContent className="text-sm text-muted-foreground">
-        <p>{description}</p>
+        <span className="font-display text-[10px] uppercase tracking-wider text-muted-foreground/60">
+          PLANNED
+        </span>
+      </header>
+
+      <div className="flex-1 space-y-3 px-3 py-3">
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {description}
+        </p>
         {vendor && (
-          <p className="mt-2 text-xs text-muted-foreground/80">by {vendor}</p>
+          <dl className="font-mono text-[11px]">
+            <div className="flex items-baseline gap-2">
+              <dt className="w-20 shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                VENDOR
+              </dt>
+              <dd className="text-muted-foreground">{vendor}</dd>
+            </div>
+          </dl>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </article>
   );
 }

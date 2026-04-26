@@ -1,5 +1,8 @@
 # Changelog
 
+Index - short one-liners:
+
+- [0.7.1 — Frontend Mission-Control Implementation: Spec → Pixels](#071--frontend-mission-control-implementation-spec--pixels-2026-04-26)
 - [0.7.0 — M4: Spawn Flow (Phases 1–6)](#070--m4-spawn-flow-phases-16-2026-04-26)
 - [0.6.1 — Frontend Redesign Phase 5: Dark Mode Activation + Base UI Button Fixes](#061--frontend-redesign-phase-5-dark-mode-activation--base-ui-button-fixes-2026-04-26)
 - [0.6.0 — Frontend Redesign Phases 1–4: Pearlescent Chrome × Halftone Substrate](#060--frontend-redesign-phases-14-pearlescent-chrome--halftone-substrate-2026-04-26)
@@ -19,6 +22,16 @@
 - [0.1.0 — Backend Scaffolding & Docs Reconciliation](#010--backend-scaffolding--docs-reconciliation-2026-04-24)
 
 Latest on top. Each release has a tight index followed by detail entries (**What / Where / Why** inlined). When a decision contradicts an earlier one, note the supersession in the new entry rather than editing the old one.
+
+---
+
+## 0.7.1 — Frontend Mission-Control Implementation: Spec → Pixels (2026-04-26)
+
+The frontend's visual identity finally matches the spec. **`docs/refs/design-system.md` has prescribed a Mission Control × Deep Space aesthetic since 0.2.0** — terminal green `#22c55e` as primary accent, Space Mono as the signature face, uppercase + `tracking-wider` chrome, hairline-bordered square panels, `[ BRACKETED ]` section labels, `›` chevrons, four-tier near-black depth, status-dot indicators with telemetry pulses. **None of it ever shipped.** 0.6.0 introduced a pearlescent chrome × halftone substrate direction *on top of* the unimplemented spec; 0.6.1 activated dark mode but the underlying tokens were still shadcn-stock-dark with pearl gradients glued on. Operator's verdict on first review: "looks clunky compared to Elephantasm" — confirming the doc-vs-code gap empirically.
+
+0.7.1 closes that gap. **The spec is now the runtime.** Token system rewritten in `globals.css` (HSL channels matching §5 + §12, `--primary: 142 71% 45%` terminal green, `--background: 0 0% 0%` pure black, `--radius: 2px` square corners, `--font-display: var(--font-space-mono)`); seven shadcn primitives rewritten at the CVA layer (`button`, `card`, `input`, `label`, `badge`, plus the previously-orphan `status-dot` and `terminal-container` get first consumers); pearl deleted (`pearl-text.tsx` removed; `pearl` button variant retired; `.pearl`, `.pearl-text`, `.pearl-ring`, `.halftone-bg` utilities gone from `globals.css`); five live routes rewritten as mission-control panels (dashboard reframed from "Welcome back, Phil + 2 onboarding cards" to a four-tile telemetry strip + `[ FLEET STATUS ]` matrix; agents reframed as `[ HARNESS CATALOG ]` with cyan-accented spec-sheet cards; fleet wrapped in `[ AGENT INSTANCES ]` `TerminalContainer` with live `POLLING · N REGISTERED` indicator; sign-in becomes a `[ AUTHENTICATE ]` panel with `EMAIL` / `PASSPHRASE` fields and `› AUTHENTICATE` CTA; onboarding becomes `[ INITIAL CONFIGURATION ] / [ OPERATOR PROFILE ]` with `CALLSIGN` / `WORKSPACE` fields). Two console errors closed along the way: vestigial `nativeButton={false}` props leaking to DOM (residue from a `@base-ui-components/react` → `@base-ui/react` migration, finished off in the first turn of this milestone) and a Base UI `useButton` warning when `<Button render={<Link>}>` is used on the dashboard's catalog CTAs. Patch version (not minor) per the 0.5.1 / 0.5.2 / 0.6.1 precedent for non-product structural follow-up: zero new product surface, pure aesthetic correctness + two console-error fixes; the user-visible action surface (deploy modal, fleet table actions, onboarding flow) is byte-equivalent in *behavior*, transformed in *register*. No API change, no env var, no DB change, no migration. **Supersedes 0.6.0's pearl direction wholesale.**
+
+The aesthetic register has shifted from "shadcn-stock-dark with pearl decoration" to "operator console with always-on monitoring." The load-bearing tells: a live `[ UTC ] HH:MM:SS` clock in the top-right (ticks every second, mono tabular-nums); `[ ONLINE ]` indicator with a 2.4s telemetry-pulse green dot on the dashboard header; `POLLING` indicator on the fleet route that pulses amber while non-terminal rows exist and stops when everything settles; the sidebar's active item gets a 12px green left-rule via `::before` pseudo + green text (no fill swap). Animation count: zero gratuitous motion (pearl drift retired); two functional motion registers — `.animate-telemetry` (2.4s opacity pulse for live-state indicators) and the live clock's per-second redraw. Both are "alive, not showy" per design-system.md §Animation Stance.
 
 ---
 

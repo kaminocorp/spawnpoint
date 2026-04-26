@@ -14,27 +14,54 @@ type StatusDotProps = Omit<React.ComponentProps<"span">, "children"> & {
 }
 
 /**
- * Semantic-colored pulse-dot indicator for agent lifecycle states. See
- * `docs/refs/design-system.md` §35 for the canonical mapping. Pulses on
- * `spawning` and `running` (active states); flat otherwise.
+ * Pulse-dot indicator for agent lifecycle state. See
+ * `docs/refs/design-system.md` §35 for the canonical mapping.
  *
- * Decoupled from chrome by design (decision 8): pearl never paints
- * status. The dot's only "alive" register is the pulse animation on
- * the two active states — uncorrupted by any chrome motion underneath.
+ * - `pending` / `spawning` → amber, telemetry pulse
+ * - `running`             → terminal green, telemetry pulse
+ * - `failed`              → red, no pulse (failed state is terminal)
+ * - `stopped` / `destroyed` → muted gray, no pulse
  *
- * Ships unused in Phase 2; first consumer is M4's `/fleet` table.
+ * The pulse animation is the load-bearing "alive, not showy" register
+ * — always-on, low frequency (2.4s), opacity-only. No motion on terminal
+ * states.
  */
 
-const STATUS_COLOR: Record<Status, string> = {
-  pending: "bg-gray-500",
-  spawning: "bg-green-400",
-  running: "bg-green-400",
-  stopped: "bg-gray-500",
-  failed: "bg-red-500",
-  destroyed: "bg-gray-500",
+const STATUS_TONE: Record<
+  Status,
+  { dot: string; label: string }
+> = {
+  pending: {
+    dot: "bg-[hsl(var(--status-pending))]",
+    label: "text-[hsl(var(--status-pending))]",
+  },
+  spawning: {
+    dot: "bg-[hsl(var(--status-pending))]",
+    label: "text-[hsl(var(--status-pending))]",
+  },
+  running: {
+    dot: "bg-[hsl(var(--status-running))]",
+    label: "text-[hsl(var(--status-running))]",
+  },
+  stopped: {
+    dot: "bg-[hsl(var(--status-stopped))]",
+    label: "text-muted-foreground",
+  },
+  failed: {
+    dot: "bg-[hsl(var(--status-failed))]",
+    label: "text-[hsl(var(--status-failed))]",
+  },
+  destroyed: {
+    dot: "bg-[hsl(var(--status-stopped))]",
+    label: "text-muted-foreground line-through",
+  },
 }
 
-const STATUS_PULSES: ReadonlySet<Status> = new Set(["spawning", "running"])
+const STATUS_PULSES: ReadonlySet<Status> = new Set([
+  "pending",
+  "spawning",
+  "running",
+])
 
 function StatusDot({
   status,
@@ -42,7 +69,7 @@ function StatusDot({
   className,
   ...props
 }: StatusDotProps) {
-  const dotColor = STATUS_COLOR[status]
+  const tone = STATUS_TONE[status]
   const pulses = STATUS_PULSES.has(status)
 
   return (
@@ -55,13 +82,18 @@ function StatusDot({
       <span
         aria-hidden
         className={cn(
-          "size-2 rounded-full",
-          dotColor,
-          pulses && "animate-pulse",
+          "size-1.5 rounded-full",
+          tone.dot,
+          pulses && "animate-telemetry",
         )}
       />
       {showLabel && (
-        <span className="font-mono text-xs uppercase tracking-wider text-gray-400">
+        <span
+          className={cn(
+            "font-display text-[10px] uppercase tracking-wider",
+            tone.label,
+          )}
+        >
           {status}
         </span>
       )}

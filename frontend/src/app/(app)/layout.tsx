@@ -7,15 +7,8 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppTopBar } from "@/components/app-top-bar";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { Skeleton } from "@/components/ui/skeleton";
+import { TerminalContainer } from "@/components/ui/terminal-container";
 import type { Organization } from "@/gen/corellia/v1/organizations_pb";
 import type { User } from "@/gen/corellia/v1/users_pb";
 import { createApiClient } from "@/lib/api/client";
@@ -87,18 +80,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (state.kind === "loading") {
     return (
-      <div className="halftone-bg flex min-h-screen w-full">
-        <div className="hidden w-64 border-r p-4 md:block">
-          <Skeleton className="mb-6 h-7 w-32" />
-          <div className="space-y-2">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-          </div>
-        </div>
-        <div className="flex-1 p-6">
-          <Skeleton className="h-8 w-48" />
+      <div className="grid-bg flex min-h-screen items-center justify-center">
+        <div className="flex items-center gap-3 font-display text-xs uppercase tracking-widest text-muted-foreground">
+          <span className="size-1.5 rounded-full bg-[hsl(var(--status-running))] animate-telemetry" />
+          INITIALISING
         </div>
       </div>
     );
@@ -106,39 +91,37 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (state.kind === "not-provisioned") {
     return (
-      <main className="halftone-bg flex min-h-screen items-center justify-center p-6">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Account not provisioned</CardTitle>
-            <CardDescription>
+      <main className="grid-bg flex min-h-screen items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          <TerminalContainer title="ACCOUNT NOT PROVISIONED" accent="failed">
+            <p className="text-sm text-muted-foreground">
               Sign-in succeeded, but no workspace record exists for your account.
               Contact an administrator to be added.
-            </CardDescription>
-          </CardHeader>
-          <CardFooter>
-            <Button variant="outline" onClick={signOut}>
-              Sign out
-            </Button>
-          </CardFooter>
-        </Card>
+            </p>
+            <div className="mt-4 flex justify-end">
+              <Button variant="outline" size="sm" onClick={signOut}>
+                Sign out
+              </Button>
+            </div>
+          </TerminalContainer>
+        </div>
       </main>
     );
   }
 
   if (state.kind === "error") {
     return (
-      <main className="halftone-bg flex min-h-screen items-center justify-center p-6">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Something went wrong</CardTitle>
-            <CardDescription>{state.message}</CardDescription>
-          </CardHeader>
-          <CardFooter>
-            <Button variant="outline" onClick={signOut}>
-              Sign out
-            </Button>
-          </CardFooter>
-        </Card>
+      <main className="grid-bg flex min-h-screen items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          <TerminalContainer title="SYSTEM FAULT" accent="failed">
+            <p className="font-mono text-xs text-foreground">{state.message}</p>
+            <div className="mt-4 flex justify-end">
+              <Button variant="outline" size="sm" onClick={signOut}>
+                Sign out
+              </Button>
+            </div>
+          </TerminalContainer>
+        </div>
       </main>
     );
   }
@@ -166,7 +149,7 @@ function ReadyChrome({
             userName={user.name ?? ""}
             email={user.email}
           />
-          <div className="halftone-bg flex-1 p-6">{children}</div>
+          <div className="grid-bg flex-1 p-6">{children}</div>
         </SidebarInset>
       </SidebarProvider>
     </UserProvider>

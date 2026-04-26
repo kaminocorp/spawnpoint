@@ -5,14 +5,7 @@ import { ConnectError } from "@connectrpc/connect";
 
 import { AgentTemplateCard } from "@/components/agent-template-card";
 import { ComingSoonHarnessCard } from "@/components/coming-soon-harness-card";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
+import { TerminalContainer } from "@/components/ui/terminal-container";
 import type { AgentTemplate } from "@/gen/corellia/v1/agents_pb";
 import { COMING_SOON_HARNESSES } from "@/lib/agents/coming-soon";
 import { createApiClient } from "@/lib/api/client";
@@ -49,40 +42,66 @@ export default function AgentsPage() {
     };
   }, []);
 
+  const availableCount =
+    state.kind === "ready" ? state.templates.length : 0;
+  const plannedCount = COMING_SOON_HARNESSES.length;
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-2xl font-semibold">Agents</h1>
-        <p className="text-sm text-muted-foreground">
-          Pick a harness, configure it, and deploy.
-        </p>
-      </div>
+      <header className="flex items-end justify-between border-b border-border pb-4">
+        <div>
+          <div className="font-display text-[10px] uppercase tracking-widest text-muted-foreground/60">
+            [ HARNESS CATALOG ]
+          </div>
+          <h1 className="mt-1 font-display text-2xl font-bold uppercase tracking-widest text-foreground">
+            CATALOG
+          </h1>
+        </div>
+        <div className="flex items-center gap-4 font-display text-[10px] uppercase tracking-widest">
+          <span className="text-[hsl(var(--feature-catalog))]">
+            {availableCount} AVAILABLE
+          </span>
+          <span className="text-muted-foreground">
+            {plannedCount} PLANNED
+          </span>
+        </div>
+      </header>
 
-      {state.kind === "loading" && <LoadingGrid />}
-
-      {state.kind === "ready" && (
-        <>
+      <TerminalContainer
+        title="AVAILABLE HARNESSES"
+        accent="catalog"
+        meta={`${availableCount} ENTRIES`}
+      >
+        {state.kind === "loading" && <LoadingGrid />}
+        {state.kind === "error" && (
+          <p className="font-mono text-xs text-[hsl(var(--status-failed))]">
+            {state.message}
+          </p>
+        )}
+        {state.kind === "empty" && (
+          <p className="font-display text-xs uppercase tracking-wider text-muted-foreground">
+            › NO HARNESSES REGISTERED
+          </p>
+        )}
+        {state.kind === "ready" && (
           <CatalogGrid>
             {state.templates.map((t) => (
               <AgentTemplateCard key={t.id} template={t} />
             ))}
           </CatalogGrid>
-          <ComingSoonSection />
-        </>
-      )}
+        )}
+      </TerminalContainer>
 
-      {state.kind === "empty" && <ComingSoonSection />}
-
-      {state.kind === "error" && (
-        <div className="mx-auto max-w-md">
-          <Card>
-            <CardHeader>
-              <CardTitle>Couldn&apos;t load harnesses.</CardTitle>
-              <CardDescription>{state.message}</CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
-      )}
+      <TerminalContainer
+        title="PLANNED HARNESSES"
+        meta={`${plannedCount} QUEUED`}
+      >
+        <CatalogGrid>
+          {COMING_SOON_HARNESSES.map((h) => (
+            <ComingSoonHarnessCard key={h.name} {...h} />
+          ))}
+        </CatalogGrid>
+      </TerminalContainer>
     </div>
   );
 }
@@ -91,7 +110,10 @@ function LoadingGrid() {
   return (
     <CatalogGrid>
       {Array.from({ length: 3 }).map((_, i) => (
-        <Skeleton key={i} className="h-44 w-full" />
+        <div
+          key={i}
+          className="h-44 w-full border border-border bg-card animate-telemetry"
+        />
       ))}
     </CatalogGrid>
   );
@@ -99,27 +121,8 @@ function LoadingGrid() {
 
 function CatalogGrid({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
       {children}
     </div>
-  );
-}
-
-function ComingSoonSection() {
-  return (
-    <section aria-label="Coming soon">
-      <div className="my-8 flex items-center gap-3">
-        <Separator className="flex-1" />
-        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Coming Soon
-        </span>
-        <Separator className="flex-1" />
-      </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {COMING_SOON_HARNESSES.map((h) => (
-          <ComingSoonHarnessCard key={h.name} {...h} />
-        ))}
-      </div>
-    </section>
   );
 }

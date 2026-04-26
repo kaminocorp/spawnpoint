@@ -3,20 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ConnectError } from "@connectrpc/connect";
-import { ArrowRightIcon } from "lucide-react";
 
 import { AgentRowActions } from "@/components/fleet/agent-row-actions";
 import { isTerminal, StatusBadge } from "@/components/fleet/status-badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { TerminalContainer } from "@/components/ui/terminal-container";
 import {
   Table,
   TableBody,
@@ -66,8 +57,6 @@ export default function FleetPage() {
     };
   }, [fetchInstances]);
 
-  // Poll while at least one row is non-terminal (i.e. pending). Stops once
-  // all rows have settled — typical idle cost is zero (plan decision 41).
   useEffect(() => {
     if (state.kind !== "ready") return;
     if (state.instances.every((i) => isTerminal(i.status))) return;
@@ -77,15 +66,36 @@ export default function FleetPage() {
     return () => clearInterval(id);
   }, [state, fetchInstances]);
 
+  const count =
+    state.kind === "ready" ? state.instances.length :
+    state.kind === "empty" ? 0 : null;
+
+  const polling =
+    state.kind === "ready" &&
+    !state.instances.every((i) => isTerminal(i.status));
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-2xl font-semibold">Fleet</h1>
-        <p className="text-sm text-muted-foreground">
-          Every agent you&apos;ve spawned. Updates every few seconds while
-          anything is converging.
-        </p>
-      </div>
+      <header className="flex items-end justify-between border-b border-border pb-4">
+        <div>
+          <div className="font-display text-[10px] uppercase tracking-widest text-muted-foreground/60">
+            [ FLEET ]
+          </div>
+          <h1 className="mt-1 font-display text-2xl font-bold uppercase tracking-widest text-foreground">
+            FLEET
+          </h1>
+        </div>
+        <div className="flex items-center gap-3 font-display text-[10px] uppercase tracking-widest text-muted-foreground">
+          {polling && (
+            <>
+              <span className="size-1.5 rounded-full bg-[hsl(var(--status-pending))] animate-telemetry" />
+              POLLING
+              <span className="text-muted-foreground/50">·</span>
+            </>
+          )}
+          {count !== null && <span>{count} REGISTERED</span>}
+        </div>
+      </header>
 
       {state.kind === "loading" && <LoadingTable />}
       {state.kind === "empty" && <EmptyState />}
@@ -105,34 +115,38 @@ function FleetTable({
   onChanged: () => void;
 }) {
   return (
-    <div className="rounded-lg border">
+    <TerminalContainer
+      title="AGENT INSTANCES"
+      accent="running"
+      meta={`${instances.length} ROWS`}
+    >
       <Table>
         <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Template</TableHead>
-            <TableHead>Model</TableHead>
-            <TableHead>Created</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+          <TableRow className="border-b border-border">
+            <Th>Name</Th>
+            <Th>Status</Th>
+            <Th>Template</Th>
+            <Th>Model</Th>
+            <Th>Created</Th>
+            <Th align="right">Actions</Th>
           </TableRow>
         </TableHeader>
         <TableBody>
           {instances.map((i) => (
-            <TableRow key={i.id}>
-              <TableCell className="font-medium">{i.name}</TableCell>
+            <TableRow key={i.id} className="border-b border-border/50">
+              <TableCell className="font-mono text-xs text-foreground">
+                {i.name}
+              </TableCell>
               <TableCell>
                 <StatusBadge status={i.status} />
               </TableCell>
-              <TableCell className="text-muted-foreground">
+              <TableCell className="font-mono text-xs text-muted-foreground">
                 {i.templateName}
               </TableCell>
-              <TableCell className="text-muted-foreground">
-                <span className="font-mono text-xs">
-                  {providerLabel(i.provider)} / {i.modelName}
-                </span>
+              <TableCell className="font-mono text-xs text-muted-foreground">
+                {providerLabel(i.provider)} / {i.modelName}
               </TableCell>
-              <TableCell className="text-muted-foreground">
+              <TableCell className="font-mono text-xs text-muted-foreground">
                 {formatCreated(i.createdAt)}
               </TableCell>
               <TableCell>
@@ -142,51 +156,74 @@ function FleetTable({
           ))}
         </TableBody>
       </Table>
-    </div>
+    </TerminalContainer>
+  );
+}
+
+function Th({
+  children,
+  align,
+}: {
+  children: React.ReactNode;
+  align?: "right";
+}) {
+  return (
+    <TableHead
+      className={`font-display text-[10px] uppercase tracking-widest text-muted-foreground/70 ${
+        align === "right" ? "text-right" : ""
+      }`}
+    >
+      {children}
+    </TableHead>
   );
 }
 
 function LoadingTable() {
   return (
-    <div className="space-y-2">
-      {Array.from({ length: 3 }).map((_, i) => (
-        <Skeleton key={i} className="h-12 w-full" />
-      ))}
-    </div>
+    <TerminalContainer title="AGENT INSTANCES" accent="running">
+      <div className="space-y-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-9 w-full border border-border/40 animate-telemetry"
+          />
+        ))}
+      </div>
+    </TerminalContainer>
   );
 }
 
 function EmptyState() {
   return (
-    <Card className="mx-auto max-w-md">
-      <CardHeader>
-        <CardTitle>No agents yet.</CardTitle>
-        <CardDescription>
+    <TerminalContainer title="AGENT INSTANCES" accent="running">
+      <div className="space-y-3 py-2">
+        <p className="font-display text-xs uppercase tracking-wider text-muted-foreground">
+          › NO AGENTS REGISTERED
+        </p>
+        <p className="text-sm text-muted-foreground/80">
           Spawn one from the catalog. They&apos;ll appear here with status and
           logs.
-        </CardDescription>
-      </CardHeader>
-      <CardFooter>
-        <Button render={<Link href="/agents" />}>
-          Browse harnesses
-          <ArrowRightIcon />
-        </Button>
-      </CardFooter>
-    </Card>
+        </p>
+        <div className="pt-1">
+          <Button variant="default" size="sm" render={<Link href="/agents" />}>
+            › OPEN CATALOG
+          </Button>
+        </div>
+      </div>
+    </TerminalContainer>
   );
 }
 
 function ErrorState({ message }: { message: string }) {
   return (
-    <Card className="mx-auto max-w-md">
-      <CardHeader>
-        <CardTitle>Couldn&apos;t load the fleet.</CardTitle>
-        <CardDescription>{message}</CardDescription>
-      </CardHeader>
-      <CardContent className="text-sm text-muted-foreground">
-        The page polls every few seconds — this might recover on its own.
-      </CardContent>
-    </Card>
+    <TerminalContainer title="FLEET FAULT" accent="failed">
+      <p className="font-mono text-xs text-[hsl(var(--status-failed))]">
+        {message}
+      </p>
+      <p className="mt-2 text-sm text-muted-foreground/80">
+        Polls every few seconds — this might recover on its own.
+      </p>
+    </TerminalContainer>
   );
 }
 

@@ -3,36 +3,69 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Mission-control button vocabulary. See `docs/refs/design-system.md` §13.
+ *
+ * Defaults: square hairline rectangle, Space Mono uppercase,
+ * `tracking-wider`, no shadow. The `default` variant is the terminal-green
+ * primary CTA — at rest it shows green text on a transparent ground with a
+ * green hairline; hover fills the surface with a green tint. Outline is the
+ * universal "secondary" — gray hairline, no fill, gray text.
+ *
+ * Convention: primary CTAs prefix copy with `>` (e.g. `> DEPLOY`). The
+ * chevron is content, not chrome — the consumer types it. See spec §13.1.
+ */
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:pearl-ring active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  [
+    "group/button inline-flex shrink-0 items-center justify-center gap-1.5",
+    "rounded-sm border whitespace-nowrap select-none outline-none transition-colors",
+    "font-display font-medium uppercase tracking-wider",
+    "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+    "disabled:pointer-events-none disabled:opacity-40",
+    "aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/40",
+    "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+  ].join(" "),
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
-        outline:
-          "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
-        ghost:
-          "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
-        destructive:
-          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
-        link: "text-primary underline-offset-4 hover:underline",
-        pearl:
-          "pearl text-foreground border-border/40 hover:border-border/70 relative overflow-hidden font-medium",
+        default: [
+          "border-primary/60 bg-transparent text-primary",
+          "hover:bg-primary/15 hover:border-primary",
+          "active:bg-primary/25",
+        ].join(" "),
+        outline: [
+          "border-border bg-transparent text-foreground",
+          "hover:border-foreground/40 hover:bg-foreground/5",
+          "active:bg-foreground/10",
+        ].join(" "),
+        ghost: [
+          "border-transparent bg-transparent text-muted-foreground",
+          "hover:text-foreground hover:bg-foreground/5",
+          "active:bg-foreground/10",
+        ].join(" "),
+        secondary: [
+          "border-border bg-secondary text-secondary-foreground",
+          "hover:bg-accent",
+        ].join(" "),
+        destructive: [
+          "border-destructive/40 bg-transparent text-destructive",
+          "hover:bg-destructive/15 hover:border-destructive",
+          "active:bg-destructive/25",
+        ].join(" "),
+        link: [
+          "border-transparent bg-transparent text-primary normal-case tracking-normal",
+          "underline-offset-4 hover:underline",
+        ].join(" "),
       },
       size: {
-        default:
-          "h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        icon: "size-8",
-        "icon-xs":
-          "size-6 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm":
-          "size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg",
-        "icon-lg": "size-9",
+        default: "h-8 px-3 text-xs",
+        xs: "h-6 px-2 text-[10px]",
+        sm: "h-7 px-2.5 text-[11px]",
+        lg: "h-9 px-4 text-xs",
+        icon: "size-8 p-0",
+        "icon-xs": "size-6 p-0",
+        "icon-sm": "size-7 p-0",
+        "icon-lg": "size-9 p-0",
       },
     },
     defaultVariants: {
@@ -46,11 +79,29 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  render,
+  nativeButton,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  // Base UI's `useButton` defaults `nativeButton: true`, which warns when
+  // the rendered element isn't a `<button>`. We commonly pass a Next.js
+  // `<Link>` (renders `<a>`) or a raw `<a>` via the `render` prop, so flip
+  // the default to `false` whenever `render` is set to anything that isn't
+  // a literal `<button>`. Consumers can still override explicitly.
+  const renderIsNativeButton =
+    render !== undefined &&
+    typeof render === "object" &&
+    render !== null &&
+    "type" in (render as React.ReactElement) &&
+    (render as React.ReactElement).type === "button"
+  const resolvedNativeButton =
+    nativeButton ?? (render === undefined || renderIsNativeButton ? undefined : false)
+
   return (
     <ButtonPrimitive
       data-slot="button"
+      render={render}
+      nativeButton={resolvedNativeButton}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />
