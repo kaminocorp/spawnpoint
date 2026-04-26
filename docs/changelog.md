@@ -2,6 +2,8 @@
 
 Index - short one-liners:
 
+- [0.12.0 — Spawn Redesign Phase 1: Wizard Reducer `harnessMode` + `getInitialState(mode)` + `GalleryWizardShell` + `spawn/page.tsx` Server Component](#0120--spawn-redesign-phase-1-wizard-reducer-harnessmode--getinitialstatemode--gallerywizardshell--spawnpagetsx-server-component-2026-04-27)
+- [0.11.10 — `BulkUpdateDeployConfig` Correctness: `errgroup.Wait()` Error Propagation + Context-Cancellation Test (Code Assessment §2.1)](#01110--bulkupdatedeployconfig-correctness-errgroupwait-error-propagation--context-cancellation-test-code-assessment-21-2026-04-27)
 - [0.11.9 — M-chat Post-Operator-Gate P1 Polish: Sidecar Stub Fail-Fast + Honest `/health` + Schema Hardening + Smoke Negative Paths + Probe-Timeout Bump + 401-Drain](#0119--m-chat-post-operator-gate-p1-polish-sidecar-stub-fail-fast--honest-health--schema-hardening--smoke-negative-paths--probe-timeout-bump--401-drain-2026-04-27)
 - [0.11.8 — M-chat Phase 7 Operator-Gate Verification: GHCR Push + Migration Confirmed Applied](#0118--m-chat-phase-7-operator-gate-verification-ghcr-push--migration-confirmed-applied-2026-04-27)
 - [0.11.7 — M-chat Post-Review Hardening: Inspector `chatEnabled` Lock-as-Read-Only + Chat-Panel Double-Enter Guard + ARIA + Error Remediation Hints](#0117--m-chat-post-review-hardening-inspector-chatenabled-lock-as-read-only--chat-panel-double-enter-guard--aria--error-remediation-hints-2026-04-27)
@@ -56,6 +58,49 @@ Index - short one-liners:
 - [0.1.0 — Backend Scaffolding & Docs Reconciliation](#010--backend-scaffolding--docs-reconciliation-2026-04-24)
 
 Latest on top. Each release includes detailed entries (**What / Where / Why** changes were made).
+
+---
+
+## 0.12.0 — Spawn Redesign Phase 1: Wizard Reducer `harnessMode` + `getInitialState(mode)` + `GalleryWizardShell` + `spawn/page.tsx` Server Component (2026-04-27)
+
+Frontend only (TypeScript). Three files changed; no new files created. No proto change, no migration, no sqlc, no backend change. `pnpm -C frontend type-check` → 0 errors · `pnpm -C frontend lint` → 0 errors.
+
+- **`frontend/src/app/(app)/spawn/page.tsx`** (rewritten) — converted from a `"use client"` component that fetched templates itself and rendered a standalone `<RosterGrid>` to a server component that delegates everything to `<Wizard initialMode="gallery" />`. The old header copy (`[ LAUNCHPAD ]`, `N AVAILABLE`, `M LOCKED`), loading skeleton, and `RosterCardSlot` / `RosterSkeleton` / `RosterGrid` helpers are deleted; their responsibilities move into `GalleryWizardShell` inside `wizard.tsx`.
+- **`frontend/src/app/(app)/spawn/[templateId]/page.tsx`** (one-liner) — adds `initialMode="confirmed"` to `<Wizard templateId={templateId} />`. Still a server component that awaits async params; no structural change.
+- **`frontend/src/components/spawn/wizard.tsx`** (extended) — five additions:
+  1. **`WizardState.harnessMode`** (`"gallery" | "confirmed"`) — new field persisted in the reducer so downstream phases can interrogate harness-selection state without inspecting the URL.
+  2. **`getInitialState(mode)`** — replaces the zero-arg `initialState()` factory; accepted as the `init` parameter of `useReducer`. `gallery` → `{ current: "harness", confirmed: new Set(), harnessMode: "gallery" }`; `confirmed` → `{ current: "identity", confirmed: new Set(["harness"]), harnessMode: "confirmed" }`. Both route paths call the same factory, eliminating drift between the two mount paths.
+  3. **`FetchState`** gains `{ kind: "ready-gallery"; templates: AgentTemplate[] }` — gallery fetch stores all templates. An early `if (fetchState.kind === "ready-gallery")` branch in `Wizard` renders `<GalleryWizardShell>` before the confirmed-mode deploy-check and step-render logic, keeping the two modes cleanly separated.
+  4. **`GalleryWizardShell`** (new) — gallery-mode page shell. Header shows `[ SELECT YOUR HARNESS ]`. Step 1 is a `<TerminalContainer meta="ACTIVE">` wrapping `<GalleryHarnessStep>`; Steps 2–5 are `pointer-events-none opacity-40 inert` `<TerminalContainer meta="PENDING">` shells so the operator sees the full wizard shape before selecting a harness.
+  5. **`GalleryHarnessStep`** (new) — roster grid inside Step 1. Joins `templates` against `HARNESSES` by `name.toLowerCase() === harness.key`; renders `<RosterCard kind="active">` for matches and `<RosterCard kind="locked">` otherwise. Harness selection navigates via the existing `<Link href={/spawn/${template.id}}>` inside `<RosterCard>`, remounting the Wizard at `/spawn/[templateId]` with `initialMode="confirmed"`. `roster-card.tsx` is not deleted in Phase 1.
+
+### Routing after Phase 1
+
+| URL | Renders |
+|-----|---------|
+| `/spawn` | `[ SELECT YOUR HARNESS ]` — Step 1 active with harness cards; Steps 2–5 inert shells |
+| `/spawn/{templateId}` | Step 1 pre-confirmed, Step 2 (identity form) active |
+
+Deep-linking `/spawn/{templateId}` is unchanged in behavior: the operator lands directly at Step 2. Step 1 is now pre-confirmed (harness selection happened in the gallery) rather than requiring an explicit `› CONFIRM` click.
+
+### Phase 2 entry points
+
+- `GalleryWizardShell` — swap `<GalleryHarnessStep>` for `<HarnessCarousel>`; add `selectHarness(templateId)` callback wiring `router.replace` + optional reducer dispatch.
+- `GalleryHarnessStep` and `roster-card.tsx` — deleted in Phase 2 once the carousel's `<HarnessSlide>` absorbs their role.
+- `nebula-scene.tsx` — Phase 3: add optional `targetPalette` prop for palette crossfade on carousel swipe.
+
+---
+
+## 0.11.10 — `BulkUpdateDeployConfig` Correctness: `errgroup.Wait()` Error Propagation + Context-Cancellation Test (Code Assessment §2.1) (2026-04-27)
+
+Backend only (Go). Two-line fix + one new test. No proto change, no migration, no sqlc, no FE change. `go vet ./...` + `go test ./...` green. Surfaced by the 2026-04-27 code assessment (`docs/executing/code-assessment-2026-04-27.md §2.1`); applied as a post-assessment patch and retroactively documented here.
+
+- **`backend/internal/agents/fleet.go:497`** — `g.Wait()` return value was discarded (`_ = g.Wait()` / bare call). When the caller's context was cancelled, `sem.Acquire(gctx, 1)` returned the context error; that error propagated up through the errgroup but was silently dropped, causing `BulkUpdateDeployConfig` to return `(results, nil)` with some `results[i]` zero-valued because their `applyBulkOne` goroutines were never invoked. Fix: `if err := g.Wait(); err != nil { return results, err }`. Returning `results` alongside the error preserves any partial-progress already recorded in populated slots, so the handler layer can still render "N applied, M cancelled" from the partial slice.
+- **`backend/internal/agents/service_test.go:1313`** — `TestBulkUpdateDeployConfig_ContextCancellation`: constructs a pre-cancelled context, calls `BulkUpdateDeployConfig` with three instance IDs, asserts the returned error is non-nil. Closes the regression path for the discard pattern.
+
+### Why this matters
+
+The bulk-apply pattern intentionally uses per-row `BulkResult.Err` so a single failed instance does not abort the batch — that design is correct and unchanged. But discarding `g.Wait()` also discarded the errgroup-level signal: context cancellation (parent timeout, client disconnect, server shutdown) returned `nil` as if the batch had completed cleanly, with silent zero-value entries for un-attempted rows. The fix makes context cancellation observable without changing the partial-failure semantics.
 
 ---
 

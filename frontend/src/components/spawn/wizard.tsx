@@ -13,6 +13,7 @@ import { z } from "zod";
 import { EyeIcon, EyeOffIcon } from "lucide-react";
 
 import { NebulaAvatar } from "@/components/spawn/nebula-avatar";
+import { RosterCard } from "@/components/spawn/roster-card";
 import {
   DeploymentConfigForm,
   type DeploymentFormValues,
@@ -123,6 +124,8 @@ type WizardState = {
   current: StepKey;
   confirmed: ReadonlySet<StepKey>;
   fields: WizardFields;
+  /** Phase 1 of redesign-spawn.md: discriminates gallery vs confirmed entry. */
+  harnessMode: "gallery" | "confirmed";
 };
 
 type WizardAction =
@@ -130,11 +133,28 @@ type WizardAction =
   | { type: "edit"; step: StepKey }
   | { type: "setField"; patch: Partial<WizardFields> };
 
-function initialState(): WizardState {
+/**
+ * State factory — shared by both route entry points so drift between the
+ * two mount paths is impossible (redesign-spawn.md Phase 1, risk note).
+ *
+ * gallery  → Step 1 active, nothing confirmed; renders the harness grid.
+ * confirmed → Step 1 already confirmed, Step 2 active; the user came from
+ *             the gallery or a direct `/spawn/[id]` deep-link.
+ */
+function getInitialState(mode: "gallery" | "confirmed"): WizardState {
+  if (mode === "gallery") {
+    return {
+      current: "harness",
+      confirmed: new Set(),
+      fields: INITIAL_FIELDS,
+      harnessMode: "gallery",
+    };
+  }
   return {
-    current: "harness",
-    confirmed: new Set(),
+    current: "identity",
+    confirmed: new Set<StepKey>(["harness"]),
     fields: INITIAL_FIELDS,
+    harnessMode: "confirmed",
   };
 }
 
@@ -172,6 +192,7 @@ type FetchState =
       template: AgentTemplate;
       harness: HarnessEntry | undefined;
     }
+  | { kind: "ready-gallery"; templates: AgentTemplate[] }
   | { kind: "not-found" }
   | { kind: "error"; message: string };
 
@@ -181,9 +202,15 @@ type DeployState =
   | { kind: "succeeded"; lines: string[] }
   | { kind: "error"; lines: string[]; message: string };
 
-export function Wizard({ templateId }: { templateId: string }) {
+export function Wizard({
+  templateId,
+  initialMode,
+}: {
+  templateId?: string;
+  initialMode: "gallery" | "confirmed";
+}) {
   const [fetchState, setFetchState] = useState<FetchState>({ kind: "loading" });
-  const [state, dispatch] = useReducer(reducer, undefined, initialState);
+  const [state, dispatch] = useReducer(reducer, initialMode, getInitialState);
   const [deploy, setDeploy] = useState<DeployState>({ kind: "idle" });
   const router = useRouter();
 
@@ -194,6 +221,14 @@ export function Wizard({ templateId }: { templateId: string }) {
         const api = createApiClient();
         const res = await api.agents.listAgentTemplates({});
         if (cancelled) return;
+        if (initialMode === "gallery") {
+          setFetchState({ kind: "ready-gallery", templates: res.templates });
+          return;
+        }
+        if (!templateId) {
+          setFetchState({ kind: "not-found" });
+          return;
+        }
         const template = res.templates.find((t) => t.id === templateId);
         if (!template) {
           setFetchState({ kind: "not-found" });
@@ -212,11 +247,14 @@ export function Wizard({ templateId }: { templateId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [templateId]);
+  }, [initialMode, templateId]);
 
   if (fetchState.kind === "loading") return <WizardSkeleton />;
   if (fetchState.kind === "error") return <WizardError message={fetchState.message} />;
-  if (fetchState.kind === "not-found") return <WizardNotFound id={templateId} />;
+  if (fetchState.kind === "not-found") return <WizardNotFound id={templateId ?? ""} />;
+  if (fetchState.kind === "ready-gallery") {
+    return <GalleryWizardShell templates={fetchState.templates} />;
+  }
 
   const { template, harness } = fetchState;
 
@@ -302,6 +340,91 @@ export function Wizard({ templateId }: { templateId: string }) {
           />
         ))}
       </div>
+    </div>
+  );
+}
+
+/* ─── GALLERY MODE (Phase 1 of redesign-spawn.md) ────────────────── */
+
+/**
+ * Wizard shell for `initialMode="gallery"` — shown at `/spawn` (no
+ * templateId). Step 1 is active and renders the full harness roster; Steps
+ * 2–5 are visible but inert/pending so the operator sees the shape of the
+ * flow before selecting a harness.
+ *
+ * Selecting a harness navigates to `/spawn/[templateId]` via the existing
+ * `<RosterCard kind="active">` Link, which remounts the Wizard in
+ * `confirmed` mode with Step 1 already confirmed and Step 2 active.
+ *
+ * Phase 2 will replace the grid with the horizontal scroll-snap carousel
+ * and swap the Link-navigation with `router.replace` + a `selectHarness`
+ * callback on the active slide. `GalleryWizardShell` is the extension
+ * point for that work.
+ */
+function GalleryWizardShell({ templates }: { templates: AgentTemplate[] }) {
+  return (
+    <div className="space-y-6">
+      <header className="flex items-end justify-between border-b border-border pb-4">
+        <div>
+          <div className="font-display text-[11px] uppercase tracking-widest text-muted-foreground/60">
+            [ SELECT YOUR HARNESS ]
+          </div>
+          <h1 className="mt-1 font-display text-2xl font-bold uppercase tracking-widest text-foreground">
+            SPAWN
+          </h1>
+        </div>
+      </header>
+
+      <div className="space-y-4">
+        <TerminalContainer title="STEP 1 // HARNESS" accent="catalog" meta="ACTIVE">
+          <GalleryHarnessStep templates={templates} />
+        </TerminalContainer>
+
+        {(["identity", "model", "deployment", "review"] as const).map((step) => {
+          const meta = STEP_META[step];
+          return (
+            <div
+              key={step}
+              className="pointer-events-none opacity-40"
+              inert
+            >
+              <TerminalContainer
+                title={`STEP ${meta.ordinal} // ${meta.label}`}
+                accent={meta.accent}
+                meta="PENDING"
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Roster grid inside Step 1 of the gallery wizard. Reuses `<RosterCard>`
+ * verbatim — same active/locked logic as the old `spawn/page.tsx`. Phase 2
+ * replaces this with `<HarnessCarousel>`. */
+function GalleryHarnessStep({ templates }: { templates: AgentTemplate[] }) {
+  return (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {HARNESSES.map((harness) => {
+        if (harness.status === "available") {
+          const template = templates.find(
+            (t) => t.name.toLowerCase() === harness.key,
+          );
+          if (template) {
+            return (
+              <RosterCard
+                key={harness.key}
+                kind="active"
+                harness={harness}
+                template={template}
+              />
+            );
+          }
+        }
+        return <RosterCard key={harness.key} kind="locked" harness={harness} />;
+      })}
     </div>
   );
 }

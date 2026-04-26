@@ -24,5 +24,5 @@ export default async function SpawnTemplatePage({
   params: Promise<{ templateId: string }>;
 }) {
   const { templateId } = await params;
-  return <Wizard templateId={templateId} />;
+  return <Wizard templateId={templateId} initialMode="confirmed" />;
 }
