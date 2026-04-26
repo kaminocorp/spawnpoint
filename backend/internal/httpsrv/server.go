@@ -8,6 +8,7 @@ import (
 
 	"github.com/hejijunhao/corellia/backend/internal/auth"
 	"github.com/hejijunhao/corellia/backend/internal/config"
+	"github.com/hejijunhao/corellia/backend/internal/deploy"
 	"github.com/hejijunhao/corellia/backend/internal/gen/corellia/v1/corelliav1connect"
 )
 
@@ -17,6 +18,7 @@ type Deps struct {
 	UsersHandler         corelliav1connect.UsersServiceHandler
 	OrganizationsHandler corelliav1connect.OrganizationsServiceHandler
 	AgentsHandler        corelliav1connect.AgentsServiceHandler
+	DeployTargets        map[string]deploy.DeployTarget
 	AllowedOrigin        string
 }
 

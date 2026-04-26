@@ -31,3 +31,33 @@ func (q *Queries) GetHarnessAdapterByID(ctx context.Context, id uuid.UUID) (Harn
 	)
 	return i, err
 }
+
+const updateHarnessAdapterImageRef = `-- name: UpdateHarnessAdapterImageRef :one
+UPDATE harness_adapters
+   SET adapter_image_ref = $2,
+       updated_at = now()
+ WHERE id = $1
+RETURNING id, harness_name, upstream_image_digest, adapter_image_ref, source, generated_at, validated_at, created_at, updated_at
+`
+
+type UpdateHarnessAdapterImageRefParams struct {
+	ID              uuid.UUID `json:"id"`
+	AdapterImageRef string    `json:"adapter_image_ref"`
+}
+
+func (q *Queries) UpdateHarnessAdapterImageRef(ctx context.Context, arg UpdateHarnessAdapterImageRefParams) (HarnessAdapter, error) {
+	row := q.db.QueryRow(ctx, updateHarnessAdapterImageRef, arg.ID, arg.AdapterImageRef)
+	var i HarnessAdapter
+	err := row.Scan(
+		&i.ID,
+		&i.HarnessName,
+		&i.UpstreamImageDigest,
+		&i.AdapterImageRef,
+		&i.Source,
+		&i.GeneratedAt,
+		&i.ValidatedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

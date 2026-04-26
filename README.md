@@ -70,19 +70,20 @@ Admins don't control agent behavior in real time. They define the **guardrails**
 
 ## Status
 
-**Scaffolding phase.** Building toward a hackathon-scoped v1 MVP.
+**Product phase — M2 shipped (`0.4.0`), M3 in flight.** Building toward a hackathon-scoped v1 MVP.
 
 | Area | State |
 |------|-------|
-| Backend scaffolding | ✓ Compiling; `GetCurrentUser` RPC pipeline wired |
-| Frontend scaffolding | ✓ Next.js 16 + Supabase SSR + Connect-ES v2; `type-check` + `lint` clean |
-| First migration | ✓ `organizations` + `users` tables |
-| Auth (Supabase JWT) | ✓ Middleware validates; domain service provisions |
-| Local bring-up (FE + BE) | ⏳ Needs populated env + seeded Supabase user |
-| User provisioning flow | ⏳ Planned (see `docs/plans/auth-user-provisioning.md`) |
-| Fly.io deploy target | ⏳ Interface exists; `FlyDeployTarget` not implemented |
-| "RPG character creation" spawn flow | ⏳ Not started |
-| Fleet view | ⏳ Not started |
+| Backend (Go + Chi + Connect + sqlc) | ✓ Compiling; three domain services live (`users`, `organizations`, `agents`) |
+| Frontend (Next.js 16 + Supabase SSR + Connect-ES v2) | ✓ Sign-in → onboarding wizard → dashboard shell + `/agents` catalog |
+| Auth (Supabase ES256 / JWKS, offline validation) | ✓ Middleware validates; `auth.users` → `public.users` provisioning trigger |
+| Schema | ✓ `organizations`, `users`, `harness_adapters`, `agent_templates` (Hermes seeded by upstream image digest) |
+| First product RPC | ✓ `AgentsService.ListAgentTemplates` — backs the `/agents` catalog page |
+| Hermes adapter image | ⏳ M3 — `adapters/hermes/` Dockerfile + entrypoint shim (`CORELLIA_*` → Hermes-native env vars) |
+| `FlyDeployTarget` (`internal/deploy/`) | ⏳ M3 — interface + stubs landing; `spawn()` wires next |
+| `adapter_image_ref` backfill | ⏳ M3 — migration drafted; tightens column to `NOT NULL` once filled |
+| "RPG character creation" spawn flow | ⏳ M4 — depends on M3 |
+| Fleet view | ⏳ M4 — replaces M1's `/fleet` placeholder |
 
 See [`docs/changelog.md`](docs/changelog.md) for the full trail.
 
@@ -98,8 +99,8 @@ See [`docs/changelog.md`](docs/changelog.md) for the full trail.
 | Backend | Go 1.26 + Chi router |
 | ORM / queries | sqlc (typed Go from SQL) |
 | Migrations | goose |
-| Auth | Supabase Auth (HS256 JWT, offline validation) |
-| Database | Supabase Postgres (Direct Connection; `pgxpool` pools in-process) |
+| Auth | Supabase Auth (ES256 JWT, offline validation via cached JWKS) |
+| Database | Supabase Postgres (Direct Connection; `pgxpool` pools in-process — never transaction pooling) |
 | Frontend deploy | Vercel |
 | Backend deploy | Fly.io (we dogfood the infra we're orchestrating) |
 | Local orchestration | overmind + `Procfile.dev` |
@@ -132,6 +133,9 @@ corellia/
 │       ├── components/   UI (shadcn + custom)
 │       ├── lib/          supabase + connect clients
 │       └── gen/          buf-generated TS client (never hand-edit)
+│
+├── adapters/             hand-written harness adapter images (one Dockerfile per harness)
+│   └── hermes/           CORELLIA_* → Hermes-native env-var translation shim
 │
 ├── shared/proto/         Proto IDL — the ONLY FE↔BE contract surface
 ├── docs/                 vision, blueprint, stack, changelog, scaffolding recipes
@@ -198,7 +202,7 @@ pnpm -C frontend dev            # Next.js on :3000
 cd backend && air               # Go API on :8080
 ```
 
-Sign in at `http://localhost:3000/sign-in` with a user you created in the Supabase dashboard, and the dashboard will call `GetCurrentUser` over Connect — rendering the email it gets back is the "pipeline works" milestone.
+Sign in at `http://localhost:3000/sign-in` with a user you created in the Supabase dashboard. First-login flows through the onboarding wizard (sets your display name + organization), then lands on the dashboard. From there, `/agents` renders the live catalog (one Hermes card backed by `AgentsService.ListAgentTemplates`, plus three "coming soon" sneak peeks). Spawn (`Deploy`) is intentionally disabled until M3 lands the adapter image and `FlyDeployTarget`.
 
 ### Everyday commands
 

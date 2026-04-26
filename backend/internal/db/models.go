@@ -24,7 +24,7 @@ type HarnessAdapter struct {
 	ID                  uuid.UUID          `json:"id"`
 	HarnessName         string             `json:"harness_name"`
 	UpstreamImageDigest string             `json:"upstream_image_digest"`
-	AdapterImageRef     *string            `json:"adapter_image_ref"`
+	AdapterImageRef     string             `json:"adapter_image_ref"`
 	Source              string             `json:"source"`
 	GeneratedAt         pgtype.Timestamptz `json:"generated_at"`
 	ValidatedAt         pgtype.Timestamptz `json:"validated_at"`

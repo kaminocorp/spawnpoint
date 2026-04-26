@@ -1,0 +1,5 @@
+# Don't bloat the image with operator docs / scripts that have no
+# runtime role. Only entrypoint.sh and the Dockerfile itself need to
+# reach the image build context.
+README.md
+smoke.sh

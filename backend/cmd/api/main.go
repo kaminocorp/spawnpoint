@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 
 	_ "github.com/joho/godotenv/autoload"
@@ -14,6 +15,7 @@ import (
 	"github.com/hejijunhao/corellia/backend/internal/auth"
 	"github.com/hejijunhao/corellia/backend/internal/config"
 	"github.com/hejijunhao/corellia/backend/internal/db"
+	"github.com/hejijunhao/corellia/backend/internal/deploy"
 	"github.com/hejijunhao/corellia/backend/internal/httpsrv"
 	"github.com/hejijunhao/corellia/backend/internal/organizations"
 	"github.com/hejijunhao/corellia/backend/internal/users"
@@ -45,12 +47,29 @@ func main() {
 	orgsSvc := organizations.NewService(queries, usersSvc)
 	agentsSvc := agents.NewService(queries)
 
+	flyTarget, err := deploy.NewFlyDeployTarget(ctx, cfg.FlyAPIToken, cfg.FlyOrgSlug)
+	if err != nil {
+		slog.Error("fly deploy target", "err", err)
+		os.Exit(1)
+	}
+	localTarget := deploy.NewLocalDeployTarget()
+	awsTarget := deploy.NewAWSDeployTarget()
+	deployTargets := map[string]deploy.DeployTarget{
+		flyTarget.Kind():   flyTarget,
+		localTarget.Kind(): localTarget,
+		awsTarget.Kind():   awsTarget,
+	}
+	slog.Info("deploy targets initialised",
+		"kinds", strings.Join(keysOf(deployTargets), ","),
+		"fly_org", cfg.FlyOrgSlug)
+
 	handler := httpsrv.New(httpsrv.Deps{
 		Config:               cfg,
 		AuthVerifier:         verifier,
 		UsersHandler:         httpsrv.NewUsersHandler(usersSvc),
 		OrganizationsHandler: httpsrv.NewOrganizationsHandler(orgsSvc),
 		AgentsHandler:        httpsrv.NewAgentsHandler(agentsSvc),
+		DeployTargets:        deployTargets,
 		AllowedOrigin:        cfg.FrontendOrigin,
 	})
 
@@ -60,4 +79,13 @@ func main() {
 		slog.Error("server", "err", err)
 		os.Exit(1)
 	}
+}
+
+func keysOf[V any](m map[string]V) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }

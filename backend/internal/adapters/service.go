@@ -14,6 +14,7 @@ var ErrNotFound = errors.New("harness adapter not found")
 
 type adapterQueries interface {
 	GetHarnessAdapterByID(ctx context.Context, id uuid.UUID) (db.HarnessAdapter, error)
+	UpdateHarnessAdapterImageRef(ctx context.Context, arg db.UpdateHarnessAdapterImageRefParams) (db.HarnessAdapter, error)
 }
 
 type Service struct {
@@ -26,6 +27,20 @@ func NewService(queries adapterQueries) *Service {
 
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (db.HarnessAdapter, error) {
 	adapter, err := s.queries.GetHarnessAdapterByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return db.HarnessAdapter{}, ErrNotFound
+		}
+		return db.HarnessAdapter{}, err
+	}
+	return adapter, nil
+}
+
+func (s *Service) UpdateImageRef(ctx context.Context, id uuid.UUID, ref string) (db.HarnessAdapter, error) {
+	adapter, err := s.queries.UpdateHarnessAdapterImageRef(ctx, db.UpdateHarnessAdapterImageRefParams{
+		ID:              id,
+		AdapterImageRef: ref,
+	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return db.HarnessAdapter{}, ErrNotFound

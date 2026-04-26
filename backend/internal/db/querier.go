@@ -19,6 +19,7 @@ type Querier interface {
 	// off the row type so the catalog service can't accidentally surface them.
 	// M4 widens this or adds a sibling query when the deploy modal needs default_config.
 	ListAgentTemplates(ctx context.Context) ([]ListAgentTemplatesRow, error)
+	UpdateHarnessAdapterImageRef(ctx context.Context, arg UpdateHarnessAdapterImageRefParams) (HarnessAdapter, error)
 	UpdateOrganizationName(ctx context.Context, arg UpdateOrganizationNameParams) (Organization, error)
 	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error)
 }
