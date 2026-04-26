@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ConnectError } from "@connectrpc/connect";
 
 import { AgentRowActions } from "@/components/fleet/agent-row-actions";
+import { FleetGallery } from "@/components/fleet/fleet-gallery";
+import { FleetViewToggle } from "@/components/fleet/view-toggle";
 import { isTerminal, StatusBadge } from "@/components/fleet/status-badge";
 import { Button } from "@/components/ui/button";
 import { TerminalContainer } from "@/components/ui/terminal-container";
@@ -17,8 +19,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { AgentInstance } from "@/gen/corellia/v1/agents_pb";
-import { ModelProvider } from "@/gen/corellia/v1/agents_pb";
 import { createApiClient } from "@/lib/api/client";
+import { formatCreated, providerLabel } from "@/lib/fleet-format";
+import { setFleetView, useFleetView } from "@/lib/fleet-view-pref";
 
 type State =
   | { kind: "loading" }
@@ -31,6 +34,7 @@ const POLL_MS = 3000;
 export default function FleetPage() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [showDestroyed, setShowDestroyed] = useState(false);
+  const view = useFleetView();
 
   const fetchInstances = useCallback(async () => {
     try {
@@ -99,6 +103,8 @@ export default function FleetPage() {
           </h1>
         </div>
         <div className="flex items-center gap-3 font-display text-[10px] uppercase tracking-widest text-muted-foreground">
+          <FleetViewToggle value={view} onChange={setFleetView} />
+          <span className="text-muted-foreground/50">·</span>
           {state.kind === "ready" && destroyedCount > 0 && (
             <>
               <button
@@ -128,8 +134,11 @@ export default function FleetPage() {
       {state.kind === "loading" && <LoadingTable />}
       {state.kind === "empty" && <EmptyState />}
       {state.kind === "error" && <ErrorState message={state.message} />}
-      {state.kind === "ready" && (
+      {state.kind === "ready" && view === "list" && (
         <FleetTable instances={visibleInstances} onChanged={fetchInstances} />
+      )}
+      {state.kind === "ready" && view === "gallery" && (
+        <FleetGallery instances={visibleInstances} onChanged={fetchInstances} />
       )}
     </div>
   );
@@ -253,29 +262,4 @@ function ErrorState({ message }: { message: string }) {
       </p>
     </TerminalContainer>
   );
-}
-
-function providerLabel(p: ModelProvider): string {
-  switch (p) {
-    case ModelProvider.ANTHROPIC:
-      return "anthropic";
-    case ModelProvider.OPENAI:
-      return "openai";
-    case ModelProvider.OPENROUTER:
-      return "openrouter";
-    default:
-      return "—";
-  }
-}
-
-function formatCreated(rfc3339: string): string {
-  if (!rfc3339) return "—";
-  const d = new Date(rfc3339);
-  if (Number.isNaN(d.getTime())) return rfc3339;
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }

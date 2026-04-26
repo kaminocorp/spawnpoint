@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { SwarmBackground } from "@/components/sign-in/swarm-background";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,7 +32,25 @@ export default function SignInPage() {
   }
 
   return (
-    <main className="grid-bg relative flex min-h-screen flex-col items-center justify-center gap-8 p-8">
+    <main className="relative flex min-h-screen flex-col items-center justify-center gap-8 p-8">
+      <SwarmBackground />
+      {/*
+       * Radial vignette — readability floor for the form. Sits between
+       * the swarm canvas (-z-10) and the form's normal stacking
+       * context. Worst-case scenario covered: an octahedron rotating
+       * such that an edge projects through the form's centre; the
+       * vignette absorbs the contrast hit. Tuning dial in Phase 7
+       * (raise the 0.6 alpha if the form ever struggles).
+       */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 -z-[5]"
+        style={{
+          background:
+            "radial-gradient(circle at center, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 60%)",
+        }}
+      />
+
       <header className="flex flex-col items-center gap-2">
         <div className="flex items-center gap-3">
           <span

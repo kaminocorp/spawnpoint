@@ -2,6 +2,8 @@
 
 Index - short one-liners:
 
+- [0.8.2 — Login Animation Phase 7: Three Live-Render Fixes (Stacking Context + Reduced-Motion Still + Particle Sizing)](#082--login-animation-phase-7-three-live-render-fixes-stacking-context--reduced-motion-still--particle-sizing-2026-04-26)
+- [0.8.1 — Fleet UI Mods: Gallery View + List ↔ Gallery Toggle (localStorage-Persisted, Gallery-Default)](#081--fleet-ui-mods-gallery-view--list--gallery-toggle-localstorage-persisted-gallery-default-2026-04-26)
 - [0.8.0 — Frontend Mods: Chrome Alignment + Avatar Dropdown + Logo Treatment + Destroyed-Filter](#080--frontend-mods-chrome-alignment--avatar-dropdown--logo-treatment--destroyed-filter-2026-04-26)
 - [0.7.7 — `fly.toml`: `min_machines_running` 0 → 1 (Always-Warm Control Plane)](#077--flytoml-min_machines_running-0--1-always-warm-control-plane-2026-04-26)
 - [0.7.6 — Env Var Rename: `FLY_API_TOKEN` → `FLY_SPAWN_TOKEN` (Stop `flyctl` Shadowing the Operator's Deploy Identity)](#076--env-var-rename-fly_api_token--fly_spawn_token-stop-flyctl-shadowing-the-operators-deploy-identity-2026-04-26)
@@ -29,6 +31,86 @@ Index - short one-liners:
 - [0.1.0 — Backend Scaffolding & Docs Reconciliation](#010--backend-scaffolding--docs-reconciliation-2026-04-24)
 
 Latest on top. Each release has a tight index followed by detail entries (**What / Where / Why** inlined). When a decision contradicts an earlier one, note the supersession in the new entry rather than editing the old one.
+
+---
+
+## 0.8.2 — Login Animation Phase 7: Three Live-Render Fixes (Stacking Context + Reduced-Motion Still + Particle Sizing) (2026-04-26)
+
+First live-browser tuning pass on the `/sign-in` swarm animation, triggered by an operator session that booted the route post-Phase-6 and surfaced three independent failure modes back-to-back: (1) the canvas painted under a black rectangle and was completely invisible; (2) once visible via macOS Reduce Motion being on, the SVG fallback projected as a viewport-filling chevron; (3) once Reduce Motion was off, the live swarm rendered as fluffy overlapping clouds rather than discrete particles. All three fixed in one pass; `/sign-in` now reads as the intended swarm-of-pinpricks morphing through the shape rotation, with a quiet ambient still for reduced-motion users. All FE-only: zero backend, proto, schema, env, or dependency change. Patch version (not minor): no new product surface, no new RPC, no schema/migration; one CSS class removed, one shader formula retuned, one SVG resized. Plan: phases 0–6 already shipped; Phase 7 is the live-render gate the prior phases deferred. Completion notes: `docs/completions/login-animation-phase-7.md`. Blueprint: `docs/blueprints/login-swarm-animation.md` (new — captures the technique for future replication elsewhere in the app).
+
+### Index
+
+- **`frontend/src/app/sign-in/page.tsx:35` — `bg-black` removed from `<main>`.** The load-bearing fix. `<main>` is `position: relative` *without* an explicit `z-index`, so it does not establish a stacking context. The `SwarmBackground` child is `fixed inset-0 -z-10`, which therefore participates in the **root** stacking context at layer −10. Per CSS painting order, the root stacking context paints negative-z descendants *before* in-flow block backgrounds — so `<main>`'s `bg-black` was painting *over* the canvas, hiding it completely. The page background register is unchanged: `SwarmBackground`'s wrapper carries its own `bg-black` on the fixed layer underneath the canvas, shared by both the morph-engine and reduced-motion branches. The only behavioural delta is that `<main>` no longer paints a black rectangle on top of the canvas. **Why this didn't surface in Phases 0–6:** every prior phase's exit gate was `next build` + lint + typecheck; the stacking-context defect is invisible to all three. Phase 7 is the first phase that gates on a live render. Future infra-style refactors on `/sign-in` must not reintroduce `bg-*` on the `<main>` element — that re-creates the canvas-hidden bug.
+- **`frontend/src/components/sign-in/reduced-motion-still.tsx` — `slice` → `meet`, chevron polygons halved, stipple sparser/dimmer, halo dimmed.** Four-part correction. (a) `preserveAspectRatio="xMidYMid slice"` → `"xMidYMid meet"`: `slice` scales the viewBox to fully *cover* the rendered rectangle and crops whichever axis is shorter — on a tall-and-narrow viewport (which the operator's screen was), the 1920×1080 viewBox got scaled up so its height matched the screen height, every viewBox unit magnified, including the chevron. `meet` scales to *fit* (no cropping); on a tall viewport the SVG renders at the width that fits, leaving vertical letterbox that's fine because the parent `<div>` is `bg-black`. (b) Chevron polygons halved (`-440 to +240` horizontal / `-440 to +440` vertical → `-220 to +120` / `-220 to +220`): silhouette now occupies ~340 viewBox units centred, not ~680×880. Quiet ambient presence rather than a hero element. (c) Stipple period 14 → 24 px, radius 1.6 → 0.9 px, opacity 1.0 → 0.45: silhouette reads as a texture suggestion, not a solid mass. (d) Halo `r=60% / alpha 0.10` → `r=55% / alpha 0.06`: subtle brand-green wash, no longer adding to the overwhelming brightness. Doc-comment rewritten to describe the new register and pin the corrections.
+- **`frontend/src/components/sign-in/shaders/swarm-vert.ts` — `gl_PointSize` retuned + alpha lowered.** The shipped Phase-0 placeholder `gl_PointSize = 2.5 * uPixelRatio * (300.0 / -mvPosition.z)` resolves at the camera distance `z=6` and `devicePixelRatio=2` to `2.5 × 2 × 50 ≈ 250 px per point` — roughly 80× too large, producing the cloudy-blob appearance. Retuned to `1.0 * uPixelRatio * (8.0 / -mvPosition.z)` ≈ `2.7 px per point` at the same camera config; with the fragment shader's `exp(-d*d*8.0)` falloff that gives a soft ~3–4 px halo per particle — pinprick scale, individually resolvable, swarm-density at 18,000. Companion alpha retune: drift/hold `0.85 → 0.32`, morph `0.95 → 0.45`, hold-phase flicker amplitude `0.08 → 0.04` (proportional to the new baseline). With ~18,000 additive points overlapping, anything above ~0.4 baseline saturates the additive blend toward white before the silhouette can read. The original shader comment literally said *"the 300.0 figure is empirical and gets a tuning pass in Phase 7"* — Phase 7 is now that pass.
+
+### Behavior change (known)
+
+- **`/sign-in` background canvas is visible.** The R3F swarm renders behind the form and runs through the chevron / octahedron / torus / globe / network / wordmark rotation per Phase 4's scheduler.
+- **Reduced-motion still is a quiet ambient texture.** macOS Reduce Motion users see a small stippled chevron centred behind the form, no longer a viewport-filling glow.
+- **Particles read as a swarm.** Discrete pinpricks at ~3 px each, additive blend no longer saturates to white, silhouettes coalesce visibly during the morph phase.
+- **`<main>` on `/sign-in` no longer paints its own background.** Black register comes from `SwarmBackground`'s wrapper, shared by both branches.
+- **Console still logs `THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.`** Originates in `@react-three/fiber` itself; benign; not Corellia's to chase.
+
+### Resolves
+
+- **Login Animation Phase 7** of the eight-phase plan in `docs/executing/login-animation-implementation.md`. Live-render gate now met. Phase 8 (numeric tuning of cycle pacing, easing curves, color cross-fade timing, hold-phase jitter, scheduler weights, bake parameters) inherits a working baseline.
+
+### Known pending work
+
+- **Phase 8 numeric tuning still owed.** Cycle pacing (drift / morph / hold durations), easing curves, color cross-fade timing, hold-phase jitter amplitude, full sequence rhythm, per-shape bake numbers. Phase 7 shipped *only* the three corrections needed to make the live render legible; everything else is at its Phase 0–6 value.
+- **No production-build perf profile.** Deferred from Phase 6; still deferred. The three Phase 7 fixes are visual-correctness, not budget-affecting.
+- **`THREE.Clock` deprecation warning.** Upstream R3F issue; will resolve when r3f migrates internally. No action.
+- **No automated test for the canvas.** v1's testing posture (no Playwright; FE exercised by the deployed RPC round-trip) holds.
+
+### Supersedes
+
+- **The Phase 0 `gl_PointSize = 2.5 * uPixelRatio * (300.0 / -mvPosition.z)` placeholder.** Replaced by `1.0 * uPixelRatio * (8.0 / -mvPosition.z)`. Phase-8 dial if particles read as too sparse: bump the `8.0` to `12.0` (~4 px) before bumping the `1.0` base — the base controls absolute size, the constant in the distance term controls how much depth-attenuation matters.
+- **The Phase 0 alpha values 0.85 / 0.95.** Replaced by 0.32 / 0.45 with a proportionally-scaled flicker amplitude. With 18,000 additive particles anything above ~0.4 baseline saturates; don't restore the higher values.
+- **Phase 6's reduced-motion still parameters.** `slice` register, full-opacity 14×14 stipple at `r=1.6`, halo alpha 0.10, chevron polygons at `-440…+240` / `-440…+440`. All replaced per the four-part correction above. The Phase 6 completion note's "Decisions worth pinning" entry on stipple density / halo strength is superseded by the Phase 7 entry.
+- **The implicit Phase 0–6 invariant that `<main>` on `/sign-in` carries `bg-black`.** Now: `<main>` carries no background; `SwarmBackground`'s wrapper does, shared across branches.
+
+---
+
+## 0.8.1 — Fleet UI Mods: Gallery View + List ↔ Gallery Toggle (localStorage-Persisted, Gallery-Default) (2026-04-26)
+
+Second operator-driven UX pass on the M4 fleet surface. The `/fleet` route had one shape since 0.7.0 — a horizontal-row `FleetTable`. Operator wanted a card-per-agent gallery as the *always-available* alternative, with a visible toggle to flip between the two; gallery as the default first-paint, list one click away, the choice persisting across reloads. All FE-only: zero backend, proto, schema, env, or dependency change. Type-check + lint clean. Patch version (not minor): no new product surface, no new RPC, no schema/migration; one new render shape behind a toggle, the data layer (polling, `showDestroyed`, `visibleInstances`, `destroyedCount`, `count`, `polling`) byte-equivalent to 0.8.0. Plan: `docs/executing/fleet-ui-mods.md`. Completion notes: `docs/completions/fleet-ui-mods.md`.
+
+### Index
+
+- **`frontend/src/lib/fleet-format.ts` — new (~25 LOC).** `providerLabel(p: ModelProvider): string` and `formatCreated(rfc3339: string): string` extracted from `fleet/page.tsx`. The table cell and the new card now render identical provider/timestamp strings without copy-paste between component trees. Zero behaviour change at the call sites.
+- **`frontend/src/lib/fleet-view-pref.ts` — new (~32 LOC).** Exposes `setFleetView(v)`, `useFleetView(): FleetView`, and the `FleetView` type. Backed by **`useSyncExternalStore`** — React's blessed primitive for syncing with external stores. Three callbacks: `subscribe(cb)` registers `cb` in a module-local `Set<() => void>`; `getSnapshot()` reads `localStorage["corellia.fleet.view"]` and returns `"gallery"` (the default) on bad/missing values or when `typeof window === "undefined"`; `getServerSnapshot()` returns the literal default `"gallery"` so SSR HTML and the very first client render agree byte-for-byte even if localStorage holds `"list"` — no hydration warning. `setFleetView(v)` writes to localStorage **and** notifies every subscriber, so the same-tab toggle press triggers an immediate re-render (the cross-tab `storage` event doesn't fire in the originating tab). **First implementation used the textbook `useState` + hydration-effect pattern**; eslint's `react-hooks/set-state-in-effect` blocks it, and the lint rule is correct in the general case — `useSyncExternalStore` is the right shape for "sync with external store" and resolves the SSR/CSR problem at the same time. Don't regress to the effect pattern when adding the next localStorage-backed preference.
+- **`frontend/src/components/fleet/view-toggle.tsx` — new (~62 LOC).** Two-button segmented control with Lucide `LayoutGridIcon` (gallery) + `Rows3Icon` (list) at `size-3` left of each label. Outer wrapper is `<div role="group" aria-label="Fleet view" className="flex items-center border border-border">`; each button is a `<button type="button" aria-pressed={…}>` with the standard chrome typography (`font-display text-[10px] uppercase tracking-widest`). Active state gets `bg-muted/40 text-foreground`; inactive gets `text-muted-foreground hover:text-foreground`. Stateless — props are `{ value, onChange }`; the parent owns persistence via the hook above.
+- **`frontend/src/components/fleet/agent-card.tsx` — new (~45 LOC).** One `AgentInstance` → one square-corner panel. Three regions stacked vertically: header strip (`<StatusBadge>` left, `formatCreated(createdAt)` right at `font-mono text-[10px] uppercase tracking-wider text-muted-foreground/70`); body (name as `<h2 className="font-mono text-sm text-foreground">`, then template, then `${providerLabel} / ${modelName}` — both at `font-mono text-[11px] text-muted-foreground`); footer (`<AgentRowActions>` justified right). **`AgentRowActions` reused unmodified** — the component is presentation-agnostic since M4 (takes `instance` + `onChanged`, no parent-shape assumption), so both views share the *exact* same Stop / Destroy / Logs button stack, modal flow, error-toast surface, and refetch trigger. Zero divergence between views in user-visible behaviour. **Destroyed treatment:** whole card gets `opacity-50` when `instance.status === "destroyed"`; `StatusBadge` already line-throughs the `destroyed` label inside `status-dot.tsx`'s tone map, the card-level opacity is the additional whole-card greying. The name itself does **not** get `line-through` — it stays scannable so the operator can read what the agent was called. Hover: subtle `hover:border-border/80`; no fill swap (the dark register avoids hover surfaces).
+- **`frontend/src/components/fleet/fleet-gallery.tsx` — new (~24 LOC).** Wraps the cards in the same `TerminalContainer` the table uses (`title="AGENT INSTANCES"`, `accent="running"`), so the surface chrome — bracketed title, `›` chevron, accent rule — is identical between views. Container `meta` reads **`N CARDS`** (vs the table's `N ROWS`) — chrome counts the unit being shown. Inside: `grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4` — a "Deploy 5" lays out as 2×3 / 3×2 on a typical 13–15" laptop; "Deploy 10" lays out as 3 rows × 4 cols on ultrawide, 4 rows × 3 cols on a typical laptop, 5 rows × 2 cols on a small tablet, 10 rows × 1 col on phone. Cards stay readable at every breakpoint without a density toggle.
+- **`frontend/src/app/(app)/fleet/page.tsx` — toggle wired in, render branch split.** Three import-level changes: `formatCreated` + `providerLabel` now come from `@/lib/fleet-format` (in-file copies deleted); `FleetGallery` + `FleetViewToggle` added; `useFleetView` + `setFleetView` from `@/lib/fleet-view-pref`. State delta is one line: `const view = useFleetView();` — no new `useState`, no `useEffect`, no `useCallback` for the change handler. The hook owns subscription, the setter owns notification, the consumer just reads. The `setFleetView` reference is module-level-stable so `<FleetViewToggle value={view} onChange={setFleetView} />` is safe as a direct prop. Header strip gains the toggle as the **leftmost** item (separated from the rest by a `·` divider) — most-used affordance, reading order is left-to-right. Render branch swaps the single `state.kind === "ready" && <FleetTable …/>` line for two parallel branches keyed on `view`. **Loading / empty / error states are unchanged** — they render regardless of `view`.
+
+### Behavior change (known)
+
+- **`/fleet` defaults to gallery view** for any user who hasn't toggled. Cards are the first impression; the segmented control in the header strip flips to the list (the 0.8.0 surface) in one click.
+- **Gallery view persists across reloads via localStorage.** Same session-local register as `showDestroyed`. No URL persistence (`?view=gallery`) — single-line lift if audit deep-linking ever matters.
+- **Destroyed agent cards render at `opacity-50`.** Greys the whole surface so the card reads as audit artefact, not active fleet member — matches 0.8.0's dashboard/fleet semantic shift.
+- **Toggle is always visible** in the header strip — even during loading / empty / error. Operator can pre-set their preference before the data arrives.
+- **Stop / Destroy / Logs actions behave identically** in both views. `AgentRowActions` is the same component instance type; the modal flow, error-toast surface, and refetch trigger are byte-equivalent.
+- **Polling cadence unchanged** (`POLL_MS = 3000`, stops when every row is terminal). Both views consume the same `visibleInstances` array, so `showDestroyed` toggling and polling state are identical across the two surfaces.
+
+### Resolves
+
+- **`docs/executing/fleet-ui-mods.md`** — the operator's single ask ("gallery view per agent, toggle between list and gallery") shipped end-to-end. All eight resolved decisions in the plan's §8 are reflected in code.
+
+### Known pending work
+
+- **Manual UI walk-through owed.** Type-check + lint catch shape errors, not feature behaviour. The eight smoke checks listed in the plan's §7 step 7 (default load, toggle flip, reload-persist, `showDestroyed` × view matrix, polling pulse on transition, `Deploy 5` round-trip, Stop / Destroy from a card) still need a live `overmind start` pass before this can be considered shipped end-to-end.
+- **No automated test for the toggle.** Consistent with v1's testing posture (no Playwright; FE exercised by the deployed RPC round-trip).
+- **URL persistence not implemented.** localStorage is the v1 stand-in. One-line lift via `useSearchParams` + `router.replace` if audit deep-linking ever matters.
+- **Per-card detail expansion / drawer / inline expanded state** — out of scope. Cards stay summary-only.
+- **Bulk-select / multi-select / batch actions across cards** — out of scope.
+- **Sort / filter beyond `showDestroyed`** — out of scope.
+
+### Supersedes
+
+- **0.7.0's fleet page render shape** — was a single `FleetTable`-or-nothing branch. Now branches on `view` between `FleetTable` and `FleetGallery`, both consuming the same filtered instance list.
+- **0.7.0's `providerLabel` + `formatCreated` colocation** in `fleet/page.tsx` — extracted to `lib/fleet-format.ts` so both the table cell and the new card render identically without prop-drilling or copy-paste.
 
 ---
 
