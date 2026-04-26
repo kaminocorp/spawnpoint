@@ -2,6 +2,8 @@
 
 Index - short one-liners:
 
+- [0.9.4 — Spawn Wizard Review Touchups: Deterministic Deploy-Log Cleanup + `inert` on Future Steps](#094--spawn-wizard-review-touchups-deterministic-deploy-log-cleanup--inert-on-future-steps-2026-04-26)
+- [0.9.3 — `/presentation` Route Skeleton: 5-Slide Deck for Hackathon Demo Video (Click-Advance, Reuses Nebula + TerminalContainer)](#093--presentation-route-skeleton-5-slide-deck-for-hackathon-demo-video-click-advance-reuses-nebula--terminalcontainer-2026-04-26)
 - [0.9.2 — Spawn Page Redesign Phase 6: Cleanup + Docs Reconciliation (Modal + Shim Deleted, design-system.md §34 Reset)](#092--spawn-page-redesign-phase-6-cleanup--docs-reconciliation-modal--shim-deleted-design-systemmd-34-reset-2026-04-26)
 - [0.9.1 — Spawn Page Redesign Phase 5: Wizard Fields Wired to `spawnAgent` + Streaming-Log Surface](#091--spawn-page-redesign-phase-5-wizard-fields-wired-to-spawnagent--streaming-log-surface-2026-04-26)
 - [0.9.0 — Spawn Page Redesign Phases 1–4: `/agents` → `/spawn` Rename + `<NebulaAvatar>` + Roster Page + Wizard Shell](#090--spawn-page-redesign-phases-14-agents--spawn-rename--nebulaavatar--roster-page--wizard-shell-2026-04-26)
@@ -35,6 +37,49 @@ Index - short one-liners:
 - [0.1.0 — Backend Scaffolding & Docs Reconciliation](#010--backend-scaffolding--docs-reconciliation-2026-04-24)
 
 Latest on top. Each release has a tight index followed by detail entries (**What / Where / Why** inlined). When a decision contradicts an earlier one, note the supersession in the new entry rather than editing the old one.
+
+---
+
+## 0.9.4 — Spawn Wizard Review Touchups: Deterministic Deploy-Log Cleanup + `inert` on Future Steps (2026-04-26)
+
+Two FE-only nits surfaced by the post-Phase-6 review of the spawn redesign (0.9.0–0.9.2). Both in `frontend/src/components/spawn/wizard.tsx`; zero backend, proto, schema, env, or dependency change. Type-check + lint clean. Patch version: no new product surface, no RPC change, no schema/migration; one new state discriminant, one DOM attribute.
+
+- **`DeployState` gains a `succeeded` discriminant; `onDeploy` flips to it before `router.push("/fleet")`.** The synthetic-log `setInterval` (Phase 5) lives in `<DeployLog>` and cleans up via React effect when `deploy.kind !== "deploying"`. Pre-0.9.4, the cleanup ran *implicitly* on route unmount — correct today, fragile if a future change ever adds a delay between RPC success and navigation. Now the parent transitions through `succeeded` first: cleanup fires deterministically, the log stays visually mounted (no flash of wizard chrome), and the navigation lands a frame later. The `<DeployLog>` line-rendering branches off the same kind so the in-flight log freezes on the final visible state until the route swap.
+- **`StepShell` future-step wrapper gets `inert={isFuture || undefined}`.** Previously `pointer-events-none opacity-40` blocked clicks but left the (invisible) ghost `[ EDIT ]` button keyboard-focusable in not-yet-confirmed steps. `inert` removes the subtree from the tab order *and* the a11y tree, matching the visual disabled state. Standard HTML attribute, well-supported across modern browsers; no polyfill, no ARIA shimming.
+
+### Resolves
+
+- Two `should-fix` items from the spawn-redesign review (post-0.9.2). The third recommended action — reconciling `docs/executing/fleet-control.md`'s "deploy modal" references against the wizard — also shipped in this pass; doc-only, not changelogged separately.
+
+---
+
+## 0.9.3 — `/presentation` Route Skeleton: 5-Slide Deck for Hackathon Demo Video (Click-Advance, Reuses Nebula + TerminalContainer) (2026-04-26)
+
+Tangible scaffold for the ~60s narrative half of the 3-min Anthropic Opus 4.7 hackathon submission video. New public top-level route `/presentation` (sibling of `/sign-in`, no auth), discrete-slides shape per the operator's Q2 → option (b) resolution: click / Space / → advances, Shift+Space / ← goes back, `1`–`5` jump, `Home` / `End` jump to ends. Chrome (top callsign strip + bottom progress dots) stops click propagation so dot-clicks don't collide with the slide-body advance. Five slide components, one file each — copy/layout/timing locked first; 3D scene polish deferred to the design phase per the plan's "out of scope" note. All FE-only: zero backend, proto, schema, env, or dependency change. Reuses `<TerminalContainer>`, `<NebulaAvatar>`, `<AvatarFallback>`, `HARNESSES`, `<Button>` and existing feature-color + status tokens — Three.js / R3F already in the bundle from 0.6.x + 0.8.x. Type-check + lint clean. Plan: `docs/plans/presentation-plan.md`.
+
+- **`frontend/src/app/presentation/{layout,page}.tsx`** — route entry. `metadata.title = "Presentation"` (composes via root template to `Presentation — Corellia`). Black-background `<main>` mounts the client `<Deck>`.
+- **`frontend/src/components/presentation/deck.tsx`** — keyboard + click controller. Five-entry `SLIDES` const drives state; `next` / `prev` / `goto` are `useCallback`'d and stable. Whole surface is the click target (`role="button"`); inputs/textareas opt out defensively though no slide has any today.
+- **`frontend/src/components/presentation/slide-frame.tsx`** — persistent chrome. Top strip shows `CORELLIA · CONTROL PLANE` + `[ NN / 05 ] · TITLE`; bottom strip carries `‹ PREV` / progress dots / `NEXT ›`. Dots are real buttons (jump-to). Click-advance hint pinned at bottom-12 in muted register.
+- **`frontend/src/components/presentation/slides/slide-1-hook.tsx`** — count-up 1 → 1,247 over 2.2s with cubic-ease, against a 120-node SVG field that reveals proportionally. Pseudo-deterministic node placement (`(seed * 31) % 1000` so the field renders identically on every mount).
+- **`frontend/src/components/presentation/slides/slide-2-problem.tsx`** — 5 tool labels (LangGraph / Composio / Portkey / LangSmith / Fly·AWS) light up with a 250ms stagger. `setInterval` cleared on unmount.
+- **`frontend/src/components/presentation/slides/slide-3-solution.tsx`** — circular bay of the same 6 harnesses as `/spawn` (sourced from `@/lib/spawn/harnesses` — single source of truth, can't drift), arranged on a 280px-radius circle. Hermes gets the live `<NebulaAvatar size={120}>` (the page's one canvas per decision 21); the other 5 get `<AvatarFallback>`. CORELLIA hub at center with dashed connection lines drawn in SVG.
+- **`frontend/src/components/presentation/slides/slide-4-how.tsx`** — split-panel `<TerminalContainer>` pair. Left (`accent="catalog"`) = stack diagram (Frontend → Wire → Domain → DeployTarget → Fly.io); right (`accent="adapter"`, `meta="OPUS 4.7"`) = adapter generation pipeline (`github → analyze → corellia.yaml + adapter image`). Caption pins the Opus 4.7 angle: tree-sitter + README + Dockerfile → validated manifest. The 20% Opus criterion lives here.
+- **`frontend/src/components/presentation/slides/slide-5-handoff.tsx`** — `<NebulaAvatar harness="hermes" size={320}>` center-stage + single `<Button render={<Link href="/spawn" />}>` CTA. Q4 → real route transition (not a recorded splice), so the dark register + nebula visual language carry across the seam — the deck *becomes* the product.
+
+### Behavior change (known)
+
+- **`/presentation` is a public route.** No auth gate. Sibling of `/sign-in` at the top level — does not enter the `(app)` group.
+- **Click anywhere on the slide advances.** Chrome (top strip, dots, prev/next buttons) stops propagation so its own clicks behave normally.
+- **Slide 5's CTA performs a real client-side navigation to `/spawn`.** Demo handoff is a route transition, not a video splice.
+
+### Known pending work
+
+- **3D scene polish** for slides 1–4 (camera pull-back on hook, fragmenting tool labels on problem, orbiting bay on solution, repo-flying-into-Opus animation on how) — deferred to the design phase per the plan's "out of scope" §.
+- **Q1 / Q3 / Q4** of `presentation-plan.md` still open (Opus angle product-vs-process, voiceover-vs-text, slide-5 transition mechanism — current scaffold lands on real-route-transition for Q4, leaves Q1 + Q3 untouched).
+
+### Resolves
+
+- **`docs/plans/presentation-plan.md` Q2 — discrete slides (option b).** Click / Space / arrow advance shipped end-to-end.
 
 ---
 

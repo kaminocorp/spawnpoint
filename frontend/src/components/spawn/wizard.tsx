@@ -166,6 +166,7 @@ type FetchState =
 type DeployState =
   | { kind: "idle" }
   | { kind: "deploying"; lines: string[] }
+  | { kind: "succeeded"; lines: string[] }
   | { kind: "error"; lines: string[]; message: string };
 
 export function Wizard({ templateId }: { templateId: string }) {
@@ -234,6 +235,15 @@ export function Wizard({ templateId }: { templateId: string }) {
         modelName: state.fields.modelName,
         modelApiKey: state.fields.apiKey,
       });
+      // Transition out of "deploying" before navigating so the
+      // synthetic-log interval's cleanup runs deterministically. The
+      // log surface stays mounted (still non-idle) so no flash of the
+      // wizard chrome — DeployLog just stops ticking until /fleet
+      // mounts and unmounts this tree entirely.
+      setDeploy((prev) => ({
+        kind: "succeeded",
+        lines: prev.kind === "deploying" ? prev.lines : [],
+      }));
       router.push("/fleet");
     } catch (e) {
       const err = ConnectError.from(e);
@@ -307,7 +317,14 @@ function StepShell({
   const stateTag = isCurrent ? "ACTIVE" : isConfirmed ? "CONFIRMED" : "PENDING";
 
   return (
-    <div className={isFuture ? "pointer-events-none opacity-40" : undefined}>
+    <div
+      className={isFuture ? "pointer-events-none opacity-40" : undefined}
+      // `inert` removes the subtree from the tab order and the a11y
+      // tree, matching the visual disabled state. Without it, ghost
+      // [ EDIT ] buttons in not-yet-confirmed steps remain
+      // keyboard-focusable behind `pointer-events-none`.
+      inert={isFuture || undefined}
+    >
       <TerminalContainer title={title} accent={meta.accent} meta={stateTag}>
         <StepBody
           step={step}
@@ -772,7 +789,10 @@ function DeployLog({
   }, [deploy.kind]);
 
   // Initial line was set by `onDeploy`; subsequent ticks append the
-  // remaining synthetic lines until exhausted.
+  // remaining synthetic lines until exhausted. After success or error
+  // the line set is frozen — `succeeded` keeps whatever the last
+  // in-flight render showed (no flash) until the route transition
+  // unmounts the tree.
   const visibleLines =
     deploy.kind === "deploying"
       ? SYNTHETIC_LINES.slice(0, Math.min(SYNTHETIC_LINES.length, 1 + tick))
