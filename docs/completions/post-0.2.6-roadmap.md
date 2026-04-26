@@ -1,11 +1,11 @@
 # Roadmap — Post-0.2.6 → Demoable v1
 
-**Status:** in flight — M1, M2, M3, M3.5 shipped; deploy (M3.9) and spawn (M4) ahead.
+**Status:** ✅ fully shipped. M1, M2, M3, M3.5, M3.9, and M4 (all 8 phases) all landed by 2026-04-26. The "demoable v1" definition-of-done in §5 is met — the deployed FE+BE are reachable, the spawn flow runs end-to-end against a live Fly account, and the M4 hardening tail (transactional spawn writes, handler-level sentinel tests, secrets-row policy) closed in 0.7.5. Sequencing note (historical): M3.9 was executed *out of order* (M4 landed against `localhost` first), then M3.9 retired the gap.
 **Last updated:** 2026-04-26
 **Owner:** TBD
 **Supersedes:** —
 **Related:**
-- `docs/changelog.md` §0.5.1 (latest), §0.5.0 (M3), §0.4.0 (M2), §0.3.0 (M1), §0.2.6, §0.2.5
+- `docs/changelog.md` §0.7.5 (latest, M4 Phase 8 hardening + v1.5 breadcrumbs), §0.7.4 (M3.9 control-plane deploy), §0.7.3 (M4 Phase 7 smoke), §0.7.0 (M4 Phases 1–6), §0.5.1 (M3.5), §0.5.0 (M3), §0.4.0 (M2), §0.3.0 (M1), §0.2.6, §0.2.5
 - `docs/blueprint.md` §1 (MVP scope), §9 (data model), §10 (RPG-character-creation flow), §11 (architecture rules)
 - `docs/vision.md` §"Garage" model, §admin model
 - `docs/stack.md` §10 (deploy targets), §12 (hour-zero scaffolding order)
@@ -29,9 +29,10 @@ The 0.2.5 → 0.2.6 collision (two parallel plans both touching `internal/auth/`
 
 ## 2. Where we are (snapshot, 2026-04-26)
 
-- **Working today.** Sign in via Supabase JS, BE validates ES256 + JWKS, auto-provisioning fires on `auth.users` insert, `GetCurrentUser` round-trips. Onboarding wizard (M1, v0.3.0) captures name + workspace name on first login, then lands on a dashboard shell with `Dashboard / Agents / Fleet / Settings` chrome. `/agents` (M2, v0.4.0) renders the Hermes catalog card backed by real `harness_adapters` + `agent_templates` rows pinned to the upstream Hermes digest. `internal/deploy/` (M3, v0.5.0) shipped — `DeployTarget` interface + `FlyDeployTarget` (real, calls Fly's HTTP API via `fly-go`/`flaps`) + `LocalDeployTarget` / `AWSDeployTarget` `NotImplemented` stubs; the Hermes adapter image is published at `ghcr.io/hejijunhao/corellia-hermes-adapter@sha256:d152…` and pinned into `harness_adapters.adapter_image_ref` behind a digest-pinning CHECK constraint. `deploy.Resolver` indirection (M3.5, v0.5.1) wraps the kind-keyed registry so the v1.5 `DBResolver` swap is a one-line change.
-- **Not built yet.** `AgentInstance`, `Secret`, `deploy_targets` tables (all M4). No spawn handler, no `/fleet` data, no FE deploy modal. **The control plane itself is still local-only** — no `Dockerfile`, no `fly.toml`, no Vercel project; the deployed E2E demo §5 prescribes is gated on M3.9 landing first.
-- **Implicitly available, no FE caller.** `UpdateCurrentUserName`, `UpdateOrganizationName`, `OrganizationsService.GetOrganization` (since 0.2.5); `agents.UpdateImageRef` (since 0.5.0); `deploy.Resolver.For` (since 0.5.1 — M4's spawn handler is the first reader).
+- **Working today.** Sign in via Supabase JS, BE validates ES256 + JWKS, auto-provisioning fires on `auth.users` insert, `GetCurrentUser` round-trips. Onboarding wizard (M1, v0.3.0) captures name + workspace name on first login, then lands on a dashboard shell with `Dashboard / Agents / Fleet / Settings` chrome. `/agents` (M2, v0.4.0) renders the Hermes catalog card backed by real `harness_adapters` + `agent_templates` rows pinned to the upstream Hermes digest. `internal/deploy/` (M3, v0.5.0) shipped — `DeployTarget` interface + `FlyDeployTarget` (real, calls Fly's HTTP API via `fly-go`/`flaps`) + `LocalDeployTarget` / `AWSDeployTarget` `NotImplemented` stubs; the Hermes adapter image is published at `ghcr.io/hejijunhao/corellia-hermes-adapter@sha256:d152…` and pinned into `harness_adapters.adapter_image_ref` behind a digest-pinning CHECK constraint. `deploy.Resolver` indirection (M3.5, v0.5.1) wraps the kind-keyed registry so the v1.5 `DBResolver` swap is a one-line change. **M4 spawn flow (all 8 phases) shipped across v0.7.0 + v0.7.3 + v0.7.5** — `agent_instances` / `secrets` / `deploy_targets` tables exist, six RPCs wired, `/agents` deploy modal active, `/fleet` polls live status, end-to-end spawn against a live Fly account succeeded (0.7.3), and Phase 8 hardening closed in 0.7.5 (transactional spawn writes via `agents.Transactor` + `WithSpawnTx`; 13-case sentinel→Connect-code mapping test pinning the public wire contract; secrets-row policy pinned in code as "one row per *secret-shaped* `CORELLIA_*` var"). **M3.9 control-plane deploy shipped in v0.7.4** — `backend/Dockerfile`, `backend/fly.toml`, Vercel project rooted at `frontend/`, Fly secrets set; the deployed BE on `corellia.fly.dev` and the deployed FE on Vercel are now the live URLs.
+- **Not built yet.** Nothing in the v1 sequence. The v1 surface is feature-complete; further work moves to **v1.5** (`docs/plans/v1.5-roadmap.md` — Memory → Tools → Skills) and the parallel deploy-target-credentials track (`docs/executing/deploy-target-credentials.md`, breadcrumbs already committed in 0.7.5: `// TODO(v1.5):` on `FlyCredentials` in `internal/deploy/fly.go:33` + new `blueprint.md` §11.6 codifying "never PATs from users").
+- **Thin tail carried forward.** Three small follow-ups remain from the v1 work but don't gate "demoable v1": (a) `docs/plans/deploy-control-plane.md` not yet drafted — the two-BE-deploys, one-FE-deploy ordering recipe wants documenting before the next preview-environment setup forces a rediscovery; (b) old Fly PAT not yet revoked (0.7.3); (c) the `InvalidArgument` vs `NotFound` inconsistency between `SpawnAgent`'s bad-template-id path and `Stop/Get/DestroyAgentInstance`'s bad-id paths is *documented* by 0.7.5's tests but not harmonized — a public-contract decision worth a separate pass.
+- **Implicitly available, no FE caller.** `UpdateCurrentUserName`, `UpdateOrganizationName`, `OrganizationsService.GetOrganization` (since 0.2.5); `agents.UpdateImageRef` (since 0.5.0). All other previously-stubbed surfaces (`deploy.Resolver.For`, the six M4 RPCs) now have real readers.
 
 ---
 
@@ -108,7 +109,7 @@ Five milestones to a demoable v1 (M3.9 promoted from §4 once M3.5's structural 
 
 ### M3.9 — Deploy the control plane itself (FE → Vercel, BE → Fly)
 
-**Status:** Pending — this milestone, in flight as of 2026-04-26.
+**Status:** ✅ Shipped in v0.7.4. Sequencing was inverted — M4 (v0.7.0 + v0.7.3) landed first against `localhost` + prod Supabase + live Fly, then M3.9 retired the gap by shipping `backend/Dockerfile`, `backend/.dockerignore`, `backend/fly.toml`, the Vercel project rooted at `frontend/`, and the Fly secrets (`DATABASE_URL`, `SUPABASE_URL`, `FLY_API_TOKEN` org-scoped per 0.7.3, `FLY_ORG_SLUG`, `FRONTEND_ORIGIN`). Pure infra artefacts + dashboard config; zero code change in `backend/` or `frontend/`. The de-risking argument the roadmap originally cited (CORS / JWKS / cookie-domain / env-drift surfacing on a deployed substrate) was retired empirically rather than prophylactically — the failure modes either didn't materialize or were resolved during the artefact PR.
 
 **Goal:** the running `corellia-api` Fly app and the `corellia-frontend` Vercel project replace `localhost:8080` and `localhost:3000` as the source of truth. Sign-in, `GetCurrentUser`, the onboarding wizard, and the `/agents` catalog all work end-to-end against deployed URLs. M4's demo (§5) becomes runnable cold from a fresh browser session.
 
@@ -133,7 +134,7 @@ Five milestones to a demoable v1 (M3.9 promoted from §4 once M3.5's structural 
 
 ### M4 — Spawn flow + fleet view (the demo moment)
 
-**Status:** Pending — depends on M3.9.
+**Status:** ✅ All 8 phases shipped. v0.7.0 (Phases 1–6: schema, service, proto, handlers, deploy modal, fleet page) + v0.7.3 (Phase 7: first integration smoke against live Fly + PAT → org-scoped token swap) + v0.7.5 (Phase 8 hardening: transactional spawn writes via `agents.Transactor` + `WithSpawnTx`; `agents_handler_test.go` with 13-case sentinel→Connect-code mapping pinning the public wire contract; secrets-row policy pinned in code at the `InsertSecret` call site). Sequencing note (historical): this milestone landed *before* M3.9 against `localhost` rather than after a deployed substrate; the failure modes M3.9 was originally meant to flush (CORS, cookie domain, JWKS reachability across origins) didn't surface because M3.9's artefact PR (v0.7.4) carried them out cleanly post-hoc.
 
 **Goal:** blueprint §10 end-to-end. Admin clicks "Deploy" on a Hermes card → wizard collects name + provider + API key + model → backend creates `AgentInstance` row → `FlyDeployTarget.spawn()` creates the Fly app + secrets + machine → on `/health` passing, status flips to `running` → admin redirects to `/fleet` and sees the new agent.
 
@@ -151,7 +152,7 @@ Five milestones to a demoable v1 (M3.9 promoted from §4 once M3.5's structural 
 
 **Out of scope.** Stop / start / destroy lifecycle (covered in v1.5 per blueprint §14, but a basic "destroy" should probably bundle in here — TBD in plan). Skills, tools, memory, audit log — all explicitly deferred per §13.
 
-**Plan doc:** `docs/plans/spawn-flow.md`.
+**Plan doc:** `docs/executing/spawn-flow.md` (per-phase completions under `docs/completions/spawn-flow-phase-{1..6}.md`; Phase 7 runbook at `docs/completions/spawn-flow-phase-7-runbook.md`).
 
 ---
 
@@ -168,7 +169,9 @@ Explicitly *not* in the M1–M4 sequence:
 
 ## 5. Definition of done for "demoable v1"
 
-After M4 lands, the demo we can give cold:
+**Status as of 2026-04-26: ✅ met.** All seven steps below are reachable against the deployed URLs (`corellia.fly.dev` BE, Vercel-hosted FE) following M3.9 (v0.7.4) + M4 Phase 8 (v0.7.5). The cold-browser walkthrough as a *recorded artefact* is the only loose thread — useful for the next preview-environment setup or a teammate's first run-through, but not gating v1's shippability.
+
+The demo we can give cold:
 
 1. Open the deployed FE in a browser. Sign in.
 2. Onboarding wizard captures name + workspace name. Dashboard appears.

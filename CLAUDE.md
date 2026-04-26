@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Corellia is a control plane for AI agents — spawn, deploy, govern, and manage agents across any model, provider, or harness framework. v1 is a hackathon-scoped MVP: one harness (Hermes), one deploy target (Fly.io), Supabase auth, Go backend + Next.js frontend.
 
-**Current state: scaffolding phase.** Backend is scaffolded through the `GetCurrentUser` RPC pipeline plus an ES256/JWKS auth middleware and an `auth.users` → `public.users` provisioning trigger; frontend is scaffolded end-to-end through sign-in + dashboard. No Dockerfile/fly.toml yet. Nothing is deployed. The historical step-by-step recipes live under `docs/archive/{backend,frontend}-scaffolding.md`; live code is authoritative.
+**Live code is authoritative.** When any doc under `docs/` (architecture, scaffolding recipes, prior plans) conflicts with what's in the codebase, the codebase wins. `docs/changelog.md` is the moving record of what's shipped and why; this file stays still.
 
 ## Doc hierarchy (read these when context is needed)
 
@@ -14,17 +14,16 @@ Precedence — the higher doc wins on conflict:
 
 1. `docs/blueprint.md` — product architecture, data model (§9), **architecture rules (§11)**, MVP scope (§1)
 2. `docs/stack.md` — tech picks with rationale, monorepo layout (§2), **implementation rules (§11)**, env vars (§8)
-3. `docs/archive/backend-scaffolding.md` / `docs/frontend-scaffolding.md` — step-by-step recipes with starter code; backend's is archival (live code supersedes), frontend's is still live as the FE half is the more recent scaffold
-4. `docs/vision.md` — product framing (admin/policy-setter model, "garage of harnesses")
+3. `docs/vision.md` — product framing (admin/policy-setter model, "garage of harnesses")
 
-Scaffolding docs are recipes; once a file is scaffolded, the live code is authoritative. Update the docs only if the *approach* changes before scaffolding. (Backend hit that point in 0.1.0 — hence the archive move; frontend is converging on it.)
+Scaffolding recipes under `docs/archive/` are historical reference for how the codebase came to be — useful when reconstructing intent, never load-bearing for current behavior. `docs/changelog.md` is the diff-log between what the docs say and what the code does at any given milestone.
 
 ## Architecture at a glance
 
 ```
 corellia/
 ├── backend/         Go 1.26 service (Chi + Connect-go + pgx + sqlc)
-├── frontend/        Next.js 15 App Router (not yet scaffolded)
+├── frontend/        Next.js 15 App Router (Tailwind + shadcn)
 ├── shared/proto/    Proto IDL — the only FE↔BE contract surface
 ├── docs/            vision, blueprint, stack, scaffolding recipes
 ├── go.work          Go workspace: `use ./backend`
@@ -39,9 +38,9 @@ Go module path: `github.com/hejijunhao/corellia/backend` (where scaffolding docs
 - `config/` — env var loading via `caarlos0/env`. The **only** place that touches `os.Getenv`. Panics on missing required vars at startup.
 - `db/` — sqlc-generated types + queries. `pool.go` is the only hand-written file here; everything else is generated from `migrations/` + `queries/`.
 - `gen/corellia/v1/` — buf-generated Go from `shared/proto/`. Never hand-edit.
-- `httpsrv/` — Chi router, CORS, auth middleware wiring, Connect handler mounts. Handlers are thin (<30 lines); they parse → call domain → marshal response.
-- `users/` — domain service (first example). Domain packages own business logic.
-- Planned packages (blueprint §9, not yet present): `agents/`, `adapters/`, `deploy/`.
+- `httpsrv/` — Chi router, CORS, auth middleware wiring, Connect handler mounts. Handlers are thin (<30 lines); they parse → call domain → marshal response. Handler tests use small in-package interfaces (`agentsService`, `userIdentityLookup`) so the service can be faked without a DB.
+- `deploy/` — `DeployTarget` interface plus its concrete implementations and the `Resolver` indirection that hands one to a caller. The **only** package that imports infrastructure-provider SDKs (per architecture rule §11.1). Deferred targets exist as `NotImplemented` stubs (rule §11.4).
+- Domain packages (e.g. `users/`, `organizations/`, `agents/`, `adapters/`) — each owns its business logic, exposes a `Service` consumed by `httpsrv/`, defines its own sentinel errors, and accepts narrow private interfaces (e.g. `agentQueries`, `Transactor`) so tests fake without touching `db.Queries` directly. New domains land here as new sub-packages.
 
 ### The contract boundary
 
@@ -74,6 +73,7 @@ From `blueprint.md` §11 and `stack.md` §11. The non-obvious ones:
 8. **All env vars read through `internal/config/`.** Config validates and panics at startup; domain code receives a typed `Config` struct.
 9. **Business logic never in Connect handlers.** Handlers stay <30 lines — parse, call domain, marshal.
 10. **Frontend never reaches Supabase for application data** — RPCs only.
+11. **Deploy-target credentials never live in Corellia's database.** Raw credentials live in a secret store; DB rows reference them via opaque `storage_ref`. When v1.5 introduces user-supplied targets, acquisition uses the provider's narrowest-capability mechanism (Fly OAuth → org-scoped macaroon, AWS STS → assumed role, etc.). **Never accept PATs from users.** Paste-as-fallback only where no narrower mechanism exists, with capability scope labelled in the UI.
 
 ## Common commands
 
@@ -109,8 +109,8 @@ air
 # Or plain build/run
 cd backend && go build -o bin/api ./cmd/api && ./bin/api
 
-# Once both halves exist, from repo root:
-overmind start                # reads Procfile; boots FE + BE together
+# From repo root — boots FE + BE together with hot reload:
+overmind start                # reads Procfile
 ```
 
 ### Testing + checks
@@ -118,9 +118,8 @@ overmind start                # reads Procfile; boots FE + BE together
 ```bash
 cd backend && go vet ./...
 cd backend && go test ./...                   # all packages
-cd backend && go test ./internal/users -run TestX   # single test
+cd backend && go test ./internal/agents -run TestSpawn   # single test
 
-# Once frontend/ exists:
 pnpm -C frontend type-check
 pnpm -C frontend lint
 pnpm -C frontend build

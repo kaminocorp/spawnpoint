@@ -174,6 +174,18 @@ func (f *fakeResolver) For(_ context.Context, _ string) (deploy.DeployTarget, er
 	return f.target, nil
 }
 
+// fakeTransactor satisfies agents.Transactor by running the closure
+// in-place against the test's fakeQueries — no real BeginTx, since
+// the fake's "DB" is just struct fields. The production PgxTransactor
+// is exercised end-to-end by the integration smoke, not unit tests.
+type fakeTransactor struct {
+	q *fakeQueries
+}
+
+func (f *fakeTransactor) WithSpawnTx(_ context.Context, fn func(agents.SpawnTx) error) error {
+	return fn(f.q)
+}
+
 // ---------- Helpers ----------
 
 func newSpawnReadyHarness() (*fakeQueries, *fakeAdapters, *fakeDeployTarget, *fakeResolver) {
@@ -239,7 +251,7 @@ func TestListAgentTemplates_HappyPath(t *testing.T) {
 		DefaultConfig: []byte(`{}`),
 	}
 	q := &fakeQueries{listRows: []db.ListAgentTemplatesRow{row}}
-	s := agents.NewService(q, &fakeAdapters{}, &fakeResolver{})
+	s := agents.NewService(q, &fakeAdapters{}, &fakeResolver{}, &fakeTransactor{q: q})
 
 	got, err := s.ListAgentTemplates(context.Background())
 	if err != nil {
@@ -254,7 +266,8 @@ func TestListAgentTemplates_HappyPath(t *testing.T) {
 }
 
 func TestListAgentTemplates_Empty(t *testing.T) {
-	s := agents.NewService(&fakeQueries{listRows: nil}, &fakeAdapters{}, &fakeResolver{})
+	q := &fakeQueries{listRows: nil}
+	s := agents.NewService(q, &fakeAdapters{}, &fakeResolver{}, &fakeTransactor{q: q})
 
 	got, err := s.ListAgentTemplates(context.Background())
 	if err != nil {
@@ -276,7 +289,7 @@ type _ = struct{}
 
 func TestSpawn_HappyPath(t *testing.T) {
 	q, a, d, r := newSpawnReadyHarness()
-	s := agents.NewService(q, a, r)
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 	in := validSpawnInput()
 	got, err := s.Spawn(context.Background(), in)
@@ -307,7 +320,7 @@ func TestSpawn_HappyPath(t *testing.T) {
 func TestSpawn_TemplateNotFound(t *testing.T) {
 	q, a, _, r := newSpawnReadyHarness()
 	q.tmplErr = pgx.ErrNoRows
-	s := agents.NewService(q, a, r)
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 	_, err := s.Spawn(context.Background(), validSpawnInput())
 	if !errors.Is(err, agents.ErrTemplateNotFound) {
@@ -327,7 +340,7 @@ func TestSpawn_InvalidName(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.label, func(t *testing.T) {
 			q, a, _, r := newSpawnReadyHarness()
-			s := agents.NewService(q, a, r)
+			s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 			in := validSpawnInput()
 			in.Name = tc.name
@@ -341,7 +354,7 @@ func TestSpawn_InvalidName(t *testing.T) {
 
 func TestSpawn_InvalidProvider(t *testing.T) {
 	q, a, _, r := newSpawnReadyHarness()
-	s := agents.NewService(q, a, r)
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 	in := validSpawnInput()
 	in.Provider = "google"
@@ -353,7 +366,7 @@ func TestSpawn_InvalidProvider(t *testing.T) {
 
 func TestSpawn_MissingAPIKey(t *testing.T) {
 	q, a, _, r := newSpawnReadyHarness()
-	s := agents.NewService(q, a, r)
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 	in := validSpawnInput()
 	in.APIKey = ""
@@ -366,7 +379,7 @@ func TestSpawn_MissingAPIKey(t *testing.T) {
 func TestSpawn_FlyFailureRedacted(t *testing.T) {
 	q, a, d, r := newSpawnReadyHarness()
 	d.spawnErr = errors.New("fly: 429 Too Many Requests at https://api.fly.io/v1/secrets/abc123")
-	s := agents.NewService(q, a, r)
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 	_, err := s.Spawn(context.Background(), validSpawnInput())
 	if !errors.Is(err, agents.ErrFlyAPI) {
@@ -383,7 +396,7 @@ func TestSpawn_FlyFailureRedacted(t *testing.T) {
 func TestSpawn_TargetUnavailable(t *testing.T) {
 	q, a, _, r := newSpawnReadyHarness()
 	r.err = deploy.ErrTargetNotConfigured
-	s := agents.NewService(q, a, r)
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 	_, err := s.Spawn(context.Background(), validSpawnInput())
 	if !errors.Is(err, agents.ErrTargetUnavailable) {
@@ -409,7 +422,7 @@ func TestSpawnN_NamingAndCount(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.label, func(t *testing.T) {
 			q, a, d, r := newSpawnReadyHarness()
-			s := agents.NewService(q, a, r)
+			s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 			got, err := s.SpawnN(context.Background(), agents.SpawnNInput{
 				TemplateID:  uuid.New(),
@@ -445,7 +458,7 @@ func TestSpawnN_NamingAndCount(t *testing.T) {
 
 func TestSpawnN_LimitExceeded(t *testing.T) {
 	q, a, _, r := newSpawnReadyHarness()
-	s := agents.NewService(q, a, r)
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 	_, err := s.SpawnN(context.Background(), agents.SpawnNInput{
 		TemplateID:  uuid.New(),
@@ -464,7 +477,7 @@ func TestSpawnN_LimitExceeded(t *testing.T) {
 
 func TestSpawnN_ZeroCount(t *testing.T) {
 	q, a, _, r := newSpawnReadyHarness()
-	s := agents.NewService(q, a, r)
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 	_, err := s.SpawnN(context.Background(), agents.SpawnNInput{
 		TemplateID:  uuid.New(),
@@ -493,7 +506,7 @@ func TestStop_RunningTransitions(t *testing.T) {
 		TemplateName:      "Hermes",
 		ModelProvider:     "openrouter",
 	}
-	s := agents.NewService(q, a, r)
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 	_, err := s.Stop(context.Background(), q.getInst.ID, uuid.New())
 	if err != nil {
@@ -513,7 +526,7 @@ func TestStop_NonRunningNoOp(t *testing.T) {
 		ID:     uuid.New(),
 		Status: "pending",
 	}
-	s := agents.NewService(q, a, r)
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 	_, err := s.Stop(context.Background(), q.getInst.ID, uuid.New())
 	if err != nil {
@@ -530,7 +543,7 @@ func TestStop_NonRunningNoOp(t *testing.T) {
 func TestStop_InstanceNotFound(t *testing.T) {
 	q, a, _, r := newSpawnReadyHarness()
 	q.getInstErr = pgx.ErrNoRows
-	s := agents.NewService(q, a, r)
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 	_, err := s.Stop(context.Background(), uuid.New(), uuid.New())
 	if !errors.Is(err, agents.ErrInstanceNotFound) {
@@ -547,7 +560,7 @@ func TestDestroy_HappyPath(t *testing.T) {
 		DeployExternalRef: &ref,
 		ModelProvider:     "openrouter",
 	}
-	s := agents.NewService(q, a, r)
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 	_, err := s.Destroy(context.Background(), q.getInst.ID, uuid.New())
 	if err != nil {
@@ -567,7 +580,7 @@ func TestDestroy_AlreadyDestroyedNoOp(t *testing.T) {
 		ID:     uuid.New(),
 		Status: "destroyed",
 	}
-	s := agents.NewService(q, a, r)
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 	_, err := s.Destroy(context.Background(), q.getInst.ID, uuid.New())
 	if err != nil {
@@ -598,7 +611,7 @@ func TestList_ProtoConversion(t *testing.T) {
 			TemplateName:  "Hermes",
 		},
 	}
-	s := agents.NewService(q, a, r)
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 	got, err := s.List(context.Background(), uuid.New())
 	if err != nil {
@@ -617,7 +630,7 @@ func TestList_ProtoConversion(t *testing.T) {
 
 func TestList_Empty(t *testing.T) {
 	q, a, _, r := newSpawnReadyHarness()
-	s := agents.NewService(q, a, r)
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 	got, err := s.List(context.Background(), uuid.New())
 	if err != nil {
@@ -651,7 +664,7 @@ func TestReapStalePending(t *testing.T) {
 	want := []uuid.UUID{uuid.New(), uuid.New()}
 	q, a, _, r := newSpawnReadyHarness()
 	q.reapIDs = want
-	s := agents.NewService(q, a, r)
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
 
 	got, err := s.ReapStalePending(context.Background())
 	if err != nil {

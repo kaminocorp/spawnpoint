@@ -88,17 +88,20 @@ type Service struct {
 	queries  agentQueries
 	adapters adapterReader
 	resolver deploy.Resolver
+	txr      Transactor
 }
 
-// NewService wires the spawn lifecycle's three collaborators.
+// NewService wires the spawn lifecycle's four collaborators.
 //
 // Plan-vs-reality drift: spawn-flow plan decision 35 specifies a
-// map[string]deploy.DeployTarget here, predating M3.5's deploy.Resolver
-// indirection (0.5.1). The Resolver is the post-M3.5 architecture and
-// the M3.5 plan explicitly named M4 as its first reader; passing a
-// resolver instead of a raw map is the forward-correction.
-func NewService(queries agentQueries, adapters adapterReader, resolver deploy.Resolver) *Service {
-	return &Service{queries: queries, adapters: adapters, resolver: resolver}
+// map[string]deploy.DeployTarget for the third arg, predating M3.5's
+// deploy.Resolver indirection (0.5.1). The Resolver is the post-M3.5
+// architecture and the M3.5 plan explicitly named M4 as its first
+// reader; passing a resolver instead of a raw map is the
+// forward-correction. The txr arg is a Phase 8 addition (decision 27
+// step 6 deferred from M4 ship); see transactor.go.
+func NewService(queries agentQueries, adapters adapterReader, resolver deploy.Resolver, txr Transactor) *Service {
+	return &Service{queries: queries, adapters: adapters, resolver: resolver, txr: txr}
 }
 
 // SpawnInput is the resolved, post-auth caller intent. The handler
@@ -141,10 +144,11 @@ func (s *Service) ListAgentTemplates(ctx context.Context) ([]*corelliav1.AgentTe
 }
 
 // Spawn implements decision 27's order of operations. The DB writes
-// (steps 5–7) are sequential rather than transactional in v1 — see
-// Phase 2 completion doc §"Decision 27 step 6 deferred". The Fly call
-// (step 8) sits *outside* any tx so a 1–5s network operation doesn't
-// hold a DB connection.
+// (steps 5–7) run inside one tx via s.txr.WithTx so the instance row
+// and its audit secret row commit atomically — pre-Phase-8 they were
+// sequential, and a process crash between them could leave one without
+// the other. The Fly call (step 8) sits *outside* the tx so a 1–5s
+// network operation doesn't hold a DB connection.
 func (s *Service) Spawn(ctx context.Context, in SpawnInput) (*corelliav1.AgentInstance, error) {
 	if err := validateSpawn(in.Name, in.Provider, in.ModelName, in.APIKey); err != nil {
 		return nil, err
@@ -155,30 +159,47 @@ func (s *Service) Spawn(ctx context.Context, in SpawnInput) (*corelliav1.AgentIn
 		return nil, err
 	}
 
-	instance, err := s.queries.InsertAgentInstance(ctx, db.InsertAgentInstanceParams{
-		Name:            in.Name,
-		AgentTemplateID: tmpl.ID,
-		OwnerUserID:     in.OwnerUserID,
-		OrgID:           in.OrgID,
-		DeployTargetID:  targetRow.ID,
-		ModelProvider:   in.Provider,
-		ModelName:       in.ModelName,
-		ConfigOverrides: []byte(`{}`),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("agents: insert instance: %w", err)
-	}
+	var instance db.AgentInstance
+	if err := s.txr.WithSpawnTx(ctx, func(q SpawnTx) error {
+		var qErr error
+		instance, qErr = q.InsertAgentInstance(ctx, db.InsertAgentInstanceParams{
+			Name:            in.Name,
+			AgentTemplateID: tmpl.ID,
+			OwnerUserID:     in.OwnerUserID,
+			OrgID:           in.OrgID,
+			DeployTargetID:  targetRow.ID,
+			ModelProvider:   in.Provider,
+			ModelName:       in.ModelName,
+			ConfigOverrides: []byte(`{}`),
+		})
+		if qErr != nil {
+			return fmt.Errorf("agents: insert instance: %w", qErr)
+		}
 
-	// Audit row — records *what* secret was set, not its value. Decision
-	// 6: storage_ref is opaque. We synthesise it from instance.ID + key
-	// pre-Fly so the row is insertable before the deploy target assigns
-	// an external ref. Future fetch path: deploy target API + (app, key).
-	if _, err := s.queries.InsertSecret(ctx, db.InsertSecretParams{
-		AgentInstanceID: instance.ID,
-		KeyName:         "CORELLIA_MODEL_API_KEY",
-		StorageRef:      fmt.Sprintf("%s:%s:CORELLIA_MODEL_API_KEY", deployer.Kind(), instance.ID),
+		// Audit row — records *what* secret was set, not its value.
+		// Decision 6: storage_ref is opaque. Synthesised from
+		// instance.ID + key pre-Fly so the row is insertable before
+		// the deploy target assigns an external ref. Future fetch
+		// path: deploy target API + (app, key).
+		//
+		// Policy (Phase 8 pin): one secrets row per *secret-shaped*
+		// CORELLIA_* env var, not per CORELLIA_* env var. Today
+		// CORELLIA_MODEL_API_KEY is the only credential the spawn
+		// flow forwards; CORELLIA_AGENT_ID / CORELLIA_MODEL_PROVIDER
+		// / CORELLIA_MODEL_NAME are configuration, not secrets, and
+		// don't get audit rows. New secret-shaped vars (e.g.
+		// CORELLIA_TOOL_AUTH_TOKEN in v1.5+) each insert their own
+		// row here.
+		if _, qErr = q.InsertSecret(ctx, db.InsertSecretParams{
+			AgentInstanceID: instance.ID,
+			KeyName:         "CORELLIA_MODEL_API_KEY",
+			StorageRef:      fmt.Sprintf("%s:%s:CORELLIA_MODEL_API_KEY", deployer.Kind(), instance.ID),
+		}); qErr != nil {
+			return fmt.Errorf("agents: insert secret audit row: %w", qErr)
+		}
+		return nil
 	}); err != nil {
-		return nil, fmt.Errorf("agents: insert secret audit row: %w", err)
+		return nil, err
 	}
 
 	// Step 8 — outside any tx. Spawn errors leave the row in 'pending';

@@ -21,12 +21,27 @@ type userIdentityLookup interface {
 	CallerIdentity(ctx context.Context) (userID, orgID uuid.UUID, err error)
 }
 
+// agentsService is the slim agents.Service surface this handler needs.
+// Faked in agents_handler_test.go so the sentinel → Connect-code
+// mapping (agentsErrToConnect, the public wire contract) can be
+// tested without a DB or a deploy-target stack. *agents.Service
+// satisfies it structurally.
+type agentsService interface {
+	ListAgentTemplates(ctx context.Context) ([]*corelliav1.AgentTemplate, error)
+	Spawn(ctx context.Context, in agents.SpawnInput) (*corelliav1.AgentInstance, error)
+	SpawnN(ctx context.Context, in agents.SpawnNInput) ([]*corelliav1.AgentInstance, error)
+	List(ctx context.Context, orgID uuid.UUID) ([]*corelliav1.AgentInstance, error)
+	Get(ctx context.Context, instanceID, orgID uuid.UUID) (*corelliav1.AgentInstance, error)
+	Stop(ctx context.Context, instanceID, orgID uuid.UUID) (*corelliav1.AgentInstance, error)
+	Destroy(ctx context.Context, instanceID, orgID uuid.UUID) (*corelliav1.AgentInstance, error)
+}
+
 type AgentsHandler struct {
-	svc   *agents.Service
+	svc   agentsService
 	users userIdentityLookup
 }
 
-func NewAgentsHandler(svc *agents.Service, users userIdentityLookup) *AgentsHandler {
+func NewAgentsHandler(svc agentsService, users userIdentityLookup) *AgentsHandler {
 	return &AgentsHandler{svc: svc, users: users}
 }
 

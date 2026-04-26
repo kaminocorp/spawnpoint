@@ -68,7 +68,7 @@ func main() {
 		"fly_org", cfg.FlyOrgSlug)
 	deployResolver := deploy.NewStaticResolver(deployTargets)
 
-	agentsSvc := agents.NewService(queries, adaptersSvc, deployResolver)
+	agentsSvc := agents.NewService(queries, adaptersSvc, deployResolver, agents.NewPgxTransactor(pool))
 
 	// Boot-time stale-pending sweep (spawn-flow plan decision 32). Reaps
 	// any agent_instances row stuck in 'pending' for >5 min — typically

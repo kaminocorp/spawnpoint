@@ -342,6 +342,17 @@ These are blocking rules. Breaking them is treated as a defect.
    acceptable; a UI button that does nothing is not.
 5. **No forking of upstream harnesses.** Capabilities are added via adapter
    wrappers or sidecars, never by modifying upstream source.
+6. **Deploy-target credentials never live in Corellia's database.** Raw
+   credentials live in a secret store; DB rows reference them via opaque
+   `storage_ref` (M4 decision 6, applied to deploy-target credentials the
+   same way it applies to per-instance secrets). When v1.5 introduces
+   user-supplied targets, the acquisition flow uses the provider's
+   narrowest-capability mechanism — Fly OAuth → org-scoped macaroon, AWS
+   STS → assumed-role with an external ID, etc. **Never accept PATs from
+   users.** Paste-as-fallback is acceptable only when no narrower
+   mechanism exists, with explicit capability scope labelled in the UI.
+   The macaroon/role caveats define the capability contract; the
+   adapter declares the minimum set it needs.
 
 ---
 
