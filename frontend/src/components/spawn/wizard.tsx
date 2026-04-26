@@ -648,6 +648,7 @@ function deploymentSummaryRows(d: DeploymentFormValues): ReadonlyArray<{
     { label: "REPLICAS", value: String(d.desiredReplicas) },
     { label: "RESTART", value: restart },
     { label: "LIFECYCLE", value: d.lifecycleMode },
+    { label: "CHAT", value: d.chatEnabled ? "enabled" : "disabled" },
   ];
 }
 
@@ -663,6 +664,7 @@ function deployConfigFromFields(d: DeploymentFormValues): DeployConfig {
     lifecycleMode: d.lifecycleMode,
     desiredReplicas: d.desiredReplicas,
     volumeSizeGb: d.volumeSizeGb,
+    chatEnabled: d.chatEnabled,
   };
 }
 

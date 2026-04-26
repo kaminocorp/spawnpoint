@@ -27,6 +27,12 @@ service AgentsService {
   rpc ResizeAgentReplicas(ResizeAgentReplicasRequest) returns (ResizeAgentReplicasResponse);
   rpc ResizeAgentVolume(ResizeAgentVolumeRequest) returns (ResizeAgentVolumeResponse);
   rpc BulkUpdateAgentDeployConfig(BulkUpdateAgentDeployConfigRequest) returns (BulkUpdateAgentDeployConfigResponse);
+
+  // M-chat Phase 5 — proxied chat turn to the per-instance sidecar.
+  // Plan decision 11: the FE never talks to the sidecar directly;
+  // the bearer token stays on the BE and the round-trip is the single
+  // audit point for who chatted with what (post-v1.5 audit pillar).
+  rpc ChatWithAgent(ChatWithAgentRequest) returns (ChatWithAgentResponse);
 }
 
 // ModelProvider is the (closed) v1 set. Adding values is a non-breaking
@@ -74,11 +80,12 @@ message AgentTemplate {
   string description = 3;
 }
 
-// DeployConfig is the wire shape of the nine fleet-control fields.
-// Mirrors deploy.DeployConfig (Go) and the nine columns added in
-// migration 20260426160000_fleet_control.sql. Zero values mean "use
-// defaults" — the service layer's WithDefaults() / Validate() owns
-// the canonicalisation (M5 plan decision 5).
+// DeployConfig is the wire shape of the nine fleet-control fields plus
+// the M-chat chat_enabled flag. Mirrors deploy.DeployConfig (Go) and
+// the columns added in migration 20260426160000_fleet_control.sql +
+// 20260427120000_chat_enabled.sql. Zero values mean "use defaults" —
+// the service layer's WithDefaults() / Validate() owns the
+// canonicalisation (M5 plan decision 5).
 message DeployConfig {
   string region = 1;
   string cpu_kind = 2;
@@ -89,6 +96,13 @@ message DeployConfig {
   string lifecycle_mode = 7;
   int32 desired_replicas = 8;
   int32 volume_size_gb = 9;
+  // M-chat: spawn wizard's default-on "Enable chat" checkbox. When
+  // false, the machine has no services block and no sidecar process
+  // (plan decision 6). The bool zero is false — the handler layer is
+  // the source of truth for the default (plan decision 6: DEFAULT TRUE
+  // lives at the migration layer; the wire default is the
+  // wizard-checkbox value, carried explicitly).
+  bool chat_enabled = 10;
 }
 
 // Region is Corellia's projection of fly.Region — re-exporting fly.Region
@@ -222,6 +236,11 @@ message AgentInstance {
   // one per replica (M5 plan decision 8).
   DriftSummary drift_summary = 22;
   repeated VolumeRef volumes = 23;
+
+  // M-chat: whether the sidecar was enabled at spawn time. Populated
+  // on the Get path (GetAgentInstanceByID widens in Phase 3); list
+  // path leaves it at false until the list query is widened in Phase 6.
+  bool chat_enabled = 24;
 }
 
 message SpawnAgentRequest {
@@ -370,4 +389,29 @@ message BulkUpdateAgentDeployConfigRequest {
 }
 message BulkUpdateAgentDeployConfigResponse {
   repeated BulkResult results = 1;
+}
+
+// M-chat Phase 5 — ChatWithAgent RPC messages.
+
+// ChatWithAgentRequest carries the minimal inputs for a proxied chat
+// turn. session_id is a client-generated UUID (stored in sessionStorage
+// per-tab) that Hermes uses to key its per-conversation SQLite state.
+// The BE never validates the session_id beyond non-empty; it is opaque
+// to Corellia and meaningful only to the sidecar.
+message ChatWithAgentRequest {
+  string instance_id = 1;
+  // session_id is the per-tab conversation key (plan decision 3).
+  // Client-generated UUID stored in sessionStorage keyed by instance id.
+  string session_id = 2;
+  // Single-turn user message. Multi-turn history is threaded via session_id
+  // (the sidecar's SQLite persists the full conversation). v1.6 adds
+  // streaming; v1 is always a single POST/response round-trip (anti-scope §5).
+  string message = 3;
+}
+
+message ChatWithAgentResponse {
+  // The agent's reply. Non-empty on success. The sidecar may return
+  // richer fields in v1.6 (usage, tool_calls, etc.); adding them is a
+  // non-breaking proto extension.
+  string content = 1;
 }

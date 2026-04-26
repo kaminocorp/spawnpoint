@@ -18,13 +18,16 @@ import (
 
 // fakeAgentsSvc satisfies agentsService. A single err field drives the
 // generic mapping path; per-method knobs (updateResult, bulkResults,
-// regions) feed the M5 happy-path tests so one fake covers every RPC.
+// regions, chatContent, chatErr) feed the M5 + M-chat happy-path tests
+// so one fake covers every RPC.
 type fakeAgentsSvc struct {
 	err          error
 	updateResult *agents.UpdateResult
 	bulkResults  []agents.BulkResult
 	regions      []deploy.Region
 	placement    deploy.PlacementResult
+	chatContent  string
+	chatErr      error
 }
 
 func (f *fakeAgentsSvc) ListAgentTemplates(_ context.Context) ([]*corelliav1.AgentTemplate, error) {
@@ -133,6 +136,15 @@ func (f *fakeAgentsSvc) BulkUpdateDeployConfig(
 		return nil, f.err
 	}
 	return f.bulkResults, nil
+}
+
+func (f *fakeAgentsSvc) ChatWithAgent(
+	_ context.Context, _, _ uuid.UUID, _, _ string,
+) (string, error) {
+	if f.chatErr != nil {
+		return "", f.chatErr
+	}
+	return f.chatContent, nil
 }
 
 // fakeUserLookup satisfies userIdentityLookup. Returns fresh UUIDs on
@@ -469,5 +481,87 @@ func TestListDeploymentRegions_HappyPath(t *testing.T) {
 	}
 	if resp.Msg.GetRegions()[0].GetCode() != "iad" {
 		t.Errorf("regions[0].code: got %s, want iad", resp.Msg.GetRegions()[0].GetCode())
+	}
+}
+
+// M-chat Phase 5 handler tests. The sentinel-to-Connect-code mapping
+// table covers chat sentinels via the existing TestAgentsErrToConnect
+// mechanism; these tests complement with the ChatWithAgent-specific
+// paths: happy-path content forwarding and the bad-UUID fast path.
+
+func TestChatWithAgent_SentinelMapping(t *testing.T) {
+	cases := []struct {
+		name     string
+		chatErr  error
+		wantCode connect.Code
+	}{
+		// plan §4 Phase 5 sentinel mapping table.
+		{"ErrChatDisabled → FailedPrecondition", agents.ErrChatDisabled, connect.CodeFailedPrecondition},
+		{"ErrChatUnreachable → Unavailable", agents.ErrChatUnreachable, connect.CodeUnavailable},
+		{"ErrChatAuth → Internal (redacted)", agents.ErrChatAuth, connect.CodeInternal},
+		// InstanceNotFound from the service layer surfaces as NotFound.
+		{"ErrInstanceNotFound → NotFound", agents.ErrInstanceNotFound, connect.CodeNotFound},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := NewAgentsHandler(
+				&fakeAgentsSvc{chatErr: tc.chatErr},
+				&fakeUserLookup{},
+			)
+			req := connect.NewRequest(&corelliav1.ChatWithAgentRequest{
+				InstanceId: uuid.New().String(),
+				SessionId:  uuid.New().String(),
+				Message:    "hello",
+			})
+			_, err := h.ChatWithAgent(context.Background(), req)
+			if err == nil {
+				t.Fatal("want error, got nil")
+			}
+			if got := connect.CodeOf(err); got != tc.wantCode {
+				t.Errorf("code: got %v, want %v (err=%v)", got, tc.wantCode, err)
+			}
+		})
+	}
+}
+
+// TestChatWithAgent_HappyPath — content string is forwarded verbatim.
+func TestChatWithAgent_HappyPath(t *testing.T) {
+	want := "I am Hermes, your AI assistant."
+	h := NewAgentsHandler(
+		&fakeAgentsSvc{chatContent: want},
+		&fakeUserLookup{},
+	)
+	req := connect.NewRequest(&corelliav1.ChatWithAgentRequest{
+		InstanceId: uuid.New().String(),
+		SessionId:  uuid.New().String(),
+		Message:    "hello",
+	})
+	resp, err := h.ChatWithAgent(context.Background(), req)
+	if err != nil {
+		t.Fatalf("ChatWithAgent: %v", err)
+	}
+	if got := resp.Msg.GetContent(); got != want {
+		t.Errorf("content: got %q, want %q", got, want)
+	}
+}
+
+// TestChatWithAgent_BadInstanceID — malformed UUID returns NotFound
+// before the service is called (same pattern as the other lifecycle handlers).
+func TestChatWithAgent_BadInstanceID(t *testing.T) {
+	h := NewAgentsHandler(&fakeAgentsSvc{}, &fakeUserLookup{})
+	req := connect.NewRequest(&corelliav1.ChatWithAgentRequest{
+		InstanceId: "not-a-uuid",
+		SessionId:  uuid.New().String(),
+		Message:    "hello",
+	})
+	_, err := h.ChatWithAgent(context.Background(), req)
+	if err == nil {
+		t.Fatal("want error, got nil")
+	}
+	if got := connect.CodeOf(err); got != connect.CodeNotFound {
+		t.Errorf("code: got %v, want NotFound", got)
+	}
+	if !errors.Is(err, agents.ErrInstanceNotFound) {
+		t.Errorf("want err to wrap ErrInstanceNotFound, got %v", err)
 	}
 }

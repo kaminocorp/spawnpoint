@@ -102,7 +102,7 @@ func main() {
 	}()
 
 	for i := 0; i < healthPollMax; i++ {
-		h, err := target.Health(ctx, res.ExternalRef)
+		h, err := target.Health(ctx, res.ExternalRef, false /* smoke-deploy spawns chat-disabled */)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "health:", err)
 		} else {

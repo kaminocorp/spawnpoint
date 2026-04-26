@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"io"
+	"net/http"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -15,6 +18,35 @@ import (
 	"github.com/hejijunhao/corellia/backend/internal/deploy"
 	corelliav1 "github.com/hejijunhao/corellia/backend/internal/gen/corellia/v1"
 )
+
+// chatHTTPFake records the last request and returns a scripted
+// response. M-chat Phase 4 plan: "table-driven tests with a
+// chatTransport interface stub (so the HTTP call is fakeable)".
+type chatHTTPFake struct {
+	respStatus int
+	respBody   string
+	doErr      error
+
+	calls   int32
+	lastReq *http.Request
+}
+
+func (f *chatHTTPFake) Do(req *http.Request) (*http.Response, error) {
+	atomic.AddInt32(&f.calls, 1)
+	f.lastReq = req
+	if f.doErr != nil {
+		return nil, f.doErr
+	}
+	status := f.respStatus
+	if status == 0 {
+		status = http.StatusOK
+	}
+	return &http.Response{
+		StatusCode: status,
+		Body:       io.NopCloser(strings.NewReader(f.respBody)),
+		Header:     make(http.Header),
+	}, nil
+}
 
 // ---------- Fakes ----------
 
@@ -200,6 +232,14 @@ type fakeDeployTarget struct {
 	ensureVolumeErr     error
 	extendVolumeRestart bool
 	extendVolumeErr     error
+
+	// M-chat Phase 4: GetAppSecret stub. getAppSecretValues is keyed
+	// by secret key name; missing keys return ("", nil) — i.e.
+	// "secret name registered but value not surfaced", same shape
+	// flapsClientFake produces.
+	getAppSecretValues map[string]string
+	getAppSecretErr    error
+	getAppSecretCalls  int32
 }
 
 func (f *fakeDeployTarget) Kind() string { return f.kind }
@@ -220,7 +260,7 @@ func (f *fakeDeployTarget) Destroy(_ context.Context, _ string) error {
 	atomic.AddInt32(&f.destroyCount, 1)
 	return f.destroyErr
 }
-func (f *fakeDeployTarget) Health(_ context.Context, _ string) (deploy.HealthStatus, error) {
+func (f *fakeDeployTarget) Health(_ context.Context, _ string, _ bool) (deploy.HealthStatus, error) {
 	idx := int(atomic.AddInt32(&f.healthIdx, 1) - 1)
 	if f.healthErr != nil {
 		return deploy.HealthUnknown, f.healthErr
@@ -287,6 +327,14 @@ func (f *fakeDeployTarget) EnsureVolume(_ context.Context, _ string, region stri
 }
 func (f *fakeDeployTarget) ExtendVolume(_ context.Context, _ string, _ string, _ int) (bool, error) {
 	return f.extendVolumeRestart, f.extendVolumeErr
+}
+
+func (f *fakeDeployTarget) GetAppSecret(_ context.Context, _ string, key string) (string, error) {
+	atomic.AddInt32(&f.getAppSecretCalls, 1)
+	if f.getAppSecretErr != nil {
+		return "", f.getAppSecretErr
+	}
+	return f.getAppSecretValues[key], nil
 }
 
 // fakeResolver returns a single target keyed by Kind().
@@ -1382,4 +1430,183 @@ func (p *perIDQueries) GetAgentInstanceByID(_ context.Context, arg db.GetAgentIn
 		return row, nil
 	}
 	return db.GetAgentInstanceByIDRow{}, pgx.ErrNoRows
+}
+
+// ---------- M-chat Phase 4 — ChatWithAgent ----------
+
+// newChatReadyInstance returns a chat-enabled, running, Fly-backed
+// instance row. Tests mutate the fields they care about.
+func newChatReadyInstance() db.GetAgentInstanceByIDRow {
+	row := newReadyInstance("fly-app:corellia-agent-chatdev")
+	row.ChatEnabled = true
+	return row
+}
+
+func TestChatWithAgent_HappyPath(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newChatReadyInstance()
+	q.getInst = row
+	d.getAppSecretValues = map[string]string{
+		"CORELLIA_SIDECAR_AUTH_TOKEN": "tok-from-fly",
+	}
+	chat := &chatHTTPFake{
+		respStatus: http.StatusOK,
+		respBody:   `{"content":"pong"}`,
+	}
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q}, agents.WithChatHTTPClient(chat))
+
+	got, err := s.ChatWithAgent(context.Background(), row.ID, row.OrgID, "sess-1", "say pong")
+	if err != nil {
+		t.Fatalf("ChatWithAgent: %v", err)
+	}
+	if got != "pong" {
+		t.Errorf("content = %q, want %q", got, "pong")
+	}
+	if atomic.LoadInt32(&d.getAppSecretCalls) != 1 {
+		t.Errorf("GetAppSecret calls = %d, want 1", d.getAppSecretCalls)
+	}
+	if atomic.LoadInt32(&chat.calls) != 1 {
+		t.Errorf("chatHTTP.Do calls = %d, want 1", chat.calls)
+	}
+	if chat.lastReq == nil {
+		t.Fatal("chatHTTP captured no request")
+	}
+	// Decision 12: URL is https://corellia-agent-<...>.fly.dev/chat.
+	wantURL := "https://corellia-agent-chatdev.fly.dev/chat"
+	if got := chat.lastReq.URL.String(); got != wantURL {
+		t.Errorf("URL = %q, want %q", got, wantURL)
+	}
+	// Decision 11: bearer token attached to every proxied request.
+	if got := chat.lastReq.Header.Get("Authorization"); got != "Bearer tok-from-fly" {
+		t.Errorf("Authorization = %q, want %q", got, "Bearer tok-from-fly")
+	}
+	if got := chat.lastReq.Header.Get("Content-Type"); got != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", got)
+	}
+}
+
+func TestChatWithAgent_ChatDisabled(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newChatReadyInstance()
+	row.ChatEnabled = false
+	q.getInst = row
+	chat := &chatHTTPFake{}
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q}, agents.WithChatHTTPClient(chat))
+
+	_, err := s.ChatWithAgent(context.Background(), row.ID, row.OrgID, "sess-1", "say pong")
+	if !errors.Is(err, agents.ErrChatDisabled) {
+		t.Fatalf("err: got %v, want ErrChatDisabled", err)
+	}
+	if atomic.LoadInt32(&d.getAppSecretCalls) != 0 {
+		t.Errorf("GetAppSecret calls = %d, want 0 (gate must precede secret read)", d.getAppSecretCalls)
+	}
+	if atomic.LoadInt32(&chat.calls) != 0 {
+		t.Errorf("chatHTTP.Do calls = %d, want 0 (gate must precede HTTP)", chat.calls)
+	}
+}
+
+func TestChatWithAgent_InstanceNotFound(t *testing.T) {
+	q, a, _, r := newSpawnReadyHarness()
+	q.getInstErr = pgx.ErrNoRows
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	_, err := s.ChatWithAgent(context.Background(), uuid.New(), uuid.New(), "sess-1", "msg")
+	if !errors.Is(err, agents.ErrInstanceNotFound) {
+		t.Fatalf("err: got %v, want ErrInstanceNotFound", err)
+	}
+}
+
+func TestChatWithAgent_PendingNoExternalRef(t *testing.T) {
+	q, a, _, r := newSpawnReadyHarness()
+	row := newChatReadyInstance()
+	row.DeployExternalRef = nil
+	q.getInst = row
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	_, err := s.ChatWithAgent(context.Background(), row.ID, row.OrgID, "sess-1", "msg")
+	if !errors.Is(err, agents.ErrInstanceNotFound) {
+		t.Fatalf("err: got %v, want ErrInstanceNotFound (pending row has no app)", err)
+	}
+}
+
+func TestChatWithAgent_SecretEmptyIsAuthFailure(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newChatReadyInstance()
+	q.getInst = row
+	// d.getAppSecretValues left nil → fake returns ("", nil),
+	// matching the Fly "secret name registered, value not surfaced"
+	// drift case the chat path treats as ErrChatAuth.
+	d.getAppSecretValues = map[string]string{}
+	chat := &chatHTTPFake{}
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q}, agents.WithChatHTTPClient(chat))
+
+	_, err := s.ChatWithAgent(context.Background(), row.ID, row.OrgID, "sess-1", "msg")
+	if !errors.Is(err, agents.ErrChatAuth) {
+		t.Fatalf("err: got %v, want ErrChatAuth", err)
+	}
+	if atomic.LoadInt32(&chat.calls) != 0 {
+		t.Errorf("chatHTTP.Do calls = %d, want 0 (no token → no proxy attempt)", chat.calls)
+	}
+}
+
+func TestChatWithAgent_SecretReadError(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newChatReadyInstance()
+	q.getInst = row
+	d.getAppSecretErr = errors.New("flaps: 503 Service Unavailable")
+	chat := &chatHTTPFake{}
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q}, agents.WithChatHTTPClient(chat))
+
+	_, err := s.ChatWithAgent(context.Background(), row.ID, row.OrgID, "sess-1", "msg")
+	if !errors.Is(err, agents.ErrChatUnreachable) {
+		t.Fatalf("err: got %v, want ErrChatUnreachable", err)
+	}
+}
+
+func TestChatWithAgent_Sidecar401(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newChatReadyInstance()
+	q.getInst = row
+	d.getAppSecretValues = map[string]string{
+		"CORELLIA_SIDECAR_AUTH_TOKEN": "stale-token",
+	}
+	chat := &chatHTTPFake{respStatus: http.StatusUnauthorized}
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q}, agents.WithChatHTTPClient(chat))
+
+	_, err := s.ChatWithAgent(context.Background(), row.ID, row.OrgID, "sess-1", "msg")
+	if !errors.Is(err, agents.ErrChatAuth) {
+		t.Fatalf("err: got %v, want ErrChatAuth (sidecar 401)", err)
+	}
+}
+
+func TestChatWithAgent_TransportError(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newChatReadyInstance()
+	q.getInst = row
+	d.getAppSecretValues = map[string]string{
+		"CORELLIA_SIDECAR_AUTH_TOKEN": "tok",
+	}
+	chat := &chatHTTPFake{doErr: errors.New("dial tcp: connection refused")}
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q}, agents.WithChatHTTPClient(chat))
+
+	_, err := s.ChatWithAgent(context.Background(), row.ID, row.OrgID, "sess-1", "msg")
+	if !errors.Is(err, agents.ErrChatUnreachable) {
+		t.Fatalf("err: got %v, want ErrChatUnreachable", err)
+	}
+}
+
+func TestChatWithAgent_Sidecar5xx(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newChatReadyInstance()
+	q.getInst = row
+	d.getAppSecretValues = map[string]string{
+		"CORELLIA_SIDECAR_AUTH_TOKEN": "tok",
+	}
+	chat := &chatHTTPFake{respStatus: http.StatusInternalServerError, respBody: `{"detail":"boom"}`}
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q}, agents.WithChatHTTPClient(chat))
+
+	_, err := s.ChatWithAgent(context.Background(), row.ID, row.OrgID, "sess-1", "msg")
+	if !errors.Is(err, agents.ErrChatUnreachable) {
+		t.Fatalf("err: got %v, want ErrChatUnreachable on non-2xx", err)
+	}
 }

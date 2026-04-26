@@ -28,6 +28,9 @@ export type DeploymentConfigValues = {
   lifecycleMode: LifecycleMode;
   desiredReplicas: number;
   volumeSizeGb: number;
+  // M-chat Phase 5: spawn wizard default-on "Enable chat" checkbox.
+  // Mirrors agent_instances.chat_enabled (migration 20260427120000).
+  chatEnabled: boolean;
 };
 
 /**
@@ -83,6 +86,7 @@ export const DEFAULT_DEPLOYMENT_VALUES: DeploymentConfigValues = {
   lifecycleMode: "always-on",
   desiredReplicas: 1,
   volumeSizeGb: 1,
+  chatEnabled: true,
 };
 
 /** Returns the preset matching (cpuKind, cpus, memoryMb) tuple, or undefined for off-preset values (Custom). */

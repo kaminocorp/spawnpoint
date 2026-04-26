@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -53,6 +55,13 @@ type flapsClientFake struct {
 	leaseErr     error
 	releaseErr   error
 
+	// M-chat Phase 4: GetAppSecrets stub. getSecretValues is keyed by
+	// secret name; missing keys return (nil, nil) — i.e. "secret
+	// exists but value not surfaced", the same shape Fly's API
+	// returns when showSecrets is denied. getSecretErr trumps both.
+	getSecretValues map[string]string
+	getSecretErr    error
+
 	calls map[string]int
 }
 
@@ -98,6 +107,19 @@ func (f *flapsClientFake) SetAppSecret(_ context.Context, _, _, _ string) (*fly.
 		return nil, f.setSecretErr
 	}
 	return &fly.SetAppSecretResp{}, nil
+}
+
+func (f *flapsClientFake) GetAppSecrets(_ context.Context, _, name string, _ *uint64, _ bool) (*fly.AppSecret, error) {
+	f.record("GetAppSecrets")
+	if f.getSecretErr != nil {
+		return nil, f.getSecretErr
+	}
+	val, ok := f.getSecretValues[name]
+	if !ok {
+		return &fly.AppSecret{Name: name}, nil
+	}
+	v := val
+	return &fly.AppSecret{Name: name, Value: &v}, nil
 }
 
 func (f *flapsClientFake) Launch(_ context.Context, _ string, _ fly.LaunchMachineInput) (*fly.Machine, error) {
@@ -706,8 +728,194 @@ func TestMachineConfigFor_ChatEnabledEmitsExactlyOneService(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
+// GetAppSecret (M-chat Phase 4)
+// -----------------------------------------------------------------------------
+
+func TestGetAppSecret_ReturnsValue(t *testing.T) {
+	fake := newFakeFlaps()
+	fake.getSecretValues = map[string]string{
+		"CORELLIA_SIDECAR_AUTH_TOKEN": "tok-from-fly",
+	}
+	target := newFlyTargetForTest(fake)
+
+	got, err := target.GetAppSecret(context.Background(),
+		"fly-app:corellia-agent-abc", "CORELLIA_SIDECAR_AUTH_TOKEN")
+	if err != nil {
+		t.Fatalf("GetAppSecret: %v", err)
+	}
+	if got != "tok-from-fly" {
+		t.Errorf("value = %q, want %q", got, "tok-from-fly")
+	}
+	if fake.callCount("GetAppSecrets") != 1 {
+		t.Errorf("GetAppSecrets calls = %d, want 1", fake.callCount("GetAppSecrets"))
+	}
+}
+
+func TestGetAppSecret_EmptyValueReturnsEmpty(t *testing.T) {
+	fake := newFakeFlaps()
+	// no entry → fake returns AppSecret{Name, Value: nil}
+	target := newFlyTargetForTest(fake)
+
+	got, err := target.GetAppSecret(context.Background(),
+		"fly-app:corellia-agent-abc", "CORELLIA_SIDECAR_AUTH_TOKEN")
+	if err != nil {
+		t.Fatalf("GetAppSecret: %v", err)
+	}
+	if got != "" {
+		t.Errorf("value = %q, want empty (showSecrets denial path)", got)
+	}
+}
+
+func TestGetAppSecret_BadExternalRef(t *testing.T) {
+	fake := newFakeFlaps()
+	target := newFlyTargetForTest(fake)
+
+	_, err := target.GetAppSecret(context.Background(),
+		"not-a-fly-ref", "CORELLIA_SIDECAR_AUTH_TOKEN")
+	if err == nil {
+		t.Fatal("err: got nil, want parse error on unrecognised ref")
+	}
+	if fake.callCount("GetAppSecrets") != 0 {
+		t.Errorf("GetAppSecrets calls = %d, want 0 on parse failure", fake.callCount("GetAppSecrets"))
+	}
+}
+
+// -----------------------------------------------------------------------------
 // helpers
 // -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+// M-chat Phase 6: Health() — machine-state vs HTTP-probe branches
+// -----------------------------------------------------------------------------
+
+// httpClientFake satisfies HealthHTTPClient. It returns canned
+// (status, body) pairs so tests exercise the full JSON parse +
+// HealthStatus derivation path without spinning up an HTTP server.
+type httpClientFake struct {
+	resp *http.Response
+	err  error
+}
+
+func (f *httpClientFake) Do(_ *http.Request) (*http.Response, error) {
+	return f.resp, f.err
+}
+
+func fakeHTTPResp(status int, body string) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Body:       io.NopCloser(strings.NewReader(body)),
+		Header:     make(http.Header),
+	}
+}
+
+// TestHealth_ChatDisabled_MachineStatePoll verifies the pre-M-chat
+// machine-state path is unchanged when chatEnabled=false.
+func TestHealth_ChatDisabled_MachineStatePoll(t *testing.T) {
+	cases := []struct {
+		name    string
+		states  []string
+		want    HealthStatus
+	}{
+		{"all started → HealthStarted", []string{"started"}, HealthStarted},
+		{"any starting → HealthStarting", []string{"starting"}, HealthStarting},
+		{"any failed → HealthFailed", []string{"failed"}, HealthFailed},
+		{"no machines → HealthStopped", nil, HealthStopped},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := newFakeFlaps()
+			fake.machines = make([]*fly.Machine, len(tc.states))
+			for i, s := range tc.states {
+				fake.machines[i] = &fly.Machine{State: s}
+			}
+			target := newFlyTargetForTest(fake)
+			// healthHTTP is nil — must not be called when chatEnabled=false.
+			got, err := target.Health(context.Background(), "fly-app:test-app", false)
+			if err != nil {
+				t.Fatalf("Health: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("status = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestHealth_ChatEnabled_HttpOkTrue — sidecar returns {"ok":true}
+// → HealthStarted (both sidecar and hermes ready).
+func TestHealth_ChatEnabled_HttpOkTrue(t *testing.T) {
+	fake := newFakeFlaps()
+	target := newFlyTargetForTest(fake)
+	target.healthHTTP = &httpClientFake{resp: fakeHTTPResp(200, `{"ok":true,"hermes":"ready"}`)}
+
+	got, err := target.Health(context.Background(), "fly-app:test-app", true)
+	if err != nil {
+		t.Fatalf("Health: %v", err)
+	}
+	if got != HealthStarted {
+		t.Errorf("status = %q, want HealthStarted", got)
+	}
+}
+
+// TestHealth_ChatEnabled_HttpOkFalse — sidecar returns {"ok":false}
+// → HealthStarting (hermes still booting; plan risk 7 grace period).
+func TestHealth_ChatEnabled_HttpOkFalse(t *testing.T) {
+	fake := newFakeFlaps()
+	target := newFlyTargetForTest(fake)
+	target.healthHTTP = &httpClientFake{resp: fakeHTTPResp(200, `{"ok":false,"hermes":"starting"}`)}
+
+	got, err := target.Health(context.Background(), "fly-app:test-app", true)
+	if err != nil {
+		t.Fatalf("Health: %v", err)
+	}
+	if got != HealthStarting {
+		t.Errorf("status = %q, want HealthStarting", got)
+	}
+}
+
+// TestHealth_ChatEnabled_Non200 — sidecar returns a non-200 status
+// → HealthFailed (sidecar started but erroring).
+func TestHealth_ChatEnabled_Non200(t *testing.T) {
+	fake := newFakeFlaps()
+	target := newFlyTargetForTest(fake)
+	target.healthHTTP = &httpClientFake{resp: fakeHTTPResp(503, `{"detail":"boot error"}`)}
+
+	got, err := target.Health(context.Background(), "fly-app:test-app", true)
+	if err != nil {
+		t.Fatalf("Health: %v", err)
+	}
+	if got != HealthFailed {
+		t.Errorf("status = %q, want HealthFailed", got)
+	}
+}
+
+// TestHealth_ChatEnabled_TransportError — TCP / TLS failure
+// → HealthUnknown with nil error (keep polling; machine may be starting).
+func TestHealth_ChatEnabled_TransportError(t *testing.T) {
+	fake := newFakeFlaps()
+	target := newFlyTargetForTest(fake)
+	target.healthHTTP = &httpClientFake{err: fmt.Errorf("dial tcp: connect: connection refused")}
+
+	got, err := target.Health(context.Background(), "fly-app:test-app", true)
+	if err != nil {
+		t.Fatalf("Health: want nil error on transport failure, got %v", err)
+	}
+	if got != HealthUnknown {
+		t.Errorf("status = %q, want HealthUnknown (keep polling)", got)
+	}
+}
+
+// TestHealth_ChatEnabled_BadExternalRef — parse failure before any HTTP call.
+func TestHealth_ChatEnabled_BadExternalRef(t *testing.T) {
+	fake := newFakeFlaps()
+	target := newFlyTargetForTest(fake)
+	// healthHTTP is nil — must not be reached on a parse error.
+
+	_, err := target.Health(context.Background(), "not-a-fly-ref", true)
+	if err == nil {
+		t.Fatal("want error on bad external ref, got nil")
+	}
+}
 
 func contains(haystack []string, needle string) bool {
 	for _, s := range haystack {

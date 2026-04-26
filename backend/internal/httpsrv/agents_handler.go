@@ -49,6 +49,9 @@ type agentsService interface {
 	ResizeReplicas(ctx context.Context, instanceID, orgID uuid.UUID, desired int) (*agents.UpdateResult, error)
 	ResizeVolume(ctx context.Context, instanceID, orgID uuid.UUID, newSizeGB int) (*agents.UpdateResult, error)
 	BulkUpdateDeployConfig(ctx context.Context, instanceIDs []uuid.UUID, orgID uuid.UUID, delta agents.BulkConfigDelta, dryRun bool) ([]agents.BulkResult, error)
+
+	// M-chat Phase 5 — proxied chat turn (plan decision 11).
+	ChatWithAgent(ctx context.Context, instanceID, orgID uuid.UUID, sessionID, message string) (string, error)
 }
 
 type AgentsHandler struct {
@@ -363,6 +366,29 @@ func (h *AgentsHandler) BulkUpdateAgentDeployConfig(
 	return connect.NewResponse(&corelliav1.BulkUpdateAgentDeployConfigResponse{Results: out}), nil
 }
 
+// ChatWithAgent proxies a single chat turn to the agent's sidecar.
+// Handler stays <30 LOC per blueprint §11.9; all logic lives in the
+// agents domain method (chat.go).
+func (h *AgentsHandler) ChatWithAgent(
+	ctx context.Context,
+	req *connect.Request[corelliav1.ChatWithAgentRequest],
+) (*connect.Response[corelliav1.ChatWithAgentResponse], error) {
+	_, orgID, err := h.users.CallerIdentity(ctx)
+	if err != nil {
+		return nil, agentsErrToConnect(err)
+	}
+	instanceID, err := uuid.Parse(req.Msg.GetInstanceId())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, agents.ErrInstanceNotFound)
+	}
+	content, err := h.svc.ChatWithAgent(ctx, instanceID, orgID,
+		req.Msg.GetSessionId(), req.Msg.GetMessage())
+	if err != nil {
+		return nil, agentsErrToConnect(err)
+	}
+	return connect.NewResponse(&corelliav1.ChatWithAgentResponse{Content: content}), nil
+}
+
 // deployConfigFromProto translates the wire DeployConfig to the domain
 // shape. Nil-safe: a nil proto returns the zero domain config (which
 // the service's WithDefaults canonicalises). Empty fields stay empty so
@@ -382,6 +408,7 @@ func deployConfigFromProto(p *corelliav1.DeployConfig) deploy.DeployConfig {
 		LifecycleMode:     p.GetLifecycleMode(),
 		DesiredReplicas:   int(p.GetDesiredReplicas()),
 		VolumeSizeGB:      int(p.GetVolumeSizeGb()),
+		ChatEnabled:       p.GetChatEnabled(),
 	}
 }
 
@@ -489,6 +516,19 @@ func agentsErrToConnect(err error) error {
 		errors.Is(err, agents.ErrTargetUnavailable),
 		errors.Is(err, deploy.ErrVolumeProvisionFailed):
 		return connect.NewError(connect.CodeUnavailable, err)
+
+	// M-chat Phase 5 sentinel mapping (plan §4 Phase 5 + chat.go doc-comment):
+	//   ErrChatDisabled    → FailedPrecondition (operator must enable chat first)
+	//   ErrChatUnreachable → Unavailable        (sidecar down / network error)
+	//   ErrChatAuth        → Internal           (Corellia-side token drift; not a user error)
+	case errors.Is(err, agents.ErrChatDisabled):
+		return connect.NewError(connect.CodeFailedPrecondition, err)
+	case errors.Is(err, agents.ErrChatUnreachable):
+		return connect.NewError(connect.CodeUnavailable, err)
+	case errors.Is(err, agents.ErrChatAuth):
+		slog.Error("agents handler: chat auth inconsistency", "err", err)
+		return connect.NewError(connect.CodeInternal, errors.New("internal error"))
+
 	default:
 		slog.Error("agents handler: unexpected error", "err", err)
 		return connect.NewError(connect.CodeInternal, errors.New("internal error"))

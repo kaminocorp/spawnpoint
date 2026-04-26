@@ -2,9 +2,12 @@ package deploy
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -72,6 +75,7 @@ type flapsClient interface {
 	CreateApp(ctx context.Context, in flaps.CreateAppRequest) (*flaps.App, error)
 	DeleteApp(ctx context.Context, name string) error
 	SetAppSecret(ctx context.Context, app, name, value string) (*fly.SetAppSecretResp, error)
+	GetAppSecrets(ctx context.Context, app, name string, version *uint64, showSecrets bool) (*fly.AppSecret, error)
 
 	Launch(ctx context.Context, app string, in fly.LaunchMachineInput) (*fly.Machine, error)
 	List(ctx context.Context, app, state string) ([]*fly.Machine, error)
@@ -139,9 +143,10 @@ func (rc *regionCache) store(regions []Region) {
 // `fly-go` or talks to the Fly.io API. Per blueprint §11.1, every
 // other package sees only the DeployTarget interface.
 type FlyDeployTarget struct {
-	flaps   flapsClient
-	orgSlug string
-	regions *regionCache
+	flaps      flapsClient
+	orgSlug    string
+	regions    *regionCache
+	healthHTTP HealthHTTPClient // HTTP probe client for chat-enabled /health checks
 }
 
 // NewFlyDeployTarget constructs a Fly-backed deploy target. The
@@ -164,9 +169,10 @@ func NewFlyDeployTarget(ctx context.Context, creds FlyCredentials) (*FlyDeployTa
 		return nil, fmt.Errorf("fly: flaps client: %w", err)
 	}
 	t := &FlyDeployTarget{
-		flaps:   fc,
-		orgSlug: creds.OrgSlug,
-		regions: &regionCache{},
+		flaps:      fc,
+		orgSlug:    creds.OrgSlug,
+		regions:    &regionCache{},
+		healthHTTP: &http.Client{Timeout: 10 * time.Second},
 	}
 	if err := t.refreshRegions(ctx); err != nil {
 		return nil, fmt.Errorf("fly: initial region fetch: %w", err)
@@ -599,7 +605,58 @@ func (f *FlyDeployTarget) Destroy(ctx context.Context, externalRef string) error
 	return nil
 }
 
-func (f *FlyDeployTarget) Health(ctx context.Context, externalRef string) (HealthStatus, error) {
+// GetAppSecret reads the plaintext value of a Fly app-level secret via
+// flaps.GetAppSecrets with showSecrets=true. M-chat Phase 4: the BE
+// reads CORELLIA_SIDECAR_AUTH_TOKEN here on every proxied chat call so
+// the token never lives in Corellia's own database (rule §11). The
+// flaps endpoint is `GET /apps/<app>/secrets/<name>?show_secrets=true`,
+// which returns the AppSecret with a populated Value field.
+//
+// Caller is responsible for redacting the returned token from any log
+// or error surface — this method's only redaction is wrapping the
+// upstream error in fmt.Errorf for context (the underlying flaps call
+// already keeps the value out of the error path).
+func (f *FlyDeployTarget) GetAppSecret(ctx context.Context, externalRef, key string) (string, error) {
+	app, err := parseExternalRef(externalRef)
+	if err != nil {
+		return "", err
+	}
+	sec, err := f.flaps.GetAppSecrets(ctx, app, key, nil, true)
+	if err != nil {
+		return "", fmt.Errorf("fly: get app secret %q on %q: %w", key, app, err)
+	}
+	if sec == nil || sec.Value == nil {
+		// Secret name registered but value not returned — Fly's API
+		// honours showSecrets only on tokens with the right scope; an
+		// empty Value here typically signals a token-scope shape we
+		// can't proxy through, and the chat call cannot proceed.
+		return "", nil
+	}
+	return *sec.Value, nil
+}
+
+// Health collapses N replica states into one HealthStatus.
+//
+// M-chat Phase 6: when chatEnabled is true, the sidecar exposes a real
+// /health HTTP endpoint (blueprint §3.1). HTTP-probing it is strictly
+// more informative than polling Fly machine state — it catches the case
+// where the machine is "started" but hermes has crashed inside the
+// container. Response semantics: {"ok": true} → HealthStarted; {"ok":
+// false} → HealthStarting (hermes still booting); transport error →
+// HealthUnknown (keep polling); non-200 → HealthFailed.
+//
+// When chatEnabled is false, the machine-state poll (existing path) is
+// used — backward-compatible with every pre-M-chat agent.
+func (f *FlyDeployTarget) Health(ctx context.Context, externalRef string, chatEnabled bool) (HealthStatus, error) {
+	if chatEnabled {
+		return f.httpHealthProbe(ctx, externalRef)
+	}
+	return f.machineStateHealth(ctx, externalRef)
+}
+
+// machineStateHealth is the pre-M-chat machine-state poll extracted
+// from the original Health() body. Used when chat is disabled.
+func (f *FlyDeployTarget) machineStateHealth(ctx context.Context, externalRef string) (HealthStatus, error) {
 	app, err := parseExternalRef(externalRef)
 	if err != nil {
 		return HealthUnknown, err
@@ -613,10 +670,8 @@ func (f *FlyDeployTarget) Health(ctx context.Context, externalRef string) (Healt
 	}
 	// M5 plan decision 1 retired the M4 "one app = one machine"
 	// invariant; plan decision 14 defines aggregate semantics across
-	// replicas. Phase 3 keeps the simple "any started → started" rule
-	// without volume-attachment checks (which arrive in Phase 3.5);
-	// it is deliberately less rich than decision 14's full set
-	// (HealthDrifted is not yet returnable from this stub).
+	// replicas. Phase 3 keeps the simple "any started → started" rule;
+	// HealthDrifted is not yet returnable from this path.
 	any := func(pred func(s string) bool) bool {
 		for _, m := range machines {
 			if pred(m.State) {
@@ -635,6 +690,54 @@ func (f *FlyDeployTarget) Health(ctx context.Context, externalRef string) (Healt
 		return HealthFailed, nil
 	}
 	return mapFlyState(machines[0].State), nil
+}
+
+// httpHealthProbe GET-probes the sidecar's unauthenticated /health
+// endpoint. The sidecar exempts /health from bearer auth so Fly's edge
+// health-check probes (which can't carry a secret) also work.
+//
+// Response semantics (Phase 1 sidecar contract):
+//   - 200 + {"ok": true}  → HealthStarted   (sidecar + hermes both ready)
+//   - 200 + {"ok": false} → HealthStarting  (sidecar ready, hermes booting)
+//   - non-200             → HealthFailed
+//   - transport error     → HealthUnknown   (machine may still be starting)
+func (f *FlyDeployTarget) httpHealthProbe(ctx context.Context, externalRef string) (HealthStatus, error) {
+	app, err := parseExternalRef(externalRef)
+	if err != nil {
+		return HealthUnknown, err
+	}
+	url := "https://" + app + ".fly.dev/health"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return HealthUnknown, fmt.Errorf("fly: health probe: build request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := f.healthHTTP.Do(req)
+	if err != nil {
+		// TCP / TLS error — machine may still be starting; keep polling.
+		slog.Debug("fly: health probe transport error", "app", app, "err", err)
+		return HealthUnknown, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Warn("fly: health probe non-200", "app", app, "status", resp.StatusCode)
+		return HealthFailed, nil
+	}
+
+	var body struct {
+		Ok bool `json:"ok"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 8192)).Decode(&body); err != nil {
+		slog.Warn("fly: health probe unmarshal", "app", app, "err", err)
+		return HealthFailed, nil
+	}
+	if body.Ok {
+		return HealthStarted, nil
+	}
+	// ok:false — sidecar is up, hermes is still booting (plan risk 7).
+	return HealthStarting, nil
 }
 
 // ListRegions returns the cached non-deprecated region list. Plan

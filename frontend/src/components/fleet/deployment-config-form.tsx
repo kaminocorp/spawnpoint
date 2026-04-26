@@ -80,6 +80,9 @@ export const deploymentConfigSchema = z.object({
     .int("Whole numbers only")
     .min(VOLUME_BOUNDS_GB.min, `At least ${VOLUME_BOUNDS_GB.min}GB`)
     .max(VOLUME_BOUNDS_GB.max, `Up to ${VOLUME_BOUNDS_GB.max}GB`),
+  // M-chat Phase 5: default-on "Enable chat" toggle. When false, the
+  // adapter image starts no sidecar and exposes no :443 endpoint.
+  chatEnabled: z.boolean(),
 });
 
 export type DeploymentFormValues = z.infer<typeof deploymentConfigSchema>;
@@ -116,6 +119,7 @@ export function DeploymentConfigForm({
       <ReplicasField form={form} />
       <RestartField form={form} />
       <LifecycleField form={form} />
+      <ChatEnabledField form={form} />
 
       <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
         <Button size="sm" type="submit">
@@ -528,6 +532,35 @@ function LifecycleField({
           {form.formState.errors.lifecycleMode.message}
         </p>
       )}
+    </div>
+  );
+}
+
+/* ─── CHAT ENABLED ────────────────────────────────────────────────── */
+
+function ChatEnabledField({ form }: { form: UseFormReturn<DeploymentFormValues> }) {
+  const checked = useWatch({ control: form.control, name: "chatEnabled" });
+
+  return (
+    <div className="space-y-1.5">
+      <Label>Chat</Label>
+      <label className="flex cursor-pointer items-center gap-3">
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border border-input bg-background accent-primary"
+          checked={checked ?? true}
+          onChange={(e) =>
+            form.setValue("chatEnabled", e.target.checked, { shouldValidate: true })
+          }
+        />
+        <span className="font-mono text-xs text-foreground">Enable chat</span>
+      </label>
+      <p className="text-sm text-muted-foreground">
+        Enables the Corellia chat panel for this agent. When on, a sidecar
+        process exposes <code className="text-foreground">/chat</code> on the
+        agent&apos;s machine. Disabling saves resources and removes inbound
+        HTTPS exposure.
+      </p>
     </div>
   );
 }

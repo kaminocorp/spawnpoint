@@ -102,6 +102,8 @@ type Querier interface {
 	// each row with the template name without a second round-trip
 	// (decision 31). org_id filter is the multi-tenancy gate (decision 9 —
 	// never grant the FE the ability to see another org's rows).
+	// M-chat Phase 6: chat_enabled added so the fleet gallery can surface the
+	// chat badge + the Health() probe path can read the correct probe strategy.
 	ListAgentInstancesByOrg(ctx context.Context, orgID uuid.UUID) ([]ListAgentInstancesByOrgRow, error)
 	// Narrowed projection (no SELECT *) — keeps created_by_user_id and timestamps
 	// off the row type so the catalog service can't accidentally surface them.

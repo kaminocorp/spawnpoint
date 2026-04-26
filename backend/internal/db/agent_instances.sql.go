@@ -280,7 +280,8 @@ SELECT
     ai.last_stopped_at,
     ai.created_at,
     ai.updated_at,
-    t.name AS template_name
+    t.name AS template_name,
+    ai.chat_enabled
 FROM agent_instances ai
 JOIN agent_templates t ON t.id = ai.agent_template_id
 WHERE ai.org_id = $1
@@ -304,12 +305,15 @@ type ListAgentInstancesByOrgRow struct {
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 	TemplateName      string             `json:"template_name"`
+	ChatEnabled       bool               `json:"chat_enabled"`
 }
 
 // Fleet view's primary read. Joins agent_templates so the FE can label
 // each row with the template name without a second round-trip
 // (decision 31). org_id filter is the multi-tenancy gate (decision 9 —
 // never grant the FE the ability to see another org's rows).
+// M-chat Phase 6: chat_enabled added so the fleet gallery can surface the
+// chat badge + the Health() probe path can read the correct probe strategy.
 func (q *Queries) ListAgentInstancesByOrg(ctx context.Context, orgID uuid.UUID) ([]ListAgentInstancesByOrgRow, error) {
 	rows, err := q.db.Query(ctx, listAgentInstancesByOrg, orgID)
 	if err != nil {
@@ -336,6 +340,7 @@ func (q *Queries) ListAgentInstancesByOrg(ctx context.Context, orgID uuid.UUID) 
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.TemplateName,
+			&i.ChatEnabled,
 		); err != nil {
 			return nil, err
 		}

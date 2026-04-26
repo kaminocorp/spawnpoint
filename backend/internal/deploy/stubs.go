@@ -29,7 +29,7 @@ func (*LocalDeployTarget) PreviewUpdate(_ context.Context, _ string, _ DeployCon
 func (*LocalDeployTarget) Stop(_ context.Context, _ string) error    { return ErrNotImplemented }
 func (*LocalDeployTarget) Start(_ context.Context, _ string) error   { return ErrNotImplemented }
 func (*LocalDeployTarget) Destroy(_ context.Context, _ string) error { return ErrNotImplemented }
-func (*LocalDeployTarget) Health(_ context.Context, _ string) (HealthStatus, error) {
+func (*LocalDeployTarget) Health(_ context.Context, _ string, _ bool) (HealthStatus, error) {
 	return HealthUnknown, ErrNotImplemented
 }
 func (*LocalDeployTarget) ListRegions(_ context.Context) ([]Region, error) {
@@ -46,6 +46,9 @@ func (*LocalDeployTarget) EnsureVolume(_ context.Context, _ string, _ string, _ 
 }
 func (*LocalDeployTarget) ExtendVolume(_ context.Context, _ string, _ string, _ int) (bool, error) {
 	return false, ErrNotImplemented
+}
+func (*LocalDeployTarget) GetAppSecret(_ context.Context, _ string, _ string) (string, error) {
+	return "", ErrNotImplemented
 }
 
 type AWSDeployTarget struct{}
@@ -64,7 +67,7 @@ func (*AWSDeployTarget) PreviewUpdate(_ context.Context, _ string, _ DeployConfi
 func (*AWSDeployTarget) Stop(_ context.Context, _ string) error    { return ErrNotImplemented }
 func (*AWSDeployTarget) Start(_ context.Context, _ string) error   { return ErrNotImplemented }
 func (*AWSDeployTarget) Destroy(_ context.Context, _ string) error { return ErrNotImplemented }
-func (*AWSDeployTarget) Health(_ context.Context, _ string) (HealthStatus, error) {
+func (*AWSDeployTarget) Health(_ context.Context, _ string, _ bool) (HealthStatus, error) {
 	return HealthUnknown, ErrNotImplemented
 }
 func (*AWSDeployTarget) ListRegions(_ context.Context) ([]Region, error) {
@@ -81,4 +84,7 @@ func (*AWSDeployTarget) EnsureVolume(_ context.Context, _ string, _ string, _ in
 }
 func (*AWSDeployTarget) ExtendVolume(_ context.Context, _ string, _ string, _ int) (bool, error) {
 	return false, ErrNotImplemented
+}
+func (*AWSDeployTarget) GetAppSecret(_ context.Context, _ string, _ string) (string, error) {
+	return "", ErrNotImplemented
 }

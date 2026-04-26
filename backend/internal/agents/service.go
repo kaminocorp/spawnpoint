@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -48,6 +49,14 @@ var (
 	// failure is domain-shaped (instance-not-found, bulk size cap)
 	// rather than infrastructure-shaped.
 	ErrBulkLimit = errors.New("bulk operation count exceeds limit")
+
+	// M-chat Phase 4 sentinels. Mapping at the handler layer (Phase 5):
+	//   ErrChatDisabled    → FailedPrecondition (operator must enable chat)
+	//   ErrChatUnreachable → Unavailable        (sidecar down / network)
+	//   ErrChatAuth        → Internal           (Corellia bug, not a user error)
+	ErrChatDisabled    = errors.New("agent chat disabled")
+	ErrChatUnreachable = errors.New("agent chat unreachable")
+	ErrChatAuth        = errors.New("agent chat auth failed")
 )
 
 // Spawn-flow tunables. Decisions 14, 16, 29 in the plan.
@@ -125,14 +134,58 @@ type adapterReader interface {
 	Get(ctx context.Context, id uuid.UUID) (db.HarnessAdapter, error)
 }
 
+// ChatHTTPClient is the small interface ChatWithAgent uses to proxy
+// chat calls to the per-instance sidecar. *http.Client satisfies it
+// out of the box; tests inject a fake to assert request shape and
+// script status / body responses without spinning up a real server.
+//
+// Single method by design: chat is unary POST in v1 (anti-scope-creep
+// §5; streaming is a v1.6 swap). When that swap lands, the streaming
+// path will introduce its own narrow interface rather than widening
+// this one.
+type ChatHTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 type Service struct {
 	queries  agentQueries
 	adapters adapterReader
 	resolver deploy.Resolver
 	txr      Transactor
+	chatHTTP ChatHTTPClient
 }
 
-// NewService wires the spawn lifecycle's four collaborators.
+// ServiceOption is the functional-option shape NewService accepts after
+// its required collaborators. Keeping NewService backward-compatible
+// with the four-arg signature avoids churn across the test suite (~25
+// call sites) and the cmd/api wiring; per-feature collaborators that
+// only matter to a subset of methods (M-chat's ChatHTTPClient is the
+// first such case) opt in here.
+type ServiceOption func(*Service)
+
+// WithChatHTTPClient overrides the default *http.Client used by
+// ChatWithAgent. Tests pass a stub; production callers omit the
+// option and pick up the default below.
+func WithChatHTTPClient(c ChatHTTPClient) ServiceOption {
+	return func(s *Service) { s.chatHTTP = c }
+}
+
+// chatHTTPTimeout caps a single /chat round-trip. Plan §6 risk 7's
+// startup grace lives at the Health() probe layer (Phase 6); this
+// timeout is for the steady-state conversation case where Hermes
+// itself takes 5–30s to formulate a reply via the upstream model.
+// 60s is well past P99 model latency; below it we'd starve legit
+// reasoning chains.
+const chatHTTPTimeout = 60 * time.Second
+
+func defaultChatHTTPClient() ChatHTTPClient {
+	return &http.Client{Timeout: chatHTTPTimeout}
+}
+
+// NewService wires the spawn lifecycle's four collaborators plus any
+// optional per-feature collaborators (e.g. WithChatHTTPClient for
+// M-chat Phase 4). The four required args mirror the M5 contract;
+// options never break that contract.
 //
 // Plan-vs-reality drift: spawn-flow plan decision 35 specifies a
 // map[string]deploy.DeployTarget for the third arg, predating M3.5's
@@ -141,8 +194,18 @@ type Service struct {
 // reader; passing a resolver instead of a raw map is the
 // forward-correction. The txr arg is a Phase 8 addition (decision 27
 // step 6 deferred from M4 ship); see transactor.go.
-func NewService(queries agentQueries, adapters adapterReader, resolver deploy.Resolver, txr Transactor) *Service {
-	return &Service{queries: queries, adapters: adapters, resolver: resolver, txr: txr}
+func NewService(queries agentQueries, adapters adapterReader, resolver deploy.Resolver, txr Transactor, opts ...ServiceOption) *Service {
+	s := &Service{
+		queries:  queries,
+		adapters: adapters,
+		resolver: resolver,
+		txr:      txr,
+		chatHTTP: defaultChatHTTPClient(),
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // SpawnInput is the resolved, post-auth caller intent. The handler
@@ -358,7 +421,7 @@ func (s *Service) Spawn(ctx context.Context, in SpawnInput) (*corelliav1.AgentIn
 	// context.Background(), not the request ctx — the request returns
 	// to the caller within ~5s of Fly's response and its ctx dies; the
 	// poll outlives it for up to 90s.
-	go s.pollHealth(instance.ID, deployer, result.ExternalRef)
+	go s.pollHealth(instance.ID, deployer, result.ExternalRef, cfg.ChatEnabled)
 
 	return toProtoInstance(instance, tmpl.Name), nil
 }
@@ -596,7 +659,11 @@ func (s *Service) flyTarget(ctx context.Context) (deploy.DeployTarget, error) {
 // context.Background() with a 90s timeout, so the poll outlives the
 // HTTP request that triggered it. DB writes use context.Background()
 // directly so a poll-timeout-induced failure transition still commits.
-func (s *Service) pollHealth(instanceID uuid.UUID, target deploy.DeployTarget, externalRef string) {
+//
+// M-chat Phase 6: chatEnabled is forwarded to Health() so the probe
+// uses the sidecar's HTTP /health endpoint instead of machine state
+// when chat is on (plan §4 Phase 6).
+func (s *Service) pollHealth(instanceID uuid.UUID, target deploy.DeployTarget, externalRef string, chatEnabled bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), pollBudget)
 	defer cancel()
 
@@ -606,7 +673,7 @@ func (s *Service) pollHealth(instanceID uuid.UUID, target deploy.DeployTarget, e
 	probe := func() (deploy.HealthStatus, error) {
 		probeCtx, probeCancel := context.WithTimeout(ctx, pollInterval)
 		defer probeCancel()
-		return target.Health(probeCtx, externalRef)
+		return target.Health(probeCtx, externalRef, chatEnabled)
 	}
 
 	for {
@@ -742,6 +809,7 @@ func toProtoInstanceListRow(r db.ListAgentInstancesByOrgRow) *corelliav1.AgentIn
 		CreatedAt:         tsToRFC3339(r.CreatedAt),
 		LastStartedAt:     tsToRFC3339(r.LastStartedAt),
 		LastStoppedAt:     tsToRFC3339(r.LastStoppedAt),
+		ChatEnabled:       r.ChatEnabled,
 	}
 }
 
@@ -772,6 +840,7 @@ func toProtoInstanceGetRow(r db.GetAgentInstanceByIDRow) *corelliav1.AgentInstan
 		LifecycleMode:     r.LifecycleMode,
 		DesiredReplicas:   r.DesiredReplicas,
 		VolumeSizeGb:      r.VolumeSizeGb,
+		ChatEnabled:       r.ChatEnabled,
 	}
 }
 

@@ -118,6 +118,7 @@ export function PolicyCheckpoint() {
             transparent 100%
           );
           height: 100%;
+          animation: checkpoint-scan-sweep ${STAGGER_MS}ms linear infinite;
         }
         @media (prefers-reduced-motion: reduce) {
           .capsule-anim, .checkpoint-scan { animation: none !important; }

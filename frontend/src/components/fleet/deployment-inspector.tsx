@@ -598,6 +598,9 @@ function deploymentValuesFromInstance(i: AgentInstance): DeploymentFormValues {
     lifecycleMode: ((i.lifecycleMode || "always-on") as LifecycleMode) ?? "always-on",
     desiredReplicas: i.desiredReplicas || 1,
     volumeSizeGb: i.volumeSizeGb || 1,
+    // M-chat Phase 6: ListAgentInstancesByOrg now includes chat_enabled;
+    // the value is accurate. The ?. guard remains for future TS strictness.
+    chatEnabled: i.chatEnabled ?? true,
   };
 }
 
@@ -613,5 +616,6 @@ function deployConfigFromValues(v: DeploymentFormValues): DeployConfig {
     lifecycleMode: v.lifecycleMode,
     desiredReplicas: v.desiredReplicas,
     volumeSizeGb: v.volumeSizeGb,
+    chatEnabled: v.chatEnabled,
   };
 }

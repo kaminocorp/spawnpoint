@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { AgentRowActions } from "@/components/fleet/agent-row-actions";
 import { StatusBadge } from "@/components/fleet/status-badge";
 import type { AgentInstance } from "@/gen/corellia/v1/agents_pb";
@@ -58,6 +60,14 @@ export function AgentCard({
             />
           )}
           <StatusBadge status={instance.status} />
+          {instance.chatEnabled && (
+            <span
+              className="font-mono text-[9px] uppercase tracking-wider text-[hsl(var(--feature-adapter))]/70 border border-[hsl(var(--feature-adapter))]/30 px-1 rounded-sm"
+              title="Chat enabled"
+            >
+              chat
+            </span>
+          )}
         </div>
         <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/70">
           {formatCreated(instance.createdAt)}
@@ -65,7 +75,11 @@ export function AgentCard({
       </header>
 
       <div className="flex flex-1 flex-col gap-1 px-3 pt-3 pb-2">
-        <h2 className="font-mono text-sm text-foreground">{instance.name}</h2>
+        <Link href={`/fleet/${instance.id}`}>
+          <h2 className="font-mono text-sm text-foreground hover:underline hover:text-primary">
+            {instance.name}
+          </h2>
+        </Link>
         <p className="font-mono text-[11px] text-muted-foreground">
           {instance.templateName}
         </p>

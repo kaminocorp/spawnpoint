@@ -216,7 +216,7 @@ func (s *Service) UpdateDeployConfig(
 		if err := s.queries.UpdateAgentDeployConfig(ctx, deployConfigParams(instanceID, orgID, cfg)); err != nil {
 			return nil, fmt.Errorf("agents: persist deploy config: %w", err)
 		}
-		go s.pollHealth(instanceID, target, ref)
+		go s.pollHealth(instanceID, target, ref, row.ChatEnabled)
 	default:
 		return nil, fmt.Errorf("agents: unexpected update kind %q", kind)
 	}
@@ -289,7 +289,7 @@ func (s *Service) respawnAgent(
 	if err := s.queries.UpdateAgentDeployConfig(ctx, deployConfigParams(row.ID, row.OrgID, cfg)); err != nil {
 		return fmt.Errorf("agents: respawn persist deploy config: %w", err)
 	}
-	go s.pollHealth(row.ID, target, result.ExternalRef)
+	go s.pollHealth(row.ID, target, result.ExternalRef, row.ChatEnabled)
 	return nil
 }
 
@@ -316,7 +316,7 @@ func (s *Service) StartInstance(ctx context.Context, instanceID, orgID uuid.UUID
 		slog.Error("agents: start", "instance_id", instanceID, "err", err)
 		return nil, ErrFlyAPI
 	}
-	go s.pollHealth(instanceID, target, *row.DeployExternalRef)
+	go s.pollHealth(instanceID, target, *row.DeployExternalRef, row.ChatEnabled)
 	return s.Get(ctx, instanceID, orgID)
 }
 
@@ -360,7 +360,7 @@ func (s *Service) ResizeReplicas(
 	}); err != nil {
 		return nil, fmt.Errorf("agents: persist replicas: %w", err)
 	}
-	go s.pollHealth(instanceID, target, *row.DeployExternalRef)
+	go s.pollHealth(instanceID, target, *row.DeployExternalRef, row.ChatEnabled)
 	return &UpdateResult{Kind: kind, EstimatedDowntime: estimatedDowntime(kind)}, nil
 }
 
@@ -442,7 +442,7 @@ func (s *Service) ResizeVolume(
 	kind := deploy.UpdateLiveApplied
 	if anyRestart {
 		kind = deploy.UpdateLiveAppliedWithRestart
-		go s.pollHealth(instanceID, target, *row.DeployExternalRef)
+		go s.pollHealth(instanceID, target, *row.DeployExternalRef, row.ChatEnabled)
 	}
 	return &UpdateResult{Kind: kind, EstimatedDowntime: estimatedDowntime(kind)}, nil
 }
@@ -544,7 +544,7 @@ func (s *Service) applyBulkOne(
 		out.Err = fmt.Errorf("agents: persist deploy config: %w", err)
 		return out
 	}
-	go s.pollHealth(instanceID, target, ref)
+	go s.pollHealth(instanceID, target, ref, row.ChatEnabled)
 	out.Kind = kind
 	return out
 }

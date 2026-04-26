@@ -75,6 +75,9 @@ const (
 	// AgentsServiceBulkUpdateAgentDeployConfigProcedure is the fully-qualified name of the
 	// AgentsService's BulkUpdateAgentDeployConfig RPC.
 	AgentsServiceBulkUpdateAgentDeployConfigProcedure = "/corellia.v1.AgentsService/BulkUpdateAgentDeployConfig"
+	// AgentsServiceChatWithAgentProcedure is the fully-qualified name of the AgentsService's
+	// ChatWithAgent RPC.
+	AgentsServiceChatWithAgentProcedure = "/corellia.v1.AgentsService/ChatWithAgent"
 )
 
 // AgentsServiceClient is a client for the corellia.v1.AgentsService service.
@@ -100,6 +103,11 @@ type AgentsServiceClient interface {
 	ResizeAgentReplicas(context.Context, *connect.Request[v1.ResizeAgentReplicasRequest]) (*connect.Response[v1.ResizeAgentReplicasResponse], error)
 	ResizeAgentVolume(context.Context, *connect.Request[v1.ResizeAgentVolumeRequest]) (*connect.Response[v1.ResizeAgentVolumeResponse], error)
 	BulkUpdateAgentDeployConfig(context.Context, *connect.Request[v1.BulkUpdateAgentDeployConfigRequest]) (*connect.Response[v1.BulkUpdateAgentDeployConfigResponse], error)
+	// M-chat Phase 5 — proxied chat turn to the per-instance sidecar.
+	// Plan decision 11: the FE never talks to the sidecar directly;
+	// the bearer token stays on the BE and the round-trip is the single
+	// audit point for who chatted with what (post-v1.5 audit pillar).
+	ChatWithAgent(context.Context, *connect.Request[v1.ChatWithAgentRequest]) (*connect.Response[v1.ChatWithAgentResponse], error)
 }
 
 // NewAgentsServiceClient constructs a client for the corellia.v1.AgentsService service. By default,
@@ -197,6 +205,12 @@ func NewAgentsServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(agentsServiceMethods.ByName("BulkUpdateAgentDeployConfig")),
 			connect.WithClientOptions(opts...),
 		),
+		chatWithAgent: connect.NewClient[v1.ChatWithAgentRequest, v1.ChatWithAgentResponse](
+			httpClient,
+			baseURL+AgentsServiceChatWithAgentProcedure,
+			connect.WithSchema(agentsServiceMethods.ByName("ChatWithAgent")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -216,6 +230,7 @@ type agentsServiceClient struct {
 	resizeAgentReplicas         *connect.Client[v1.ResizeAgentReplicasRequest, v1.ResizeAgentReplicasResponse]
 	resizeAgentVolume           *connect.Client[v1.ResizeAgentVolumeRequest, v1.ResizeAgentVolumeResponse]
 	bulkUpdateAgentDeployConfig *connect.Client[v1.BulkUpdateAgentDeployConfigRequest, v1.BulkUpdateAgentDeployConfigResponse]
+	chatWithAgent               *connect.Client[v1.ChatWithAgentRequest, v1.ChatWithAgentResponse]
 }
 
 // ListAgentTemplates calls corellia.v1.AgentsService.ListAgentTemplates.
@@ -288,6 +303,11 @@ func (c *agentsServiceClient) BulkUpdateAgentDeployConfig(ctx context.Context, r
 	return c.bulkUpdateAgentDeployConfig.CallUnary(ctx, req)
 }
 
+// ChatWithAgent calls corellia.v1.AgentsService.ChatWithAgent.
+func (c *agentsServiceClient) ChatWithAgent(ctx context.Context, req *connect.Request[v1.ChatWithAgentRequest]) (*connect.Response[v1.ChatWithAgentResponse], error) {
+	return c.chatWithAgent.CallUnary(ctx, req)
+}
+
 // AgentsServiceHandler is an implementation of the corellia.v1.AgentsService service.
 type AgentsServiceHandler interface {
 	// M2 — catalog read, returns the static template list.
@@ -311,6 +331,11 @@ type AgentsServiceHandler interface {
 	ResizeAgentReplicas(context.Context, *connect.Request[v1.ResizeAgentReplicasRequest]) (*connect.Response[v1.ResizeAgentReplicasResponse], error)
 	ResizeAgentVolume(context.Context, *connect.Request[v1.ResizeAgentVolumeRequest]) (*connect.Response[v1.ResizeAgentVolumeResponse], error)
 	BulkUpdateAgentDeployConfig(context.Context, *connect.Request[v1.BulkUpdateAgentDeployConfigRequest]) (*connect.Response[v1.BulkUpdateAgentDeployConfigResponse], error)
+	// M-chat Phase 5 — proxied chat turn to the per-instance sidecar.
+	// Plan decision 11: the FE never talks to the sidecar directly;
+	// the bearer token stays on the BE and the round-trip is the single
+	// audit point for who chatted with what (post-v1.5 audit pillar).
+	ChatWithAgent(context.Context, *connect.Request[v1.ChatWithAgentRequest]) (*connect.Response[v1.ChatWithAgentResponse], error)
 }
 
 // NewAgentsServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -404,6 +429,12 @@ func NewAgentsServiceHandler(svc AgentsServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(agentsServiceMethods.ByName("BulkUpdateAgentDeployConfig")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentsServiceChatWithAgentHandler := connect.NewUnaryHandler(
+		AgentsServiceChatWithAgentProcedure,
+		svc.ChatWithAgent,
+		connect.WithSchema(agentsServiceMethods.ByName("ChatWithAgent")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/corellia.v1.AgentsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentsServiceListAgentTemplatesProcedure:
@@ -434,6 +465,8 @@ func NewAgentsServiceHandler(svc AgentsServiceHandler, opts ...connect.HandlerOp
 			agentsServiceResizeAgentVolumeHandler.ServeHTTP(w, r)
 		case AgentsServiceBulkUpdateAgentDeployConfigProcedure:
 			agentsServiceBulkUpdateAgentDeployConfigHandler.ServeHTTP(w, r)
+		case AgentsServiceChatWithAgentProcedure:
+			agentsServiceChatWithAgentHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -497,4 +530,8 @@ func (UnimplementedAgentsServiceHandler) ResizeAgentVolume(context.Context, *con
 
 func (UnimplementedAgentsServiceHandler) BulkUpdateAgentDeployConfig(context.Context, *connect.Request[v1.BulkUpdateAgentDeployConfigRequest]) (*connect.Response[v1.BulkUpdateAgentDeployConfigResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.BulkUpdateAgentDeployConfig is not implemented"))
+}
+
+func (UnimplementedAgentsServiceHandler) ChatWithAgent(context.Context, *connect.Request[v1.ChatWithAgentRequest]) (*connect.Response[v1.ChatWithAgentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.ChatWithAgent is not implemented"))
 }

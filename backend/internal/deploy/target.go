@@ -3,6 +3,7 @@ package deploy
 import (
 	"context"
 	"errors"
+	"net/http"
 )
 
 // ErrNotImplemented is returned by stub DeployTarget implementations.
@@ -10,6 +11,14 @@ import (
 // implementations, not as fake UI buttons. Callers branch on this
 // sentinel to render "Coming soon" or surface a 501.
 var ErrNotImplemented = errors.New("deploy target not implemented")
+
+// HealthHTTPClient is the narrow interface FlyDeployTarget needs for
+// the M-chat Phase 6 HTTP health probe. *http.Client satisfies it.
+// Defined in the deploy package so FlyDeployTarget can hold it without
+// importing agents — no import cycle.
+type HealthHTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
 
 // SpawnSpec is the minimal information needed to bring up one
 // AgentInstance on any DeployTarget.
@@ -103,7 +112,14 @@ type DeployTarget interface {
 	// Health collapses N replica states into one HealthStatus per
 	// plan decision 14. M4's len(machines)>1 error path is gone (it
 	// was the v1 invariant; M5 retires it).
-	Health(ctx context.Context, externalRef string) (HealthStatus, error)
+	//
+	// M-chat Phase 6: when chatEnabled is true, FlyDeployTarget HTTP-
+	// probes GET https://<app>.fly.dev/health (the sidecar's unauthenticated
+	// liveness route — plan §3.1) instead of polling machine state.
+	// The response body carries {"ok": true} when the sidecar and Hermes
+	// are both ready, {"ok": false} during Hermes's startup window. Stubs
+	// ignore chatEnabled and return ErrNotImplemented as before.
+	Health(ctx context.Context, externalRef string, chatEnabled bool) (HealthStatus, error)
 
 	// ListRegions returns the cached list of non-deprecated regions
 	// the configured Fly token can deploy to. Plan decision 9: the
@@ -143,4 +159,22 @@ type DeployTarget interface {
 	// must be rejected by the caller before reaching here; this
 	// method assumes newSizeGB >= current.
 	ExtendVolume(ctx context.Context, externalRef string, volumeID string, newSizeGB int) (needsRestart bool, err error)
+
+	// GetAppSecret reads the plaintext value of an app-level secret
+	// previously written via the spawn flow's SetAppSecret loop.
+	// M-chat Phase 4: the chat-sidecar bearer token (key
+	// CORELLIA_SIDECAR_AUTH_TOKEN) is read by ChatWithAgent on every
+	// proxied call so the BE never persists the value in Corellia's
+	// own database (rule §11: deploy-target-managed secrets stay in
+	// the deploy target's secret store; the agent_instances.secrets
+	// rows hold opaque audit refs only).
+	//
+	// Returns the empty string with a nil error iff the deploy
+	// target's secret store explicitly omitted the value (e.g.,
+	// caller asked for showSecrets=false on a backend that supports
+	// it). Callers should treat empty-but-no-error as "secret exists
+	// but value not surfaced" and short-circuit accordingly.
+	//
+	// Stubs return ErrNotImplemented — chat is Fly-only in v1.
+	GetAppSecret(ctx context.Context, externalRef string, key string) (string, error)
 }

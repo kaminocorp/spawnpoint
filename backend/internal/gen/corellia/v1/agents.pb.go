@@ -334,11 +334,12 @@ func (x *AgentTemplate) GetDescription() string {
 	return ""
 }
 
-// DeployConfig is the wire shape of the nine fleet-control fields.
-// Mirrors deploy.DeployConfig (Go) and the nine columns added in
-// migration 20260426160000_fleet_control.sql. Zero values mean "use
-// defaults" — the service layer's WithDefaults() / Validate() owns
-// the canonicalisation (M5 plan decision 5).
+// DeployConfig is the wire shape of the nine fleet-control fields plus
+// the M-chat chat_enabled flag. Mirrors deploy.DeployConfig (Go) and
+// the columns added in migration 20260426160000_fleet_control.sql +
+// 20260427120000_chat_enabled.sql. Zero values mean "use defaults" —
+// the service layer's WithDefaults() / Validate() owns the
+// canonicalisation (M5 plan decision 5).
 type DeployConfig struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	Region            string                 `protobuf:"bytes,1,opt,name=region,proto3" json:"region,omitempty"`
@@ -350,8 +351,15 @@ type DeployConfig struct {
 	LifecycleMode     string                 `protobuf:"bytes,7,opt,name=lifecycle_mode,json=lifecycleMode,proto3" json:"lifecycle_mode,omitempty"`
 	DesiredReplicas   int32                  `protobuf:"varint,8,opt,name=desired_replicas,json=desiredReplicas,proto3" json:"desired_replicas,omitempty"`
 	VolumeSizeGb      int32                  `protobuf:"varint,9,opt,name=volume_size_gb,json=volumeSizeGb,proto3" json:"volume_size_gb,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// M-chat: spawn wizard's default-on "Enable chat" checkbox. When
+	// false, the machine has no services block and no sidecar process
+	// (plan decision 6). The bool zero is false — the handler layer is
+	// the source of truth for the default (plan decision 6: DEFAULT TRUE
+	// lives at the migration layer; the wire default is the
+	// wizard-checkbox value, carried explicitly).
+	ChatEnabled   bool `protobuf:"varint,10,opt,name=chat_enabled,json=chatEnabled,proto3" json:"chat_enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DeployConfig) Reset() {
@@ -445,6 +453,13 @@ func (x *DeployConfig) GetVolumeSizeGb() int32 {
 		return x.VolumeSizeGb
 	}
 	return 0
+}
+
+func (x *DeployConfig) GetChatEnabled() bool {
+	if x != nil {
+		return x.ChatEnabled
+	}
+	return false
 }
 
 // Region is Corellia's projection of fly.Region — re-exporting fly.Region
@@ -1035,8 +1050,12 @@ type AgentInstance struct {
 	// M5 drift + volumes (fields 22–23). Drift is computed on demand;
 	// volumes is the projected agent_volumes rows for this instance,
 	// one per replica (M5 plan decision 8).
-	DriftSummary  *DriftSummary `protobuf:"bytes,22,opt,name=drift_summary,json=driftSummary,proto3" json:"drift_summary,omitempty"`
-	Volumes       []*VolumeRef  `protobuf:"bytes,23,rep,name=volumes,proto3" json:"volumes,omitempty"`
+	DriftSummary *DriftSummary `protobuf:"bytes,22,opt,name=drift_summary,json=driftSummary,proto3" json:"drift_summary,omitempty"`
+	Volumes      []*VolumeRef  `protobuf:"bytes,23,rep,name=volumes,proto3" json:"volumes,omitempty"`
+	// M-chat: whether the sidecar was enabled at spawn time. Populated
+	// on the Get path (GetAgentInstanceByID widens in Phase 3); list
+	// path leaves it at false until the list query is widened in Phase 6.
+	ChatEnabled   bool `protobuf:"varint,24,opt,name=chat_enabled,json=chatEnabled,proto3" json:"chat_enabled,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1230,6 +1249,13 @@ func (x *AgentInstance) GetVolumes() []*VolumeRef {
 		return x.Volumes
 	}
 	return nil
+}
+
+func (x *AgentInstance) GetChatEnabled() bool {
+	if x != nil {
+		return x.ChatEnabled
+	}
+	return false
 }
 
 type SpawnAgentRequest struct {
@@ -2634,6 +2660,123 @@ func (x *BulkUpdateAgentDeployConfigResponse) GetResults() []*BulkResult {
 	return nil
 }
 
+// ChatWithAgentRequest carries the minimal inputs for a proxied chat
+// turn. session_id is a client-generated UUID (stored in sessionStorage
+// per-tab) that Hermes uses to key its per-conversation SQLite state.
+// The BE never validates the session_id beyond non-empty; it is opaque
+// to Corellia and meaningful only to the sidecar.
+type ChatWithAgentRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	InstanceId string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	// session_id is the per-tab conversation key (plan decision 3).
+	// Client-generated UUID stored in sessionStorage keyed by instance id.
+	SessionId string `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// Single-turn user message. Multi-turn history is threaded via session_id
+	// (the sidecar's SQLite persists the full conversation). v1.6 adds
+	// streaming; v1 is always a single POST/response round-trip (anti-scope §5).
+	Message       string `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ChatWithAgentRequest) Reset() {
+	*x = ChatWithAgentRequest{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChatWithAgentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChatWithAgentRequest) ProtoMessage() {}
+
+func (x *ChatWithAgentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChatWithAgentRequest.ProtoReflect.Descriptor instead.
+func (*ChatWithAgentRequest) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *ChatWithAgentRequest) GetInstanceId() string {
+	if x != nil {
+		return x.InstanceId
+	}
+	return ""
+}
+
+func (x *ChatWithAgentRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *ChatWithAgentRequest) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+type ChatWithAgentResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The agent's reply. Non-empty on success. The sidecar may return
+	// richer fields in v1.6 (usage, tool_calls, etc.); adding them is a
+	// non-breaking proto extension.
+	Content       string `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ChatWithAgentResponse) Reset() {
+	*x = ChatWithAgentResponse{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChatWithAgentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChatWithAgentResponse) ProtoMessage() {}
+
+func (x *ChatWithAgentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChatWithAgentResponse.ProtoReflect.Descriptor instead.
+func (*ChatWithAgentResponse) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *ChatWithAgentResponse) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
 var File_corellia_v1_agents_proto protoreflect.FileDescriptor
 
 const file_corellia_v1_agents_proto_rawDesc = "" +
@@ -2645,7 +2788,7 @@ const file_corellia_v1_agents_proto_rawDesc = "" +
 	"\rAgentTemplate\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription\"\xc1\x02\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\"\xe4\x02\n" +
 	"\fDeployConfig\x12\x16\n" +
 	"\x06region\x18\x01 \x01(\tR\x06region\x12\x19\n" +
 	"\bcpu_kind\x18\x02 \x01(\tR\acpuKind\x12\x12\n" +
@@ -2655,7 +2798,9 @@ const file_corellia_v1_agents_proto_rawDesc = "" +
 	"\x13restart_max_retries\x18\x06 \x01(\x05R\x11restartMaxRetries\x12%\n" +
 	"\x0elifecycle_mode\x18\a \x01(\tR\rlifecycleMode\x12)\n" +
 	"\x10desired_replicas\x18\b \x01(\x05R\x0fdesiredReplicas\x12$\n" +
-	"\x0evolume_size_gb\x18\t \x01(\x05R\fvolumeSizeGb\"~\n" +
+	"\x0evolume_size_gb\x18\t \x01(\x05R\fvolumeSizeGb\x12!\n" +
+	"\fchat_enabled\x18\n" +
+	" \x01(\bR\vchatEnabled\"~\n" +
 	"\x06Region\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1e\n" +
@@ -2700,7 +2845,7 @@ const file_corellia_v1_agents_proto_rawDesc = "" +
 	"instanceId\x128\n" +
 	"\vupdate_kind\x18\x02 \x01(\x0e2\x17.corellia.v1.UpdateKindR\n" +
 	"updateKind\x12#\n" +
-	"\rerror_message\x18\x03 \x01(\tR\ferrorMessage\"\xc7\x06\n" +
+	"\rerror_message\x18\x03 \x01(\tR\ferrorMessage\"\xea\x06\n" +
 	"\rAgentInstance\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1f\n" +
@@ -2728,7 +2873,8 @@ const file_corellia_v1_agents_proto_rawDesc = "" +
 	"\x10desired_replicas\x18\x14 \x01(\x05R\x0fdesiredReplicas\x12$\n" +
 	"\x0evolume_size_gb\x18\x15 \x01(\x05R\fvolumeSizeGb\x12>\n" +
 	"\rdrift_summary\x18\x16 \x01(\v2\x19.corellia.v1.DriftSummaryR\fdriftSummary\x120\n" +
-	"\avolumes\x18\x17 \x03(\v2\x16.corellia.v1.VolumeRefR\avolumes\"\x9a\x02\n" +
+	"\avolumes\x18\x17 \x03(\v2\x16.corellia.v1.VolumeRefR\avolumes\x12!\n" +
+	"\fchat_enabled\x18\x18 \x01(\bR\vchatEnabled\"\x9a\x02\n" +
 	"\x11SpawnAgentRequest\x12\x1f\n" +
 	"\vtemplate_id\x18\x01 \x01(\tR\n" +
 	"templateId\x12\x12\n" +
@@ -2816,7 +2962,15 @@ const file_corellia_v1_agents_proto_rawDesc = "" +
 	"\x13deploy_config_delta\x18\x02 \x01(\v2\x1c.corellia.v1.BulkConfigDeltaR\x11deployConfigDelta\x12\x17\n" +
 	"\adry_run\x18\x03 \x01(\bR\x06dryRun\"X\n" +
 	"#BulkUpdateAgentDeployConfigResponse\x121\n" +
-	"\aresults\x18\x01 \x03(\v2\x17.corellia.v1.BulkResultR\aresults*Z\n" +
+	"\aresults\x18\x01 \x03(\v2\x17.corellia.v1.BulkResultR\aresults\"p\n" +
+	"\x14ChatWithAgentRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x18\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\"1\n" +
+	"\x15ChatWithAgentResponse\x12\x18\n" +
+	"\acontent\x18\x01 \x01(\tR\acontent*Z\n" +
 	"\rModelProvider\x12\x1e\n" +
 	"\x1aMODEL_PROVIDER_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tANTHROPIC\x10\x01\x12\n" +
@@ -2836,7 +2990,7 @@ const file_corellia_v1_agents_proto_rawDesc = "" +
 	"\x1cDRIFT_CATEGORY_SIZE_MISMATCH\x10\x02\x12\"\n" +
 	"\x1eDRIFT_CATEGORY_VOLUME_MISMATCH\x10\x03\x12'\n" +
 	"#DRIFT_CATEGORY_VOLUME_SIZE_MISMATCH\x10\x04\x12$\n" +
-	" DRIFT_CATEGORY_VOLUME_UNATTACHED\x10\x052\xca\v\n" +
+	" DRIFT_CATEGORY_VOLUME_UNATTACHED\x10\x052\xa2\f\n" +
 	"\rAgentsService\x12e\n" +
 	"\x12ListAgentTemplates\x12&.corellia.v1.ListAgentTemplatesRequest\x1a'.corellia.v1.ListAgentTemplatesResponse\x12M\n" +
 	"\n" +
@@ -2852,7 +3006,8 @@ const file_corellia_v1_agents_proto_rawDesc = "" +
 	"\x12StartAgentInstance\x12&.corellia.v1.StartAgentInstanceRequest\x1a'.corellia.v1.StartAgentInstanceResponse\x12h\n" +
 	"\x13ResizeAgentReplicas\x12'.corellia.v1.ResizeAgentReplicasRequest\x1a(.corellia.v1.ResizeAgentReplicasResponse\x12b\n" +
 	"\x11ResizeAgentVolume\x12%.corellia.v1.ResizeAgentVolumeRequest\x1a&.corellia.v1.ResizeAgentVolumeResponse\x12\x80\x01\n" +
-	"\x1bBulkUpdateAgentDeployConfig\x12/.corellia.v1.BulkUpdateAgentDeployConfigRequest\x1a0.corellia.v1.BulkUpdateAgentDeployConfigResponseBLZJgithub.com/hejijunhao/corellia/backend/internal/gen/corellia/v1;corelliav1b\x06proto3"
+	"\x1bBulkUpdateAgentDeployConfig\x12/.corellia.v1.BulkUpdateAgentDeployConfigRequest\x1a0.corellia.v1.BulkUpdateAgentDeployConfigResponse\x12V\n" +
+	"\rChatWithAgent\x12!.corellia.v1.ChatWithAgentRequest\x1a\".corellia.v1.ChatWithAgentResponseBLZJgithub.com/hejijunhao/corellia/backend/internal/gen/corellia/v1;corelliav1b\x06proto3"
 
 var (
 	file_corellia_v1_agents_proto_rawDescOnce sync.Once
@@ -2867,7 +3022,7 @@ func file_corellia_v1_agents_proto_rawDescGZIP() []byte {
 }
 
 var file_corellia_v1_agents_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_corellia_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
+var file_corellia_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
 var file_corellia_v1_agents_proto_goTypes = []any{
 	(ModelProvider)(0),                          // 0: corellia.v1.ModelProvider
 	(UpdateKind)(0),                             // 1: corellia.v1.UpdateKind
@@ -2912,6 +3067,8 @@ var file_corellia_v1_agents_proto_goTypes = []any{
 	(*BulkConfigDelta)(nil),                     // 40: corellia.v1.BulkConfigDelta
 	(*BulkUpdateAgentDeployConfigRequest)(nil),  // 41: corellia.v1.BulkUpdateAgentDeployConfigRequest
 	(*BulkUpdateAgentDeployConfigResponse)(nil), // 42: corellia.v1.BulkUpdateAgentDeployConfigResponse
+	(*ChatWithAgentRequest)(nil),                // 43: corellia.v1.ChatWithAgentRequest
+	(*ChatWithAgentResponse)(nil),               // 44: corellia.v1.ChatWithAgentResponse
 }
 var file_corellia_v1_agents_proto_depIdxs = []int32{
 	5,  // 0: corellia.v1.ListAgentTemplatesResponse.templates:type_name -> corellia.v1.AgentTemplate
@@ -2956,22 +3113,24 @@ var file_corellia_v1_agents_proto_depIdxs = []int32{
 	36, // 39: corellia.v1.AgentsService.ResizeAgentReplicas:input_type -> corellia.v1.ResizeAgentReplicasRequest
 	38, // 40: corellia.v1.AgentsService.ResizeAgentVolume:input_type -> corellia.v1.ResizeAgentVolumeRequest
 	41, // 41: corellia.v1.AgentsService.BulkUpdateAgentDeployConfig:input_type -> corellia.v1.BulkUpdateAgentDeployConfigRequest
-	4,  // 42: corellia.v1.AgentsService.ListAgentTemplates:output_type -> corellia.v1.ListAgentTemplatesResponse
-	17, // 43: corellia.v1.AgentsService.SpawnAgent:output_type -> corellia.v1.SpawnAgentResponse
-	19, // 44: corellia.v1.AgentsService.SpawnNAgents:output_type -> corellia.v1.SpawnNAgentsResponse
-	21, // 45: corellia.v1.AgentsService.ListAgentInstances:output_type -> corellia.v1.ListAgentInstancesResponse
-	23, // 46: corellia.v1.AgentsService.GetAgentInstance:output_type -> corellia.v1.GetAgentInstanceResponse
-	25, // 47: corellia.v1.AgentsService.StopAgentInstance:output_type -> corellia.v1.StopAgentInstanceResponse
-	27, // 48: corellia.v1.AgentsService.DestroyAgentInstance:output_type -> corellia.v1.DestroyAgentInstanceResponse
-	29, // 49: corellia.v1.AgentsService.ListDeploymentRegions:output_type -> corellia.v1.ListDeploymentRegionsResponse
-	31, // 50: corellia.v1.AgentsService.CheckDeploymentPlacement:output_type -> corellia.v1.CheckDeploymentPlacementResponse
-	33, // 51: corellia.v1.AgentsService.UpdateAgentDeployConfig:output_type -> corellia.v1.UpdateAgentDeployConfigResponse
-	35, // 52: corellia.v1.AgentsService.StartAgentInstance:output_type -> corellia.v1.StartAgentInstanceResponse
-	37, // 53: corellia.v1.AgentsService.ResizeAgentReplicas:output_type -> corellia.v1.ResizeAgentReplicasResponse
-	39, // 54: corellia.v1.AgentsService.ResizeAgentVolume:output_type -> corellia.v1.ResizeAgentVolumeResponse
-	42, // 55: corellia.v1.AgentsService.BulkUpdateAgentDeployConfig:output_type -> corellia.v1.BulkUpdateAgentDeployConfigResponse
-	42, // [42:56] is the sub-list for method output_type
-	28, // [28:42] is the sub-list for method input_type
+	43, // 42: corellia.v1.AgentsService.ChatWithAgent:input_type -> corellia.v1.ChatWithAgentRequest
+	4,  // 43: corellia.v1.AgentsService.ListAgentTemplates:output_type -> corellia.v1.ListAgentTemplatesResponse
+	17, // 44: corellia.v1.AgentsService.SpawnAgent:output_type -> corellia.v1.SpawnAgentResponse
+	19, // 45: corellia.v1.AgentsService.SpawnNAgents:output_type -> corellia.v1.SpawnNAgentsResponse
+	21, // 46: corellia.v1.AgentsService.ListAgentInstances:output_type -> corellia.v1.ListAgentInstancesResponse
+	23, // 47: corellia.v1.AgentsService.GetAgentInstance:output_type -> corellia.v1.GetAgentInstanceResponse
+	25, // 48: corellia.v1.AgentsService.StopAgentInstance:output_type -> corellia.v1.StopAgentInstanceResponse
+	27, // 49: corellia.v1.AgentsService.DestroyAgentInstance:output_type -> corellia.v1.DestroyAgentInstanceResponse
+	29, // 50: corellia.v1.AgentsService.ListDeploymentRegions:output_type -> corellia.v1.ListDeploymentRegionsResponse
+	31, // 51: corellia.v1.AgentsService.CheckDeploymentPlacement:output_type -> corellia.v1.CheckDeploymentPlacementResponse
+	33, // 52: corellia.v1.AgentsService.UpdateAgentDeployConfig:output_type -> corellia.v1.UpdateAgentDeployConfigResponse
+	35, // 53: corellia.v1.AgentsService.StartAgentInstance:output_type -> corellia.v1.StartAgentInstanceResponse
+	37, // 54: corellia.v1.AgentsService.ResizeAgentReplicas:output_type -> corellia.v1.ResizeAgentReplicasResponse
+	39, // 55: corellia.v1.AgentsService.ResizeAgentVolume:output_type -> corellia.v1.ResizeAgentVolumeResponse
+	42, // 56: corellia.v1.AgentsService.BulkUpdateAgentDeployConfig:output_type -> corellia.v1.BulkUpdateAgentDeployConfigResponse
+	44, // 57: corellia.v1.AgentsService.ChatWithAgent:output_type -> corellia.v1.ChatWithAgentResponse
+	43, // [43:58] is the sub-list for method output_type
+	28, // [28:43] is the sub-list for method input_type
 	28, // [28:28] is the sub-list for extension type_name
 	28, // [28:28] is the sub-list for extension extendee
 	0,  // [0:28] is the sub-list for field type_name
@@ -2990,7 +3149,7 @@ func file_corellia_v1_agents_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_corellia_v1_agents_proto_rawDesc), len(file_corellia_v1_agents_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   40,
+			NumMessages:   42,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

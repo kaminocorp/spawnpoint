@@ -300,7 +300,12 @@ function FleetTable({
                 )}
               </TableCell>
               <TableCell className="font-mono text-xs text-foreground">
-                {i.name}
+                <Link
+                  href={`/fleet/${i.id}`}
+                  className="hover:underline hover:text-primary"
+                >
+                  {i.name}
+                </Link>
               </TableCell>
               <TableCell>
                 <StatusBadge status={i.status} />
