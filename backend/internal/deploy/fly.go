@@ -33,7 +33,7 @@ const (
 //
 // TODO(v1.5): split this. v1.5's resolver loads per-target credentials
 // from the secret store via deploy_targets.credentials_storage_ref;
-// the boot-time FLY_API_TOKEN / FLY_ORG_SLUG env path becomes the
+// the boot-time FLY_SPAWN_TOKEN / FLY_ORG_SLUG env path becomes the
 // operator-only fallback for the platform's own service-account
 // (Corellia's own dogfood deploys). User-supplied targets get an
 // org-scoped Fly macaroon via OAuth — never a PAT pasted into a form.

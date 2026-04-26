@@ -347,7 +347,7 @@ instances), not before. **Never transaction pooling.**
 | `SUPABASE_URL` | both | Supabase project URL |
 | `SUPABASE_ANON_KEY` | frontend | Public anon key, safe for client bundle |
 | `SUPABASE_SERVICE_KEY` | backend (rare) | Service-role key for admin ops; avoid if possible |
-| `FLY_API_TOKEN` | backend | Calls Fly's GraphQL API to spawn apps/machines |
+| `FLY_SPAWN_TOKEN` | backend | Org-scoped Fly token for spawning agent apps via the Machines API. **Not** named `FLY_API_TOKEN`: `flyctl` honors that env var ahead of `fly auth login`, so direnv-loading it would shadow the operator's interactive deploy identity. See changelog 0.7.6. |
 | `FLY_ORG_SLUG` | backend | Fly organization to create apps under |
 | `PORT` | backend | HTTP listen port (default 8080) |
 | `FRONTEND_ORIGIN` | backend | Allowed CORS origin for the deployed FE (e.g., `http://localhost:3000`) |

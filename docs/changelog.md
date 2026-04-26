@@ -2,6 +2,7 @@
 
 Index - short one-liners:
 
+- [0.7.6 — Env Var Rename: `FLY_API_TOKEN` → `FLY_SPAWN_TOKEN` (Stop `flyctl` Shadowing the Operator's Deploy Identity)](#076--env-var-rename-fly_api_token--fly_spawn_token-stop-flyctl-shadowing-the-operators-deploy-identity-2026-04-26)
 - [0.7.5 — M4 Phase 8 Hardening: Transactional Spawn Writes + Handler-Level Sentinel Mapping Tests + v1.5 Deploy-Target-Credentials Breadcrumbs](#075--m4-phase-8-hardening-transactional-spawn-writes--handler-level-sentinel-mapping-tests--v15-deploy-target-credentials-breadcrumbs-2026-04-26)
 - [0.7.4 — M3.9: Control-Plane Deploy (BE → Fly, FE → Vercel)](#074--m39-control-plane-deploy-be--fly-fe--vercel-2026-04-26)
 - [0.7.3 — M4 Phase 7: Integration Smoke Pass (Local BE + Prod DB + Live Fly) + Fly Token Swap (PAT → Org-Scoped)](#073--m4-phase-7-integration-smoke-pass-local-be--prod-db--live-fly--fly-token-swap-pat--org-scoped-2026-04-26)
@@ -26,6 +27,40 @@ Index - short one-liners:
 - [0.1.0 — Backend Scaffolding & Docs Reconciliation](#010--backend-scaffolding--docs-reconciliation-2026-04-24)
 
 Latest on top. Each release has a tight index followed by detail entries (**What / Where / Why** inlined). When a decision contradicts an earlier one, note the supersession in the new entry rather than editing the old one.
+
+---
+
+## 0.7.6 — Env Var Rename: `FLY_API_TOKEN` → `FLY_SPAWN_TOKEN` (Stop `flyctl` Shadowing the Operator's Deploy Identity) (2026-04-26)
+
+Surfaced when `fly deploy` from `backend/` returned `unauthorized` against `corellia` (the control-plane app itself), despite the operator being signed in via `fly auth login`. Diagnosis: `flyctl` honors the `FLY_API_TOKEN` shell env var ahead of `fly auth login` credentials; direnv auto-loads `backend/.env` on `cd backend/`; the runtime *spawn* token (org-scoped per 0.7.3, no permissions on the `corellia` app) was therefore silently shadowing the operator's interactive identity on every `fly deploy`. The two credentials are distinct roles by design — the **runtime spawn token** the deployed backend uses to create agent apps, and the **operator's deploy identity** for releasing the control plane itself — but they collided on a single env var name. Fix is a rename: the runtime-spawn env var becomes `FLY_SPAWN_TOKEN`, a name `flyctl` does not look at, so the two roles stay in their own lanes permanently. Patch version (not minor) per the 0.5.1 / 0.5.2 / 0.7.3 precedent for non-product correctness: zero new product surface, zero RPC change, zero schema/migration change. One env-var name change, four files touched, plus the Fly secret rotation on the deployed backend.
+
+### Index
+
+- **`backend/internal/config/config.go:38` — struct tag changes from `env:"FLY_API_TOKEN,required"` to `env:"FLY_SPAWN_TOKEN,required"`.** Field name (`FlyAPIToken`) intentionally unchanged — every domain caller (`deploy.NewFlyDeployTarget`, `cmd/api/main.go`, `cmd/smoke-deploy/main.go`) still reads `cfg.FlyAPIToken` and never sees the env-var name. The Go-side identity is "this is the Fly API token the binary uses"; the env-var-side identity is "this is what gets parsed from the environment." The mismatch is correct: only the binary's *input boundary* needs to dodge `flyctl`. A six-line comment on the field documents the rename + reasoning so the next person who tries to "fix" the inconsistency reads the why before the what.
+- **`backend/.env:15` — key renamed `FLY_API_TOKEN=` → `FLY_SPAWN_TOKEN=` (value unchanged).** Same org-scoped token from 0.7.3, just under the new name. Operator gitignored file; not in the repo.
+- **`.env.example:58–66` — section rewritten.** New comment block explains the rename rationale up front (so anyone copying `.env.example` to a fresh `backend/.env` understands *why* the var is called `FLY_SPAWN_TOKEN` and not `FLY_API_TOKEN`), plus the mint command (`fly tokens create org -o <slug> --name "corellia-spawn" --expiry 8760h`). Placeholder string updated.
+- **`backend/cmd/smoke-deploy/main.go:14` — required-env doc-comment string updated** from `FLY_API_TOKEN` to `FLY_SPAWN_TOKEN`. Pure docstring; no code path change.
+- **`backend/internal/deploy/fly.go:36` — `TODO(v1.5)` breadcrumb on `FlyCredentials` updated** to reference `FLY_SPAWN_TOKEN` (the breadcrumb dropped in 0.7.5 still named the old var).
+- **`docs/stack.md` §8 env-var table** — `FLY_API_TOKEN` row replaced with `FLY_SPAWN_TOKEN` row; the new row's description carries the rename rationale inline so the table itself documents the trap. Same for `CLAUDE.md` §Environment, where the required-vars list now reads `FLY_SPAWN_TOKEN` and a parenthetical explains why it's not `FLY_API_TOKEN`.
+- **Fly secret rotation on the deployed backend.** `fly secrets set FLY_SPAWN_TOKEN=<value> -a corellia` + `fly secrets unset FLY_API_TOKEN -a corellia`. Runtime config of the deployed `corellia` machine is updated to match the renamed binary input.
+
+### Behavior change (known)
+
+- **`fly deploy` from `backend/` works again with the operator's `fly auth login` identity.** The env var direnv loads (`FLY_SPAWN_TOKEN`) is no longer one `flyctl` recognizes, so it falls through to the user's interactive credentials.
+- **`config.Load()` now panics on `FLY_API_TOKEN` set without `FLY_SPAWN_TOKEN`.** The old name is no longer recognized; this is the intentional break that prevents the collision from re-emerging silently.
+- **No code-path change.** Once parsed, the credential flows through the same `cfg.FlyAPIToken → FlyCredentials.APIToken → flaps.Client` chain as before. Spawn behavior on the deployed backend is byte-identical.
+
+### Resolves
+
+- **The `unauthorized` error on `fly deploy`** that surfaced this session against the `corellia` control-plane app. Operator can now redeploy the backend without env-var gymnastics (no `env -u FLY_API_TOKEN fly deploy` workaround).
+
+### Known pending work
+
+- **Historical doc references to `FLY_API_TOKEN` in `docs/archive/*` and `docs/blueprints/deployment-architecture.md`** are intentionally left as-is — they describe state at the time they were written. Touching them retroactively would muddle the history record. The current-state docs (`stack.md`, `CLAUDE.md`, `.env.example`, `fly.go`, `config.go`, `cmd/smoke-deploy/main.go`) all use the new name.
+
+### Supersedes
+
+- **0.7.3's runtime use of the env-var name `FLY_API_TOKEN`.** The token *value* and *shape* (org-scoped) from 0.7.3 are unchanged; only the env-var key changes. The 0.7.4 Fly-secrets list and 0.7.5's `fly.go` breadcrumb (which both named `FLY_API_TOKEN`) are now out of date — this entry is the canonical record.
 
 ---
 

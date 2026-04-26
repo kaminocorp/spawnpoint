@@ -34,8 +34,15 @@ type Config struct {
 	// are slated for retirement in v1.5, when DB-backed deploy_targets
 	// rows replace this env-var bootstrap with per-org user-configurable
 	// credentials. See docs/executing/deploy-target-resolver.md §1.
+	//
+	// Env var name is FLY_SPAWN_TOKEN (not FLY_API_TOKEN) because flyctl
+	// honors FLY_API_TOKEN ahead of `fly auth login` credentials — using
+	// that name in backend/.env caused direnv to silently shadow the
+	// operator's interactive identity on `fly deploy`. The runtime
+	// spawn credential and the operator's deploy identity are distinct
+	// roles; the rename keeps them in their own lanes. See changelog 0.7.6.
 	// TODO(v1.5): delete these two fields when DBResolver lands.
-	FlyAPIToken string `env:"FLY_API_TOKEN,required"`
+	FlyAPIToken string `env:"FLY_SPAWN_TOKEN,required"`
 	FlyOrgSlug  string `env:"FLY_ORG_SLUG,required"`
 
 	FrontendOrigin string `env:"FRONTEND_ORIGIN,required"`

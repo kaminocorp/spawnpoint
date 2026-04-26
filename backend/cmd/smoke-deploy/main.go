@@ -11,7 +11,7 @@
 //
 // Required env (loaded via godotenv/autoload from backend/.env at the
 // binary's cwd):
-//   - FLY_API_TOKEN, FLY_ORG_SLUG (required by config.Config)
+//   - FLY_SPAWN_TOKEN, FLY_ORG_SLUG (required by config.Config)
 //   - DATABASE_URL, SUPABASE_URL, FRONTEND_ORIGIN (required by
 //     config.Config but unused here — stub values are fine)
 //   - CORELLIA_SMOKE_API_KEY (the OpenRouter / model API key the
