@@ -2,6 +2,8 @@ package agents
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -60,6 +62,22 @@ const (
 	pollBudget          = 90 * time.Second
 	flyDeployTargetName = "fly" // server-resolved per decision 5
 	flyExternalRefPfx   = "fly-app:"
+
+	// M-chat Phase 3 — env-var keys read by the adapter image's
+	// entrypoint.sh + sidecar.py (Phase 2). Pinned here so the service
+	// layer is the single grep target for "what env vars does the
+	// chat sidecar consume?" Same posture as the existing
+	// CORELLIA_MODEL_API_KEY string-literal in the spec.Env map below.
+	envKeyChatEnabled       = "CORELLIA_CHAT_ENABLED"
+	envKeySidecarAuthToken  = "CORELLIA_SIDECAR_AUTH_TOKEN"
+	chatEnabledEnvValueTrue = "true" // entrypoint.sh's literal-string match (default-deny per risk 4)
+
+	// chatSidecarTokenBytes is the entropy of the per-instance bearer
+	// token. 32 bytes URL-safe base64-encodes to 43 ASCII chars — well
+	// inside Fly's secret-value size limit and long enough that brute-
+	// force is uneconomic against a per-machine sidecar that returns
+	// 401 with constant-time compare (Phase 1's bearer_auth middleware).
+	chatSidecarTokenBytes = 32
 )
 
 // agentQueries is the narrowed view of db.Queries this service touches.
@@ -195,6 +213,20 @@ func (s *Service) Spawn(ctx context.Context, in SpawnInput) (*corelliav1.AgentIn
 		return nil, err
 	}
 
+	// M-chat Phase 3: when chat is opted-in for this spawn, generate
+	// the per-instance bearer token *before* the tx so the audit row
+	// (inserted inside the tx) and the env-var injection (outside the
+	// tx, on the spec.Env map) reference the same value. Generation
+	// must succeed before any DB write happens — a crypto/rand failure
+	// is a system-state error and shouldn't leave a half-spawned row.
+	var chatToken string
+	if cfg.ChatEnabled {
+		chatToken, err = generateChatSidecarToken()
+		if err != nil {
+			return nil, fmt.Errorf("agents: generate sidecar token: %w", err)
+		}
+	}
+
 	var instance db.AgentInstance
 	if err := s.txr.WithSpawnTx(ctx, func(q SpawnTx) error {
 		var qErr error
@@ -207,6 +239,7 @@ func (s *Service) Spawn(ctx context.Context, in SpawnInput) (*corelliav1.AgentIn
 			ModelProvider:   in.Provider,
 			ModelName:       in.ModelName,
 			ConfigOverrides: []byte(`{}`),
+			ChatEnabled:     cfg.ChatEnabled,
 		})
 		if qErr != nil {
 			return fmt.Errorf("agents: insert instance: %w", qErr)
@@ -234,6 +267,23 @@ func (s *Service) Spawn(ctx context.Context, in SpawnInput) (*corelliav1.AgentIn
 			return fmt.Errorf("agents: insert secret audit row: %w", qErr)
 		}
 
+		// M-chat Phase 3: second audit row for the chat-sidecar bearer
+		// token, only when chat is opted-in. Same opaque-ref shape as
+		// the model-API-key audit above; Phase 4's ChatWithAgent will
+		// load the actual value out of the deploy target's secret store
+		// (Fly app secrets) via this storage_ref. Atomic with the
+		// instance + model-key inserts: a tx rollback un-records all
+		// three together, no half-spawned secret state.
+		if cfg.ChatEnabled {
+			if _, qErr = q.InsertSecret(ctx, db.InsertSecretParams{
+				AgentInstanceID: instance.ID,
+				KeyName:         envKeySidecarAuthToken,
+				StorageRef:      fmt.Sprintf("%s:%s:%s", deployer.Kind(), instance.ID, envKeySidecarAuthToken),
+			}); qErr != nil {
+				return fmt.Errorf("agents: insert chat-sidecar audit row: %w", qErr)
+			}
+		}
+
 		// M5 Phase 4: persist the resolved DeployConfig in the same
 		// tx. The InsertAgentInstance query relies on column DEFAULTs
 		// for the nine new fields (so the M4 shape was preserved at
@@ -247,8 +297,12 @@ func (s *Service) Spawn(ctx context.Context, in SpawnInput) (*corelliav1.AgentIn
 		}
 		// Patch the in-memory copy so the proto projection at the end
 		// of Spawn reflects the post-update state — InsertAgentInstance
-		// returns the column DEFAULTs, but the cfg the caller asked for
-		// is what hit the row in the same tx via UpdateAgentDeployConfig.
+		// returns the column DEFAULTs for deploy-config columns (chat_enabled
+		// is *not* among them — it's written by InsertAgentInstance
+		// directly via the M-chat Phase 3 widening, so RETURNING * has
+		// the correct value). UpdateAgentDeployConfig has overwritten
+		// the nine deploy-config columns; this helper keeps the
+		// in-memory copy in sync without a re-read.
 		applyDeployConfigToInstance(&instance, cfg)
 		return nil
 	}); err != nil {
@@ -265,15 +319,24 @@ func (s *Service) Spawn(ctx context.Context, in SpawnInput) (*corelliav1.AgentIn
 	// FlyDeployTarget reads them from cfg via WithDefaults. The Phase
 	// 3 fall-through path is now dormant — preserved on the deploy
 	// side as back-compat, unused from here onward.
+	env := map[string]string{
+		"CORELLIA_AGENT_ID":       instance.ID.String(),
+		"CORELLIA_MODEL_PROVIDER": in.Provider,
+		"CORELLIA_MODEL_NAME":     in.ModelName,
+		"CORELLIA_MODEL_API_KEY":  in.APIKey,
+	}
+	// M-chat Phase 3: chat env vars live alongside CORELLIA_MODEL_API_KEY
+	// in the same Fly app-secrets surface. The entrypoint.sh's literal-
+	// string "true" match (Phase 2 default-deny) is what the
+	// chatEnabledEnvValueTrue constant pins.
+	if cfg.ChatEnabled {
+		env[envKeyChatEnabled] = chatEnabledEnvValueTrue
+		env[envKeySidecarAuthToken] = chatToken
+	}
 	result, err := deployer.Spawn(ctx, deploy.SpawnSpec{
 		Name:     instance.ID.String(),
 		ImageRef: adapter.AdapterImageRef,
-		Env: map[string]string{
-			"CORELLIA_AGENT_ID":       instance.ID.String(),
-			"CORELLIA_MODEL_PROVIDER": in.Provider,
-			"CORELLIA_MODEL_NAME":     in.ModelName,
-			"CORELLIA_MODEL_API_KEY":  in.APIKey,
-		},
+		Env:      env,
 	}, cfg)
 	if err != nil {
 		// Redact the upstream error (decision 25): generic ErrFlyAPI
@@ -770,6 +833,24 @@ func tsToRFC3339(t pgtype.Timestamptz) string {
 }
 
 func ptrOf(s string) *string { return &s }
+
+// generateChatSidecarToken returns a fresh URL-safe base64 token for
+// the per-instance bearer auth on the chat sidecar (M-chat Phase 3,
+// decision 5). 32 bytes of entropy → 43-char base64-RawURL string;
+// well below Fly's secret-value size limit and long enough that the
+// constant-time compare in the sidecar's bearer_auth middleware
+// (Phase 1) makes brute force uneconomic.
+//
+// Errors only on crypto/rand exhaustion — a system-state failure that
+// caller should bubble up as a spawn error rather than silently
+// fall through to a non-chat-enabled posture.
+func generateChatSidecarToken() (string, error) {
+	buf := make([]byte, chatSidecarTokenBytes)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
 
 // applyDeployConfigToInstance writes the cfg's nine fields onto the
 // in-memory db.AgentInstance row. Used by Spawn after the in-tx

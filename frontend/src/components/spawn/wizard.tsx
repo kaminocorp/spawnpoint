@@ -277,14 +277,14 @@ export function Wizard({ templateId }: { templateId: string }) {
     <div className="space-y-6">
       <header className="flex items-end justify-between border-b border-border pb-4">
         <div>
-          <div className="font-display text-[10px] uppercase tracking-widest text-muted-foreground/60">
+          <div className="font-display text-[11px] uppercase tracking-widest text-muted-foreground/60">
             [ LAUNCHPAD // CONFIGURE ]
           </div>
           <h1 className="mt-1 font-display text-2xl font-bold uppercase tracking-widest text-foreground">
             {(harness?.name ?? template.name).toUpperCase()}
           </h1>
         </div>
-        <div className="font-display text-[10px] uppercase tracking-widest text-muted-foreground">
+        <div className="font-display text-[11px] uppercase tracking-widest text-muted-foreground">
           STEP {STEP_META[state.current].ordinal} OF {STEPS.length}
         </div>
       </header>
@@ -413,19 +413,19 @@ function HarnessStep({
         </div>
         <div className="flex-1 space-y-3">
           <div>
-            <div className="font-display text-[10px] uppercase tracking-widest text-muted-foreground/70">
+            <div className="font-display text-[11px] uppercase tracking-widest text-muted-foreground/70">
               HARNESS
             </div>
-            <div className="mt-1 font-mono text-sm text-foreground">
+            <div className="mt-1 font-mono text-base text-foreground">
               {harness?.name ?? template.name}
             </div>
           </div>
           {(template.description || harness?.description) && (
-            <p className="text-xs leading-relaxed text-muted-foreground">
+            <p className="text-sm leading-relaxed text-muted-foreground">
               {template.description || harness?.description}
             </p>
           )}
-          <dl className="space-y-1 font-mono text-[11px]">
+          <dl className="space-y-1 font-mono text-xs">
             <SpecRow label="ADAPTER" value="hand-written" />
             <SpecRow label="DEPLOY" value="fly.io" />
             <SpecRow label="TEMPLATE" value={template.id} />
@@ -617,7 +617,7 @@ function DeploymentStep({ state, dispatch, isCurrent }: StepBodyProps) {
 
   return (
     <div className="space-y-4">
-      <p className="text-xs leading-relaxed text-muted-foreground">
+      <p className="text-sm leading-relaxed text-muted-foreground">
         Where and how this agent runs. Region + size + volume become
         immutable lightly: most can be edited live from the fleet page;
         region change destroys and respawns the agent.
@@ -740,14 +740,14 @@ function ReviewStep({
 
   return (
     <div className="space-y-4">
-      <p className="text-xs leading-relaxed text-muted-foreground">
+      <p className="text-sm leading-relaxed text-muted-foreground">
         Review the configuration. Deploying spins up{" "}
         {cfg.desiredReplicas === 1 ? "one Fly machine" : `${cfg.desiredReplicas} Fly machines`}{" "}
         in <code className="text-foreground">{cfg.region}</code> and lands you
         on the fleet view.
       </p>
 
-      <dl className="space-y-1 font-mono text-[11px]">
+      <dl className="space-y-1 font-mono text-xs">
         <SpecRow label="HARNESS" value={harness?.name ?? template.name} />
         <SpecRow label="NAME" value={state.fields.name} />
         <SpecRow label="PROVIDER" value={providerLabel(state.fields.provider)} />
@@ -818,14 +818,14 @@ function DeployLog({
     <div className="space-y-6">
       <header className="flex items-end justify-between border-b border-border pb-4">
         <div>
-          <div className="font-display text-[10px] uppercase tracking-widest text-muted-foreground/60">
+          <div className="font-display text-[11px] uppercase tracking-widest text-muted-foreground/60">
             [ LAUNCHPAD // DEPLOYING ]
           </div>
           <h1 className="mt-1 font-display text-2xl font-bold uppercase tracking-widest text-foreground">
             {templateName.toUpperCase()}
           </h1>
         </div>
-        <div className="font-display text-[10px] uppercase tracking-widest text-muted-foreground">
+        <div className="font-display text-[11px] uppercase tracking-widest text-muted-foreground">
           {isError ? "ERROR" : "IN FLIGHT"}
         </div>
       </header>
@@ -835,7 +835,7 @@ function DeployLog({
         accent={accent}
         meta={isError ? "FAILED" : "STREAMING"}
       >
-        <pre className="min-h-[160px] whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-foreground/80">
+        <pre className="min-h-[160px] whitespace-pre-wrap font-mono text-xs leading-relaxed text-foreground/80">
           {visibleLines.join("\n")}
         </pre>
         {isError && (
@@ -870,7 +870,7 @@ function Field({
       <Label htmlFor={id}>{label}</Label>
       {children}
       {hint && !error && (
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <p className="text-sm text-muted-foreground">{hint}</p>
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
@@ -943,7 +943,7 @@ function ApiKeyField({
           )}
         </button>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         Forwarded once to the agent&apos;s secret store. Never written to
         Corellia&apos;s database.
       </p>
@@ -960,7 +960,7 @@ function ConfirmedSummary({
   rows: ReadonlyArray<{ label: string; value: string }>;
 }) {
   return (
-    <dl className="space-y-1 font-mono text-[11px]">
+    <dl className="space-y-1 font-mono text-xs">
       {rows.map((r) => (
         <SpecRow key={r.label} label={r.label} value={r.value} />
       ))}
@@ -979,7 +979,7 @@ function SpecRow({
 }) {
   return (
     <div className="flex items-baseline gap-2">
-      <dt className="w-24 shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground/70">
+      <dt className="w-24 shrink-0 text-[11px] uppercase tracking-wider text-muted-foreground/70">
         {label}
       </dt>
       <dd
@@ -989,7 +989,7 @@ function SpecRow({
       >
         {value}
         {deferred && (
-          <span className="ml-2 font-display text-[9px] uppercase tracking-widest text-muted-foreground/50">
+          <span className="ml-2 font-display text-[10px] uppercase tracking-widest text-muted-foreground/50">
             [ COMING WITH FLEET CONTROL ]
           </span>
         )}
@@ -1031,7 +1031,7 @@ function WizardSkeleton() {
 function WizardError({ message }: { message: string }) {
   return (
     <TerminalContainer title="WIZARD" accent="failed">
-      <p className="font-mono text-xs text-[hsl(var(--status-failed))]">
+      <p className="font-mono text-sm text-[hsl(var(--status-failed))]">
         {message}
       </p>
     </TerminalContainer>
@@ -1041,7 +1041,7 @@ function WizardError({ message }: { message: string }) {
 function WizardNotFound({ id }: { id: string }) {
   return (
     <TerminalContainer title="TEMPLATE NOT FOUND" accent="failed">
-      <p className="font-mono text-xs text-muted-foreground">
+      <p className="font-mono text-sm text-muted-foreground">
         No agent template matches{" "}
         <code className="text-foreground">{id}</code>. The template may have
         been removed or the link is stale.

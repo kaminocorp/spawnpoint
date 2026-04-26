@@ -650,6 +650,61 @@ func TestLifoTail_FailedMachinesDestroyedFirst(t *testing.T) {
 	}
 }
 
+// M-chat Phase 3: chat-sidecar services block emission.
+//
+// machineConfigFor is the single grep target for "what shape goes on
+// the wire to flaps.Launch?" — testing it directly exercises the
+// invariant that ChatEnabled flips on a services block and nothing
+// else, without having to thread a LaunchMachineInput-recording fake
+// through every Spawn call site.
+
+func TestMachineConfigFor_ChatDisabledOmitsServices(t *testing.T) {
+	cfg := DeployConfig{
+		Region: "iad", CPUKind: "shared", CPUs: 1, MemoryMB: 256,
+		RestartPolicy: "on-failure", DesiredReplicas: 1,
+		LifecycleMode: "always-on", VolumeSizeGB: 1,
+		ChatEnabled: false,
+	}
+	mc := machineConfigFor("ghcr.io/foo/bar@sha256:abc", cfg.CPUs, cfg.MemoryMB, cfg)
+	if mc.Services != nil {
+		t.Errorf("Services = %+v, want nil for chat-disabled spawn", mc.Services)
+	}
+}
+
+func TestMachineConfigFor_ChatEnabledEmitsExactlyOneService(t *testing.T) {
+	cfg := DeployConfig{
+		Region: "iad", CPUKind: "shared", CPUs: 1, MemoryMB: 256,
+		RestartPolicy: "on-failure", DesiredReplicas: 1,
+		LifecycleMode: "always-on", VolumeSizeGB: 1,
+		ChatEnabled: true,
+	}
+	mc := machineConfigFor("ghcr.io/foo/bar@sha256:abc", cfg.CPUs, cfg.MemoryMB, cfg)
+	if len(mc.Services) != 1 {
+		t.Fatalf("Services len = %d, want 1", len(mc.Services))
+	}
+	svc := mc.Services[0]
+	if svc.Protocol != "tcp" {
+		t.Errorf("Protocol = %q, want %q", svc.Protocol, "tcp")
+	}
+	if svc.InternalPort != 8642 {
+		t.Errorf("InternalPort = %d, want 8642 (blueprint §3.1)", svc.InternalPort)
+	}
+	if len(svc.Ports) != 1 {
+		t.Fatalf("Ports len = %d, want 1", len(svc.Ports))
+	}
+	p := svc.Ports[0]
+	if p.Port == nil || *p.Port != 443 {
+		got := "<nil>"
+		if p.Port != nil {
+			got = fmt.Sprintf("%d", *p.Port)
+		}
+		t.Errorf("Port = %s, want 443 (decision 4 + 12)", got)
+	}
+	if !contains(p.Handlers, "http") || !contains(p.Handlers, "tls") {
+		t.Errorf("Handlers = %v, want both 'http' and 'tls'", p.Handlers)
+	}
+}
+
 // -----------------------------------------------------------------------------
 // helpers
 // -----------------------------------------------------------------------------

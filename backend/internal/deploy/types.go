@@ -27,6 +27,32 @@ type DeployConfig struct {
 	LifecycleMode     string
 	DesiredReplicas   int
 	VolumeSizeGB      int
+
+	// ChatEnabled controls whether the chat sidecar runs alongside the
+	// harness inside the deployed machine. M-chat Phase 3 + plan
+	// decision 6.
+	//
+	// When TRUE: FlyDeployTarget.Spawn emits a `services` block on the
+	// machine config (external :443 → internal :8642), and the agents
+	// service layer adds CORELLIA_CHAT_ENABLED=true plus a generated
+	// CORELLIA_SIDECAR_AUTH_TOKEN to the spec.Env map (which the
+	// FlyDeployTarget.Spawn loop persists as Fly app secrets, alongside
+	// CORELLIA_MODEL_API_KEY). The adapter image's entrypoint.sh
+	// (Phase 2) reads CORELLIA_CHAT_ENABLED and starts the sidecar
+	// process only on the literal string "true" (default-deny per risk
+	// 4); the sidecar's bearer-auth middleware reads the token.
+	//
+	// When FALSE (Go zero, the byte-equivalent-to-M5 path): no services
+	// block, no chat env vars, no audit secret row. The deployed
+	// machine has no inbound network exposure — same posture as every
+	// pre-this-milestone agent.
+	//
+	// No WithDefaults treatment — the wire / handler layer is the
+	// single source of truth. Phase 3-to-Phase 5 callers (which don't
+	// yet carry the field on the wire) get the Go zero value (FALSE),
+	// matching the gap-period intent that chat opt-in lands when the
+	// wizard ships in Phase 5.
+	ChatEnabled bool
 }
 
 // Defaults that line up with the migration's column DEFAULTs and

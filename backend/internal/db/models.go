@@ -34,6 +34,7 @@ type AgentInstance struct {
 	LifecycleMode     string             `json:"lifecycle_mode"`
 	DesiredReplicas   int32              `json:"desired_replicas"`
 	VolumeSizeGb      int32              `json:"volume_size_gb"`
+	ChatEnabled       bool               `json:"chat_enabled"`
 }
 
 type AgentTemplate struct {

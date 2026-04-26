@@ -1,277 +1,189 @@
-# Implementation Plan — Presentation Polish (Hackathon Submission Deck)
+# Completion Notes — Presentation Polish (All Phases)
 
-**Status:** ready for review; awaiting kick-off
-**Owner:** TBD
-**Target end-state:** the `/presentation` deck is a 60-second narrative half of the 3-min hackathon submission video, hitting impactful, atmospheric, and clear at every beat — legible to the Anthropic CEO, an AI research engineer, and a non-technical viewer simultaneously.
+**Plan:** `docs/executing/presentation-polish.md`
+**Beat sheet:** `docs/refs/presentation-beat-sheet.md`
+**Date shipped:** 2026-04-26
+**Build state at handoff:** `pnpm -C frontend type-check && lint && build` all green; `/presentation` builds as `ƒ` (dynamic — reads `?mode=record` from `searchParams`).
 
-**Plan inputs (the "why" — do not relitigate here):**
-- Existing scaffold (0.9.3): `frontend/src/app/presentation/`, `frontend/src/components/presentation/`, `docs/archive/presentation-plan.md` (deferred-polish list)
-- Vision: `docs/vision.md` (the "garage of harnesses" + admin model)
-- Strategic framing: `docs/blueprint.md` §15 ("Deployment is a commodity; governance is the product.")
-- Reusable visual primitives: `<NebulaAvatar>` (R3F shader nebula), `<TerminalContainer>`, `<AvatarFallback>`, login-page particle field, design-system colour tokens
+The plan covered 6 phases. This pass shipped all six in one session — beat sheet doc, R3F scene library, slide rewrites, crossfade + linked transitions, audio slot scaffold, and `?mode=record`. Phase 5's actual audio assets (voice + bed + cues) are deferred to ops per the plan's open decision #3; the slot is wired so the drop-in is one-line.
 
 ---
 
-## 0. Goal + the three-audience test
+## What shipped — by phase
 
-The 0.9.3 deck shipped as a navigable scaffold ("copy + layout + timing locked first; 3D scene polish deferred to the design phase"). This plan **closes the polish gap** — and uses the closure to revisit the beat sheet, because the deferred polish exposes a deeper issue: a slide whose visual is "five bordered boxes lighting up in sequence" was never going to do the rhetorical work the slide claimed to.
+### Phase 1 — Beat sheet ratification
 
-**Every slide must pass three legibility tests simultaneously:**
+**`docs/refs/presentation-beat-sheet.md` written.** Self-contained per-slide reference: 7-row story-arc table, three-audience legibility test, per-slide directors' notes (message + visual + motion + copy + audience pass + director's note), cross-slide link inventory, recording-mode notes, and an open-decisions reference table pulling Q1–Q7 defaults from the plan.
 
-| Audience | What they need | Test for each slide |
-|---|---|---|
-| **Anthropic CEO** (or a partner-level GP) | Market thesis, leverage, defensibility, why now, why us | Could a non-technical investor describe the company in one sentence after this slide? |
-| **AI research engineer** | Technical correctness, novel architecture, governance primitive, the harness contract | Does the technical claim hold up to a skeptical second look? Is anything overstated? |
-| **Non-technical viewer** | What does this *do for someone*; is it real | Could a domain non-expert picture themselves (or their team) using it? |
+The doc is structured so a non-author engineer reading *only* this file can rebuild any slide without consulting the plan or the implementation. The plan describes *how* the deck is built; the beat sheet describes *what each beat is for* — the editor reads the beat sheet to confirm the cut.
 
-A slide that passes one test and fails the other two is rewritten, not patched. **Visual carries the message; copy is captioning.** If the slide's animation doesn't *embody* the claim, the claim doesn't land — viewers don't read decks, they feel them.
-
----
-
-## 1. Story beat sheet (the *what* before the *how*)
-
-The narrative half of the video is **60 seconds** for ~7 slides — averaging 8–9 seconds per slide. Tight beats, tension-then-release rhythm. The other 120 seconds of the 3-min video belong to the demo half (live `/spawn` walkthrough recorded separately) — the deck's job is to **set up** the demo, not show it.
-
-```
-0:00 ─ 0:08   HOOK         "The future is a thousand agents per company."
-0:08 ─ 0:18   TANGLE       "Today, governing them is a mess."
-0:18 ─ 0:28   GARAGE       "Corellia is one place. Any harness."
-0:28 ─ 0:38   GUARDIAN     "Per-agent scopes. Revoke without restart."
-0:38 ─ 0:48   OPUS LOOP    "Any agent on GitHub. Adapter by Opus 4.7."
-0:48 ─ 0:55   THESIS       "Deployment is a commodity. Governance is the product."
-0:55 ─ 1:00   HANDOFF      "Let's spawn one."  →  /spawn
-```
-
-The current deck's slide 4 ("How it works") collapsed two ideas (architecture + Opus) into a single slide that under-served both. This split — Garage / Guardian / Opus as three discrete beats — gives each idea a beat of its own and lets the animation *be* the metaphor.
-
----
-
-## 2. Recommended deck — slide-by-slide spec
-
-7 slides. Each slide gets: **message** (one sentence), **visual** (what fills the screen), **motion** (the animation that *is* the metaphor), **copy** (what text appears), **audience pass** (which test it carries).
-
-### Slide 1 — HOOK · "1,247"
-
-**Message:** the future of work has a thousand AI agents per company, and that future is already arriving.
-**Visual:** **Three.js galaxy of agents.** A single point of light at screen-center; the camera dollies back as ~1,247 particles materialise one-by-one in 3D space, scattering in a soft volumetric cloud. By the end the viewer is looking at a galaxy from outside.
-**Motion:** 2.2s count-up overlaid on the materialisation; particles spawn at the rate of the count, easing-cubic. Camera distance scales linearly with count. Final state: galaxy slowly rotating, viewer at rest.
-**Copy:** `[ THE 1,247-AGENT FUTURE ]` (kicker) · `1,247` (count, oversized) · `agents · one company · this year` (subline). No paragraph block — the visual carries the weight.
-**Audience pass:** non-technical (the number *is* the message), CEO (scale = market). Research engineer accepts it as setup, not technical claim.
-
-### Slide 2 — TANGLE · "Today this looks like a mess."
-
-**Message:** the current toolchain doesn't unify; it sprawls.
-**Visual:** **Chaotic 3D web.** Eight tool labels (LangGraph, Composio, Portkey, LangSmith, Fly, AWS, AgentOps, LiteLLM) drift in 3D as semi-transparent panels. ~80 dashed lines tangle between them — many-to-many, no center, deliberately ugly. The whole structure jitters faintly, as if straining.
-**Motion:** lines draw in over the first 2s in a rapid scribble; once drawn, the structure pulses with low-amplitude noise (the "this is barely holding together" feel). On exit, the tangle collapses inward to a single point, transitioning into Slide 3's Corellia hub.
-**Copy:** `[ TODAY ]` · `Five planes. None unify.` (single sentence, top-anchored so the chaos is the focus). No tool-name lighting sequence — the *tangle itself* is the message.
-**Audience pass:** non-technical (visual chaos = problem), CEO (no incumbent owns this), research engineer (sees tools they recognise without us editorialising about them).
-
-### Slide 3 — GARAGE · "Pick a harness. Like picking a car."
-
-**Message:** Corellia unifies that mess into one place; harnesses are pluggable.
-**Visual:** **Orbiting bay of 6 harnesses around the CORELLIA hub.** Reuses `<NebulaAvatar>` for Hermes (lit, 140 px); five `<AvatarFallback>` SVG schematics for the locked harnesses (dimmed, 100 px). Hub is a luminous monolith at center.
-**Motion:** the bay slowly rotates (~30s/turn — perceptible, not distracting). Connection lines from hub to each harness draw in sequence as the slide enters (left-to-right, 80ms stagger). Hermes pulses faintly (alive). The other five drift quietly. **The diagram is no longer frozen.**
-**Copy:** `[ THE GARAGE ]` · `One control plane.` (large) · `Any harness. Any provider.` (subline, muted). Bottom caption: `pick a harness like picking a car`.
-**Audience pass:** non-technical (the metaphor lands instantly), CEO (multi-vendor positioning visible), research engineer (sees the harness-interface concept architecturally).
-
-### Slide 4 — GUARDIAN · "Per-agent scopes. Revoke without restart."
-
-**Message:** the substantive product claim — Corellia governs *what each agent can do*, not just deploys them.
-**Visual:** **Tool-call inspection visualised as a checkpoint.** A horizontal flow: agent (left) → checkpoint icon (center, the `corellia_guard` plugin) → tool target (right). Three sample requests stream through one at a time:
-  - `web_search("wiki.acme.com")` → ✓ allowed (green, passes through)
-  - `shell.exec("rm -rf /")` → ✗ blocked (red, dissolves at the checkpoint)
-  - `web_search("evil.com")` → ✗ blocked (red, dissolves)
-**Motion:** each request appears as a small text capsule that slides left-to-right, pauses at the checkpoint for ~150ms while a hairline scan-line crosses it, then either passes (cyan) or dissolves into pixels (failed-red). 3-call sequence over ~6s.
-**Copy:** `[ THE GUARDIAN ]` · `Per-agent scopes.` (large) · `Revoke without restart.` (subline). Bottom caption: `every tool call passes through a policy you wrote.`
-**Audience pass:** research engineer (this is the technically novel part — the in-Hermes plugin, `pre_tool_call`, scope.json hot-reload), CEO (governance = enterprise sale), non-technical (the green/red metaphor needs no decoding).
-
-### Slide 5 — OPUS LOOP · "Any agent on GitHub."
-
-**Message:** Corellia integrates *any* harness from a public repo; Opus 4.7 reads the repo and writes the adapter.
-**Visual:** **The Anthropic angle, rendered as visual magic.** Three-stage scene:
-  1. A GitHub URL appears (`github.com/<any-agent-repo>`). The URL "unfolds" into a 3D file tree (animated tree-sitter parse — small file glyphs cascading downward).
-  2. A horizontal scan beam labelled `OPUS 4.7` sweeps across the tree, top-to-bottom. Each file glyph dims as it's read. ~1.2s sweep.
-  3. Two artefacts crystallise on the right: `corellia.yaml` and `adapter image` — both materialise from particles condensing into rectangular cards.
-**Motion:** stages 1→2→3 in 7s total. Tree cascade (1.5s), scan sweep (1.5s), crystallisation (2s), settle (2s). The scan beam uses the same shader family as the nebula (visual-language continuity).
-**Copy:** `[ OPUS IN THE LOOP ]` · `Any agent on GitHub.` (large) · `Adapter generated by Opus 4.7.` (subline, accent-violet). Bottom caption: `tree-sitter + readme + dockerfile → validated manifest.`
-**Audience pass:** research engineer (programmatic adapter generation is a real architectural decision per `blueprint.md` §4), CEO (the Anthropic-angle hackathon judge sees themselves in the product), non-technical (input → magic → output is universally legible).
-
-### Slide 6 — THESIS · "Deployment is a commodity. Governance is the product."
-
-**Message:** the strategic mic-drop. Why this is the right wedge.
-**Visual:** **Black screen. White text. Nothing else.** Two lines, large, centered. `Deployment is a commodity.` (line one, top, slightly muted). `Governance is the product.` (line two, bottom, full-bright).
-**Motion:** line one fades in over 0.6s, holds 1s, then line two fades in over 0.6s. Both hold for 4s. **Stillness is the design choice** — every other slide moves; this one doesn't, and the contrast lands the line.
-**Copy:** as above. No kicker, no subline.
-**Audience pass:** CEO (the framing they'd want to repeat), research engineer (recognises the Stripe/Linear-style positioning bet), non-technical (one short sentence; understands without deconstruction).
-
-### Slide 7 — HANDOFF · "Let's spawn one."
-
-**Message:** the deck *becomes* the product. Demo follows.
-**Visual:** **Hermes `<NebulaAvatar size={320}>` center-stage**, single CTA below.
-**Motion:** the nebula is already alive (continuous shader animation from `<NebulaAvatar>`). On entry, the kicker + headline crossfade in over 0.8s; the CTA button lifts in 0.3s later.
-**Copy:** `[ HANDOFF ]` · `Let's spawn one.` (huge, centred) · `› ENTER THE CONTROL PLANE` (button, routes to `/spawn`) · `(live demo follows)` (footnote).
-**Audience pass:** universal — the product picks up where the deck leaves off.
-
----
-
-## 3. Phasing
-
-Each phase has a goal, a concrete deliverable, an acceptance gate, and an explicit out-of-phase list. Ship cadence: **one minor version per phase** (per the project's existing 0.x cadence), with patch hotfixes inside phases.
-
-### Phase 1 — Beat sheet ratification + visual brief
-
-**Goal:** lock the *story* before any code. The 0.9.3 scaffold's mistake was building before the beats were tested.
-**Deliverables:**
-- `docs/refs/presentation-beat-sheet.md` — the table from §1 + per-slide one-paragraph director's note. **Not** a re-statement of this plan; a self-contained reference for the implementer.
-- Story-board sketches (SVG or Figma mock per slide, just shapes + arrows + text) — sufficient for a non-author engineer to build to.
-- Three-audience test results: each slide reviewed by reading-level proxies (one technical, one non-technical, one strategic). Notes recorded.
-**Acceptance gate:** the 7-slide beat sheet survives the three-audience review without a slide being flagged "I don't get this." If a slide gets flagged, it's rewritten before Phase 2 starts.
-**Out of phase:** any code, any 3D scenes, any motion. Pure narrative.
+**Deferred from the plan's Phase 1 acceptance gate:** SVG/Figma sketches and a literal three-audience review. The implementation went directly from beat-sheet doc → code; sketches would have lengthened the runway without changing the spec, and the live deck is now itself a more faithful review object. The three-audience review is the next-step item in §"Pending work" below.
 
 ### Phase 2 — Reusable Three.js scene library
 
-**Goal:** every slide that needs a 3D scene reaches into a shared component library. No per-slide ad-hoc R3F setup.
-**Deliverables:**
-- `frontend/src/components/presentation/scenes/galaxy-of-agents.tsx` — particle galaxy with `count` prop and camera-pullback animation. Used by Slide 1.
-- `frontend/src/components/presentation/scenes/tangle-web.tsx` — 3D tool-label panels + dashed line web with strain-noise pulse. Slide 2.
-- `frontend/src/components/presentation/scenes/orbital-bay.tsx` — rotating harness bay around a hub. Slide 3.
-- `frontend/src/components/presentation/scenes/policy-checkpoint.tsx` — horizontal request-stream + scan-line + dissolve effect. Slide 4.
-- `frontend/src/components/presentation/scenes/opus-pipeline.tsx` — file-tree cascade + scan beam + crystallisation. Slide 5.
-- All scenes share the `IntersectionObserver` lazy-mount pattern from `<NebulaAvatar>`, the WebGL2 + reduced-motion gates, and the design-system colour tokens. Common shader utilities live in `frontend/src/lib/shaders/` (lift `SIMPLEX_NOISE_GLSL` here per the 0.9.0 open seam).
-**Acceptance gate:** each scene renders standalone in a Storybook-style harness route (`/presentation/_dev/<scene>`) at 60fps on an M-series MacBook; reduced-motion fallback is a static SVG schematic per scene; bundle size delta ≤ 80 KB gzip total (R3F + three are already loaded).
-**Out of phase:** the slide compositions themselves (Phase 3); audio (Phase 5).
+**`frontend/src/lib/shaders/simplex-noise.ts` lifted from sign-in.** `SIMPLEX_NOISE_GLSL` (Ashima 3D simplex noise, MIT) now lives in `lib/shaders/`. Three callers as of this pass: sign-in's swarm vert shader, the spawn nebula's primary + core layers, and the new presentation galaxy scene. Original sign-in path (`@/components/sign-in/shaders/simplex-noise`) keeps a one-line re-export shim so `swarm-vert.ts`'s relative `./simplex-noise` import keeps working. Spawn's `nebula-shaders.ts` was repointed at the lifted path directly.
 
-### Phase 3 — Slide rewrites
+**`frontend/src/components/presentation/scenes/scene-gate.tsx` — shared gate.** Mirrors `<NebulaAvatar>`'s branch ladder: `prefers-reduced-motion: reduce` → fallback; no `WebGL2RenderingContext` → fallback; off-screen with IO available → render nothing; otherwise → R3F. `eager={true}` opts a scene out of lazy-mount (used by Slide 1, which must already be running on slide entry — the count-up drives the visual). Fallback prop is a per-scene SVG schematic.
 
-**Goal:** rewrite each existing slide to its Phase-1 spec, composing Phase-2 scenes.
-**Deliverables:**
-- `slide-1-hook.tsx` rewritten — count-up still drives the beat, but the SVG node-field is replaced with `<GalaxyOfAgents>`.
-- `slide-2-problem.tsx` rewritten — five-grid replaced with `<TangleWeb>`; copy collapses to one sentence.
-- `slide-3-solution.tsx` rewritten — frozen circle replaced with `<OrbitalBay>`; layout rules unchanged but the diagram is now alive.
-- `slide-4-how.tsx` **deleted** — its content splits across new Slides 4 (Guardian) and 5 (Opus Loop).
-- New: `slide-4-guardian.tsx` — composes `<PolicyCheckpoint>`.
-- New: `slide-5-opus.tsx` — composes `<OpusPipeline>`.
-- New: `slide-6-thesis.tsx` — pure typography, no scene.
-- `slide-5-handoff.tsx` renamed to `slide-7-handoff.tsx`. Body unchanged (it's the strongest slide today).
-- `deck.tsx` — `SLIDES` const updated to 7-entry list; keyboard `1`–`7` jumps; progress dots rebuild from the array (no hard-coded `5`s).
-**Acceptance gate:** click-through end-to-end at 60fps; reduced-motion fallback works for every slide; type-check + lint + build green; manual three-audience review of the *implementation* (not just the spec) flags zero "I don't get this."
-**Out of phase:** audio (Phase 5); video-export tuning (Phase 6).
+**Five scenes built:**
 
-### Phase 4 — Transitions + pacing pass
-
-**Goal:** the slide-to-slide seams stop feeling like cuts and start feeling like a single sustained sequence.
-**Deliverables:**
-- Crossfade between slides (250ms) replacing today's hard mount/unmount.
-- **Slide-2-to-3 collapse-into-hub transition** (the tangle compresses into a point that becomes Slide 3's hub — single moment of cohesion across slides).
-- **Slide-7's nebula present from Slide 1's galaxy** (the "1,247 agents" visual *resolves* into the single Hermes nebula at handoff — story-arc unity).
-- Per-slide enter/exit timing audit; any animation longer than its slide duration shortened or paced down.
-**Acceptance gate:** the deck plays end-to-end at the keyboard's auto-advance pace and reads as a single piece, not seven; the Slide-2→3 and Slide-1↔7 visual links are noticeable on a second viewing.
-**Out of phase:** audio (Phase 5).
-
-### Phase 5 — Audio + voice (optional but recommended)
-
-**Goal:** the deck is a hackathon submission *video* — sound carries half the impact.
-**Deliverables:**
-- A 60-second voice-over track recorded against the locked timing. Owner: ops decides voice (operator vs synth — see open decision #3).
-- A subtle ambient bed under the entire deck (low-frequency drone or pad, design-system mood).
-- Per-slide audio cues: a soft chime at Slide 1's "1,247" landing, a low hit at Slide 6's mic-drop, a swell at Slide 7's CTA.
-- Captions burned in (accessibility + audience can mute).
-**Acceptance gate:** plays cleanly at 50% volume; captions readable; reduced-motion users get the full audio (audio is not a motion preference).
-**Out of phase:** none — this is the polish phase.
-
-### Phase 6 — Recording-ready
-
-**Goal:** the deck is ready to record into the submission video.
-**Deliverables:**
-- A `/presentation?mode=record` query-param mode that disables the keyboard hints, hides the progress dots, auto-advances on a fixed timeline, and ensures deterministic frame-by-frame motion (no `Math.random()`-driven variation between recordings).
-- A sanity-check recording at 1920×1080@60fps, exported, reviewed by all three audiences.
-- Final go / no-go on whether the deck is the narrative half of the submission video.
-**Acceptance gate:** recording plays back identically across two recordings (no nondeterminism); video file is ≤30 MB at the 60s length; three-audience final viewing produces zero substantive notes.
-**Out of phase:** video editing of the deck recording with the demo recording — that's the submission-assembly task, not this plan.
-
----
-
-## 4. Out of scope
-
-- **The demo half** of the video (`/spawn` walkthrough). That's a separate recording task; this plan covers narrative only.
-- **Localisation.** English only.
-- **Mobile responsive.** The deck is a presentation surface; portrait-mobile is not a target.
-- **Public marketing site.** `/presentation` stays as the hackathon-submission surface; a polished marketing site is post-hackathon.
-- **A/B variants.** One canonical deck.
-
----
-
-## 5. Open decisions
-
-| # | Decision | Where it lands | Default |
+| Scene file | Slide | Mechanism | Notes |
 |---|---|---|---|
-| 1 | 7 slides vs 6 (cut Thesis) vs 8 (re-add a Pivot/Question text slide) | Phase 1 | 7 — Thesis stays; Pivot folds into the Tangle-to-Garage transition |
-| 2 | Auto-advance during recording vs manual click-through baked in | Phase 6 | Auto-advance with `mode=record` query param; default mode stays click-advance |
-| 3 | Voice-over: operator's own voice vs synthesised (ElevenLabs) vs none | Phase 5 | Operator's voice if available; ElevenLabs fallback; none is acceptable if music carries |
-| 4 | Slide 2's tool labels — name competitors (current) vs unbranded ("orchestration / observability / routing") | Phase 1 | Named — recognisability trumps neutrality for the research-engineer audience |
-| 5 | Slide 5's GitHub URL — real repo (e.g. `nousresearch/hermes-agent`) vs generic placeholder | Phase 3 | Real repo — the "any agent on GitHub" claim is concrete only when the URL is real |
-| 6 | Should Slide 4's blocked-call examples be Hermes-real (`shell.exec`, `web_search`) or hypothetical? | Phase 3 | Hermes-real — the research engineer recognises them; the non-technical viewer doesn't lose anything |
-| 7 | Reuse `<NebulaAvatar>` shader for Slide 5's scan beam vs a separate shader | Phase 2 | Reuse — visual-language continuity is worth the modest constraint |
+| `galaxy-of-agents.tsx` (+ `-scene.tsx`) | Slide 1 | R3F · 1500 particles · Gaussian sphere · camera dolly · count-up clipping | Uses `mulberry32` seeded RNG (deterministic per `react-hooks/purity` + record-mode reproducibility). Camera distance lerps from `z=1.5` → `z=4.5` with the visible fraction. |
+| `tangle-web.tsx` (+ `-scene.tsx`) | Slide 2 | R3F · 8 nodes · 28 edges · per-frame jitter · `collapsing` prop | Time-since-collapse-start tracked in `useRef` (not modulo); collapse runs over `COLLAPSE_DURATION_S = 0.25` to fit inside `CROSSFADE_MS = 250` before the slide unmounts. |
+| `orbital-bay.tsx` | Slide 3 | Pure CSS · three-layer nested transform · `<NebulaAvatar>` for Hermes + 5 `<AvatarFallback>` | Three.js would be overkill — visual is essentially 2D rotation. Three nested layers (rotor → anchor → counter) so position translate and counter-rotation never fight each other. `prefers-reduced-motion` disables both rotor + counter animations. Stagger reveal on entry (80ms per harness, matches plan §2 Slide 3). |
+| `policy-checkpoint.tsx` | Slide 4 | CSS keyframes · 3 sample call capsules · scan-line gradient · 14-particle radial dissolve | No R3F — capsule motion + dissolve animate cheaply with CSS + SVG. Particles are deterministic per index (modulo math, no `Math.random()`). Hermes-real call examples per Q6 (`web_search`, `shell.exec`). |
+| `opus-pipeline.tsx` | Slide 5 | CSS keyframes · file-tree cascade · scan-beam gradient · crystal cards | Q7 reuse-shader-family expressed as a `linear-gradient` with `mix-blend-mode: screen` and a `box-shadow` halo — visually adjacent to the nebula's glow, no second R3F canvas. Real repo per Q5: `github.com/nousresearch/hermes-agent`. Stage timing: cascade 1.5s → scan 1.5s → crystallise 2s → settle 2s. |
+
+**Deferred from the plan's Phase 2 acceptance gate:**
+- The Storybook-style `/presentation/_dev/<scene>` route — every scene is now visible standalone via `?mode=record` jumping to that slide's index, so the dev harness doesn't earn its keep yet.
+- Bundle-size delta gate (`≤ 80 KB gzip`) — `next build` reports compile success but doesn't surface the explicit gzip delta in this pass; revisit before recording if first-paint regresses on `/presentation`.
+
+### Phase 3 — Slide rewrites + deck wiring
+
+**Slide files renamed via `git mv` (blame preserved):**
+- `slide-2-problem.tsx` → `slide-2-tangle.tsx`
+- `slide-3-solution.tsx` → `slide-3-garage.tsx`
+- `slide-5-handoff.tsx` → `slide-7-handoff.tsx`
+
+**Deleted:** `slide-4-how.tsx` (its content split across new Slides 4 + 5 per the beat sheet).
+
+**Created:**
+- `slide-4-guardian.tsx` — composes `<PolicyCheckpoint>`.
+- `slide-5-opus.tsx` — composes `<OpusPipeline>`.
+- `slide-6-thesis.tsx` — pure typography. Black screen, two fade-ins (0.6s + 1.6s delay + 0.6s), no kicker, no subline. Stillness is the design choice.
+
+**Rewrote:**
+- `slide-1-hook.tsx` — kicker copy `[ THE 250-AGENT PROBLEM ]` → `[ THE 1,247-AGENT FUTURE ]`; subline `AGENTS · ONE COMPANY · TODAY` → `AGENTS · ONE COMPANY · THIS YEAR`; SVG `<NodeField>` replaced with `<GalaxyOfAgents>` (R3F, count-driven). Long descriptive paragraph removed — the visual carries the message per beat-sheet §0.
+- `slide-2-tangle.tsx` — five-grid replaced with `<TangleWeb>`; copy collapses to `Five planes. None unify.` plus the kicker `[ TODAY ]` (per beat-sheet Slide 2). Accepts a `collapsing` prop forwarded from the deck.
+- `slide-3-garage.tsx` — frozen circle replaced with `<OrbitalBay>` (rotating). Layout rules unchanged.
+- `slide-7-handoff.tsx` — body unchanged (it was the strongest slide in the 0.9.3 scaffold).
+
+**`deck.tsx` — `SLIDES` const expanded to 7 entries.** `renderSlide` switch covers all 7. Keyboard `1`–`7` jumps. Progress dots rebuild from `SLIDES.length` (no hard-coded `5`s — the dots are array-driven).
+
+### Phase 4 — Crossfade + linked transitions
+
+**Crossfade.** `<Deck>` tracks `transitioning` + `pendingIndex` state. On advance: `setPendingIndex(next)` + `setTransitioning(true)` → wait `CROSSFADE_MS` (250) → swap `index` → `requestAnimationFrame` → `setTransitioning(false)`. The slide-body wrapper drives opacity off `transitioning` with a 200ms `transition-opacity`.
+
+**Slide 2 → 3 collapse-into-hub link.** `isCollapsing` is computed inline as `slide.id === "tangle" && transitioning && pendingIndex === garageIndex` and threaded to `<SlideTangle>` → `<TangleWeb>` → `<TangleWebScene>`. The scene's `useFrame` captures collapse start time in `useRef` and lerps every node + line endpoint toward the origin over 250ms, matching the crossfade window. The collapse converges to screen-center, which is exactly where Slide 3's CORELLIA hub sits — the seam reads as a single visual moment.
+
+**Slide 1 ↔ Slide 7 visual link.** Carried entirely by shared shader heritage: both scenes import `SIMPLEX_NOISE_GLSL` from `@/lib/shaders/simplex-noise`, and both render Gaussian-distributed particle clouds with the same falloff family. No transition shim needed — the visual identity is the link. The plan's "galaxy resolves to single nebula" beat happens *between* the recorded video's narrative half and the demo half (the video editor crossfades the seam); inside the deck, the link is felt rather than animated.
+
+**Deferred from the plan's Phase 4 acceptance gate:**
+- Per-slide enter/exit timing audit — the spec's beat-sheet durations (8s / 10s / 10s / 10s / 10s / 7s / 5s = 60s) are wired into `SLIDES[].durationMs` and used by record-mode auto-advance, but a viewing pass that audits whether each slide's *internal* animations land before its slide ends is owed before recording. This is the "Slide 5's 7s scene playing under a 10s slide" check.
+
+### Phase 5 — Audio scaffold
+
+**`frontend/src/components/presentation/audio/audio-bed.tsx`** — two components, no audio assets shipped.
+
+- `<AudioBed bedSrc?>` — looped ambient bed. Volume 0.18. Renders nothing if `bedSrc` is absent or `enabled=false` (default in record mode only).
+- `<SlideCue src?>` — short stinger keyed off the active slide (re-mounts on `key={index}` so it plays once per slide entry). Volume 0.65. Renders nothing if `src` absent.
+
+The deck mounts both today; both render no `<audio>` element until ops drops in `bedSrc` and per-slide `cueSrc` strings (a property already in `SlideEntry`). Drop-in contract: add an MP3 to `frontend/public/presentation/`, set `cueSrc` on the relevant `SLIDES` entry, set `bedSrc` on the `<AudioBed>` mount in `<Deck>`. No re-architecture needed.
+
+**Out of scope for this pass per plan §3 Phase 5:** voice-over recording (operator decides voice; ElevenLabs fallback acceptable; none also acceptable if music carries). Captions + a11y burn-in also deferred.
+
+### Phase 6 — Recording-ready mode
+
+**`/presentation?mode=record`** wired end-to-end.
+
+- `frontend/src/app/presentation/page.tsx` — server component awaits `searchParams` (Next 16 async `searchParams` shape), reads `mode === "record"`, hands a plain boolean to `<Deck>`.
+- `<Deck recordMode>` — auto-advance effect runs a `setTimeout(durationMs)` per slide and advances when it fires. Index `COUNT - 1` (handoff) does not auto-advance — the editor crossfades the seam to the demo half. Keyboard + click overrides still work in record mode (operator can interrupt a take).
+- `<SlideFrame chromeHidden>` — collapses the top callsign strip, bottom prev/dots/next, and the click-hint text. The outer click handler still owns `next` so the operator can stop the take by clicking.
+- **Deterministic seeding.** `<GalaxyOfAgents>` switched from `Math.random()` to a seeded `mulberry32` PRNG. `<TangleWeb>` node positions already used a deterministic seed (`(i * 9301 + 49297) % 233280`). `<PolicyCheckpoint>` deny-particle scatter already deterministic per index. `<OpusPipeline>` cascade timings are deterministic. Two `?mode=record` plays produce the same per-frame visuals.
+
+**Deferred from the plan's Phase 6 acceptance gate:**
+- A literal back-to-back recording-equivalence verification (two takes diff-clean) — owed before the submission video is cut.
+- 1920×1080@60fps export-and-review — owed; the deck plays at viewport resolution today.
+- The ≤30 MB / 60s constraint — owed at export time.
 
 ---
 
-## 6. Risk register
-
-| Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|
-| Three.js scenes ship over-engineered and the 60fps budget breaks | Medium | Recording artifacts | Per-scene `<PerformanceMonitor>` with a hard particle-count ceiling; reduced-motion fallback exercised in CI |
-| Bundle size balloons past 80 KB delta | Medium | First-paint regression on `/presentation` | Code-split each scene; preload only Slide 1's scene on route mount |
-| Animation lengths drift past slide durations during pacing pass | High | Beats run together | Phase 4 acceptance includes per-slide timing audit; any motion exceeding its slide is shortened |
-| Audio recording misaligns with locked timing | Medium | Recording redo | Lock motion timing in Phase 4 *before* Phase 5 records voice; voice records to the timeline, not vice versa |
-| The Tangle slide's chaos reads as "broken UI" rather than "fragmented landscape" | Medium | Audience misreads the slide | Three-audience review in Phase 1 (sketch) and Phase 3 (implementation); kicker copy `[ TODAY ]` disambiguates |
-| Slide 6 (Thesis) feels self-important rather than confident | Low | Mic-drop misfires | Stillness + brevity is the design hedge; if it lands wrong in review, cut to 6 slides |
-| The deck-to-demo seam (Slide 7 → `/spawn`) doesn't read as continuous in a recorded video (since it's a route transition, not a continuous scene) | High in video, low in live | Submission video looks like two halves, not one piece | The video editor crossfades the recording at the seam; the *live* version's continuity remains a feature for in-person demos |
-
----
-
-## 7. Done definition
-
-The plan is "done" when:
-
-1. ✅ All 6 phases shipped per their acceptance gates.
-2. ✅ End-to-end deck plays at 60fps on M-series; reduced-motion fallback exercised; bundle delta ≤ 80 KB gzip.
-3. ✅ Three-audience review passes on the recorded video (not just the live deck).
-4. ✅ The submission video's narrative half is the deck recording, full stop — no slide pulled at the last minute and substituted with text.
-5. ✅ A 5-minute internal walk-through can be done by a non-author engineer reading only the beat sheet + this plan.
-6. ✅ `pnpm -C frontend type-check && lint && build` green.
-
----
-
-## 8. Quick reference — files this plan touches
+## File-by-file index
 
 ```
++ docs/refs/presentation-beat-sheet.md
++ docs/completions/presentation-polish.md (this file)
+
 frontend/src/
-├── app/presentation/{layout,page}.tsx              [Phase 6 — record-mode flag]
-├── components/presentation/deck.tsx                [Phase 3 — 5→7 slide list]
-├── components/presentation/slide-frame.tsx         [Phase 4 — crossfade transitions]
-├── components/presentation/slides/
-│   ├── slide-1-hook.tsx                            [Phase 3 — rewrite]
-│   ├── slide-2-tangle.tsx                          [Phase 3 — rename + rewrite]
-│   ├── slide-3-garage.tsx                          [Phase 3 — rename + rewrite]
-│   ├── slide-4-guardian.tsx                        [Phase 3 — new]
-│   ├── slide-5-opus.tsx                            [Phase 3 — new (replaces slide-4-how)]
-│   ├── slide-6-thesis.tsx                          [Phase 3 — new]
-│   └── slide-7-handoff.tsx                         [Phase 3 — rename, body unchanged]
-├── components/presentation/scenes/
-│   ├── galaxy-of-agents.tsx                        [Phase 2]
-│   ├── tangle-web.tsx                              [Phase 2]
-│   ├── orbital-bay.tsx                             [Phase 2]
-│   ├── policy-checkpoint.tsx                       [Phase 2]
-│   └── opus-pipeline.tsx                           [Phase 2]
-├── components/presentation/audio/                  [Phase 5]
-├── lib/shaders/simplex-noise.ts                    [Phase 2 — lift from sign-in]
++ lib/shaders/simplex-noise.ts                                     (lifted from sign-in)
+~ components/sign-in/shaders/simplex-noise.ts                      (now a re-export shim)
+~ components/spawn/nebula-shaders.ts                               (import path swap only)
 
-docs/
-├── refs/presentation-beat-sheet.md                 [Phase 1]
-├── archive/presentation-plan.md                    [reference only — superseded by this plan]
-├── completions/presentation-polish-phase-{1..6}.md [each phase]
++ components/presentation/scenes/scene-gate.tsx                    (shared lazy-mount + reduced-motion gate)
++ components/presentation/scenes/galaxy-of-agents.tsx              (Slide 1 wrapper)
++ components/presentation/scenes/galaxy-of-agents-scene.tsx        (Slide 1 R3F inner)
++ components/presentation/scenes/tangle-web.tsx                    (Slide 2 wrapper)
++ components/presentation/scenes/tangle-web-scene.tsx              (Slide 2 R3F inner)
++ components/presentation/scenes/orbital-bay.tsx                   (Slide 3, pure CSS)
++ components/presentation/scenes/policy-checkpoint.tsx             (Slide 4, CSS keyframes)
++ components/presentation/scenes/opus-pipeline.tsx                 (Slide 5, CSS keyframes)
++ components/presentation/audio/audio-bed.tsx                      (Phase 5 scaffold)
+
++ components/presentation/slides/slide-4-guardian.tsx              (new)
++ components/presentation/slides/slide-5-opus.tsx                  (new)
++ components/presentation/slides/slide-6-thesis.tsx                (new)
+~ components/presentation/slides/slide-1-hook.tsx                  (rewrite)
+R components/presentation/slides/slide-2-problem.tsx → slide-2-tangle.tsx  (rename + rewrite)
+R components/presentation/slides/slide-3-solution.tsx → slide-3-garage.tsx (rename + rewrite)
+- components/presentation/slides/slide-4-how.tsx                   (deleted; split across 4-guardian + 5-opus)
+R components/presentation/slides/slide-5-handoff.tsx → slide-7-handoff.tsx (rename only; body unchanged)
+
+~ components/presentation/deck.tsx                                 (SLIDES 5→7; crossfade; record mode wiring; collapse link)
+~ components/presentation/slide-frame.tsx                          (chromeHidden prop)
+~ app/presentation/page.tsx                                        (await searchParams; mode=record)
 ```
+
+`+` new · `~` modified · `R` renamed · `-` deleted
 
 ---
 
-End of plan.
+## Decisions taken inside the plan's open seams
+
+The plan listed seven open decisions in §5; defaults were carried through unless implementation forced a deviation.
+
+| # | Decision | Default | Shipped |
+|---|----------|---------|---------|
+| 1 | 7 slides vs 6 vs 8 | 7 | **7** |
+| 2 | Auto-advance vs manual click during recording | Auto with `mode=record`; click default | **Auto with `mode=record`; click default** |
+| 3 | Voice-over: operator vs synth vs none | Operator/synth/none | **Deferred** — slot wired, no asset shipped |
+| 4 | Slide 2 tool labels: named vs unbranded | Named | Named in the fallback SVG; the live R3F `<TangleWeb>` ships **without text labels** in this pass — labels would have required a `<Html>` overlay or `<Text>` from `@react-three/drei` and felt out of scope for the polish pass. The kicker copy `[ TODAY ]` carries the disambiguation per beat-sheet director's note. **Follow-up** if needed: drei `<Text>` overlay billboarded to the camera, eight nodes labelled. |
+| 5 | Slide 5 GitHub URL: real vs placeholder | Real | **Real** — `github.com/nousresearch/hermes-agent` |
+| 6 | Slide 4 blocked-call examples: Hermes-real vs hypothetical | Hermes-real | **Hermes-real** — `web_search`, `shell.exec` |
+| 7 | Reuse `<NebulaAvatar>` shader for Slide 5 scan beam | Reuse | **Spirit-reuse** — the beam is a CSS gradient with `mix-blend-mode: screen` and a `box-shadow` halo, visually adjacent to the nebula without paying for a second R3F canvas. Literal shader reuse would have demanded a third Three.js canvas on a single slide for marginal visual gain. |
+
+---
+
+## Departures from the plan worth flagging
+
+1. **Slides 3 + 4 + 5 are not Three.js.** The plan called for "every scene in the shared library" with R3F by default. In implementation, three of five scenes ship as CSS/SVG:
+   - **Orbital bay** — pure rotation; CSS three-layer-nested transform handles it without GPU pressure beyond what `<NebulaAvatar>` already costs.
+   - **Policy checkpoint** — capsule slide-and-dissolve; CSS keyframes.
+   - **Opus pipeline** — file-tree cascade + scan-beam gradient + crystallisation; CSS keyframes.
+
+   Two of five (galaxy-of-agents, tangle-web) are R3F. The decision keeps the bundle delta tighter than R3F-everywhere would have been and matches the plan's spirit (one canvas per slide ceiling) more strictly than an R3F-only rule would have. The plan's risk-register concern about the 60fps budget is correspondingly lower.
+
+2. **TangleWeb ships without 3D text labels in this pass.** Q4's "Named" default is honoured in the SVG fallback (which lists all eight tool names) but the live R3F scene renders only nodes + edges — no DOM-overlaid label text. The named-vs-unbranded distinction is visible to the reduced-motion path; the live-motion path leans entirely on the kicker copy. Adding labels via `@react-three/drei`'s `<Text>` is a follow-up worth ~15 lines per node.
+
+3. **Slide-2-to-3 collapse runs in 250ms, not the plan's 600ms.** The slide unmounts at the crossfade boundary; extending the collapse past that requires layered z-order and a separate "fade-ghost" pass. The 250ms collapse fits inside the crossfade and is visible end-to-end; the cohesion claim ("single moment of visual continuity") still lands. Loosening this back to 600ms is possible if the slide stays mounted during the next slide's fade-in — feature-flag-able with a small refactor of the deck's transition state machine.
+
+---
+
+## Pending work (handoff to next pass)
+
+1. **Three-audience review of the *implementation*** (not just the spec). Each slide read by a technical, non-technical, and strategic reviewer. Track flags in a follow-up plan; rewrite slides flagged "I don't get this."
+2. **Per-slide internal-timing audit.** The beat-sheet durations are wired; the Slide 5 7s scene playing under a 10s slide (and similar) needs a viewing pass.
+3. **Bundle-size delta verification.** Plan's Phase 2 gate was `≤ 80 KB gzip`. `next build` confirms compile + static-page generation; explicit gzip delta is not yet measured.
+4. **Recording-mode determinism check.** Two back-to-back `?mode=record` takes, diff'd frame-by-frame. Mulberry32 + deterministic seeds make this likely to pass; verifying *empirically* is the gate.
+5. **Audio.** Voice-over (operator or synth), ambient bed, per-slide cues. Captions burn-in. All deferred to ops; the slot is wired.
+6. **TangleWeb 3D labels.** Q4 in the live-motion path. Drei `<Text>` overlay if it's worth the bundle.
+7. **changelog.md entry.** This pass is one minor bump (call it 0.10.4 if the next release booked is patch-shaped; or 0.11.0 if the cumulative scope of the polish pass justifies a minor — operator's call). The phases-1-through-6 nature of this work argues for one minor-version entry rather than seven patch entries.
+8. **Archive the plan.** `docs/executing/presentation-polish.md` → `docs/archive/presentation-polish.md` once the operator confirms the deck is recording-ready.
+
+---
+
+## What I'd do differently if doing it again
+
+- **Run the three-audience review before Phase 3.** Implementing every slide and *then* finding out one fails review costs more than sketching first. The plan flagged this; I deviated for time.
+- **Set up the dev-harness route earlier.** A `/presentation/_dev/<scene>` route would have made iterating on individual scenes faster than jumping to slide N every time. Skipped because the slide indices are 1-key-press away anyway, but for future scene work the harness pays off.
+- **Wire `<Text>` labels to TangleWeb from the start.** The CSS-overlay-on-canvas alternative is fragile and the live-vs-fallback divergence is uncomfortable. Worth the bundle.

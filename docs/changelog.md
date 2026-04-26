@@ -2,6 +2,11 @@
 
 Index - short one-liners:
 
+- [0.11.2 — M-chat Hermes Chat Sidecar Phase 3: Backend Stack (chat_enabled Migration + DeployConfig + Services Block + Token Generation + 4 New Tests)](#0112--m-chat-hermes-chat-sidecar-phase-3-backend-stack-chat_enabled-migration--deployconfig--services-block--token-generation--4-new-tests-2026-04-27)
+- [0.11.1 — M-chat Hermes Chat Sidecar Phase 2: Dockerfile + Entrypoint Two-Process Supervisor (CORELLIA_CHAT_ENABLED Gate)](#0111--m-chat-hermes-chat-sidecar-phase-2-dockerfile--entrypoint-two-process-supervisor-corellia_chat_enabled-gate-2026-04-27)
+- [0.11.0 — M-chat Hermes Chat Sidecar Phase 1: Sidecar Source + Bearer Auth + LRU Session Cache + Smoke Harness](#0110--m-chat-hermes-chat-sidecar-phase-1-sidecar-source--bearer-auth--lru-session-cache--smoke-harness-2026-04-26)
+- [0.10.7 — Fleet Gallery: 3-Column Grid Match with Spawn + Icon-Only Compact Row Actions (Card Footer Overflow Fix)](#0107--fleet-gallery-3-column-grid-match-with-spawn--icon-only-compact-row-actions-card-footer-overflow-fix-2026-04-27)
+- [0.10.6 — Spawn Page Cosmetic Pass: Locked-Card Particle Cloud Fallback + SaaS-Standard Type Scale Bump (Wizard + Deployment Form + Label/Button Primitives)](#0106--spawn-page-cosmetic-pass-locked-card-particle-cloud-fallback--saas-standard-type-scale-bump-wizard--deployment-form--labelbutton-primitives-2026-04-27)
 - [0.10.5 — Presentation Polish Phases 1–6: Beat Sheet + R3F Scene Library (5 Scenes) + 7-Slide Rewrite + Crossfade + Audio Scaffold + `?mode=record`](#0105--presentation-polish-phases-16-beat-sheet--r3f-scene-library-5-scenes--7-slide-rewrite--crossfade--audio-scaffold--moderecord-2026-04-26)
 - [0.10.4 — M5 Fleet Control Hardening: Lifo Failed-First Scale-Down + Idempotent Destroy + Region-Loop Lifetime + Lease-Nonce Log + Drift All-Mismatches + Name-Match Destroy Gate + Bulk-Delta Wire Contract Doc](#0104--m5-fleet-control-pre-prod-hardening-lifo-failed-first-scale-down--idempotent-destroy--region-loop-lifetime--lease-nonce-log--drift-all-mismatches--name-match-destroy-gate--bulk-delta-wire-contract-doc--4-new-tests-2026-04-26)
 - [0.10.3 — M5 Fleet Control Phase 8: Bulk Fleet Ops (Header + Per-Row Checkboxes, Sticky Selection Toolbar, "Don't Change" Bulk-Apply Modal with Dry-Run Preview)](#0103--m5-fleet-control-phase-8-bulk-fleet-ops-header--per-row-checkboxes-sticky-selection-toolbar-dont-change-bulk-apply-modal-with-dry-run-preview-2026-04-26)
@@ -44,6 +49,133 @@ Index - short one-liners:
 - [0.1.0 — Backend Scaffolding & Docs Reconciliation](#010--backend-scaffolding--docs-reconciliation-2026-04-24)
 
 Latest on top. Each release includes detailed entries (**What / Where / Why** changes were made).
+
+---
+
+## 0.11.2 — M-chat Hermes Chat Sidecar Phase 3: Backend Stack (chat_enabled Migration + DeployConfig + Services Block + Token Generation + 4 New Tests) (2026-04-27)
+
+Backend only (Go + SQL). One new migration, two query edits, sqlc regeneration of three files, three Go source edits, four new tests. Zero proto change, zero FE change, zero Fly push, zero adapter image rebuild. Chat-disabled spawns are byte-equivalent to the M5 wire shape throughout — every gated code path is conditioned on `cfg.ChatEnabled`. `go vet ./...` + `go build ./...` + `go test ./...` (all packages green) + `sqlc generate` clean. Four new tests pass: `TestMachineConfigFor_ChatDisabledOmitsServices`, `TestMachineConfigFor_ChatEnabledEmitsExactlyOneService`, `TestSpawn_ChatEnabled_PlumbsTokenAndSecrets`, `TestSpawn_ChatDisabled_OmitsChatPlumbing`.
+
+- **`backend/migrations/20260427120000_chat_enabled.sql`** (new) — `ALTER TABLE agent_instances ADD COLUMN chat_enabled BOOLEAN NOT NULL DEFAULT TRUE`. DEFAULT TRUE follows plan decision 6 and the v1.5 user-facing default (chat-on). Existing M4/M5 rows backfill to TRUE on migration, but their deployed adapter image is the pre-sidecar digest — `ChatWithAgent` (Phase 4) will surface `ErrChatUnreachable` until those agents are destroy-and-respawned to the Phase 7 digest. This observable-not-destructive consistency window is documented inline in the migration. `+goose Down` drops the column.
+- **`backend/queries/agent_instances.sql`** — two surgical edits: `InsertAgentInstance` widened from 8 to 9 columns (`chat_enabled` as explicit `$9` param — every BE-driven spawn carries the explicit value, no reliance on DB DEFAULT); `GetAgentInstanceByID` projection gains `ai.chat_enabled` so Phase 4's `ChatWithAgent` and Phase 6's `Health()` HTTP-probe switch can read the field without a further sqlc churn. `ListAgentInstancesByOrg` unchanged (widened in Phase 5/6 when the fleet row card needs it).
+- **sqlc regeneration** (`internal/db/models.go`, `internal/db/agent_instances.sql.go`, `internal/db/querier.go`) — `db.AgentInstance.ChatEnabled bool`, `InsertAgentInstanceParams.ChatEnabled bool`, `GetAgentInstanceByIDRow.ChatEnabled bool`. `Querier` interface is unchanged: `InsertAgentInstance`'s method name stays the same; the widened struct arg absorbs the new field in place. Generated tree checked in per blueprint §11.7.
+- **`backend/internal/deploy/types.go`** — `DeployConfig.ChatEnabled bool` added with a comment explaining the three-way runtime fan-out (services block in `machineConfigFor`, env vars in spawn, audit `Secret` row) and the deliberate no-`WithDefaults` treatment: Go zero is `false`; the wire/handler layer is the eventual source of truth in Phase 5.
+- **`backend/internal/deploy/fly.go`** — two new package constants (`chatSidecarInternalPort = 8642`, `chatSidecarExternalPort = 443`) anchored to blueprint §3.1 and plan decisions 4/12. `machineConfigFor` widened: when `cfg.ChatEnabled`, the returned `*fly.MachineConfig` carries a single-element `Services` slice via the new `chatSidecarServices()` helper (`Protocol: "tcp"`, `InternalPort: 8642`, one `Ports` entry: `Port: 443`, handlers `["http","tls"]`); otherwise `Services` is nil (byte-equivalent to M5). `chatSidecarServices()` is a named helper so the Phase 5+ Update path can reuse it without duplicating the port/handler set.
+- **`backend/internal/agents/service.go`** — four new package constants: `envKeyChatEnabled`, `envKeySidecarAuthToken`, `chatEnabledEnvValueTrue = "true"` (pinned to the literal the Phase 2 entrypoint checks — not `fmt.Sprintf("%v", true)`, which would be a fragile coupling), `chatSidecarTokenBytes = 32`. New `generateChatSidecarToken()`: 32 bytes from `crypto/rand` → 43-char `base64.RawURLEncoding` (no padding, URL-safe; below Fly's secret-value size limit by orders of magnitude). `Spawn` flow widened in three gated places: (1) pre-tx — token generated before any DB write so the audit row inside the tx and the Fly secret outside the tx reference the same value; `crypto/rand` failure returns before any write; (2) inside tx — second `InsertSecret` row records the chat-token audit (`CORELLIA_SIDECAR_AUTH_TOKEN`, opaque `storage_ref`) atomically with the model-key row and instance insert; a rollback un-records all three; (3) post-tx — `spec.Env` map gains `CORELLIA_CHAT_ENABLED="true"` and `CORELLIA_SIDECAR_AUTH_TOKEN=<token>` when chat is on, flowing through the existing `for k,v := range spec.Env { flaps.SetAppSecret }` loop unchanged. `InsertAgentInstanceParams` call site gains `ChatEnabled: cfg.ChatEnabled`.
+- **`backend/internal/deploy/fly_test.go`** — 2 new tests. `TestMachineConfigFor_ChatDisabledOmitsServices`: asserts `nil` services, read-only, byte-equivalent to M5. `TestMachineConfigFor_ChatEnabledEmitsExactlyOneService`: asserts full services-block shape — `Protocol == "tcp"`, `InternalPort == 8642`, exactly one `Ports` entry, `Port == 443`, both `"http"` and `"tls"` handlers present.
+- **`backend/internal/agents/service_test.go`** — 2 new tests. `TestSpawn_ChatEnabled_PlumbsTokenAndSecrets`: 2 secret rows inserted (model key + chat token); `spec.Env` carries `CORELLIA_CHAT_ENABLED="true"` + a 43-char `base64.RawURLEncoding` token that decodes to exactly 32 bytes. `TestSpawn_ChatDisabled_OmitsChatPlumbing`: 1 secret row inserted; neither chat key present in `spec.Env`.
+
+### Known pending work
+
+- **`goose up/down/up` round-trip against dev DB** — applies the `chat_enabled` column, backfills existing rows to TRUE, verifies down drops the column cleanly.
+- **`mergeMachineConfig` does not inject the services block on Update.** An agent toggled from chat-disabled to chat-enabled via `UpdateDeployConfig` (Phase 5+) needs a destroy-and-respawn to pick up the services block. Phase 3's spawn path emits it correctly; Update path is Phase 5's concern.
+- **Phase 7 adapter image push + migration** — the sidecar-capable adapter image has not yet been GHCR-pushed or recorded in the DB. Chat-enabled spawns will fail at machine-start until Phase 7 lands.
+
+---
+
+## 0.11.1 — M-chat Hermes Chat Sidecar Phase 2: Dockerfile + Entrypoint Two-Process Supervisor (CORELLIA_CHAT_ENABLED Gate) (2026-04-27)
+
+Adapter-image layer only. Four existing files modified under `adapters/hermes/`; zero new files; Phase 1 sidecar files are untouched. The deployed adapter image now *can* run the chat sidecar — whether it *does* is a per-instance decision made by the BE in Phase 3. No Go, TS, migration, proto, or Fly push. Passes `sh -n adapters/hermes/entrypoint.sh` (POSIX-shell syntax check). Operator owes the `docker build && docker run` exit gate before Phase 3 is wired into the live image. `git diff --stat`: `+154 -9` across the four files.
+
+- **`adapters/hermes/Dockerfile`** — adds one `COPY` line under the existing `USER root` block: `COPY --chmod=0755 sidecar/ /corellia/sidecar/`. Directory lands at the `/corellia/` prefix (alongside the existing `entrypoint.sh`), outside `$HERMES_HOME` — a runtime VOLUME that would shadow build-time writes. No `pip install` step: fastapi and uvicorn ship in the upstream image via the `[all]` extra (changelog 0.9.5 re-inspection; Phase 1 smoke passing against the same pinned digest is implicit verification). A venv with `--system-site-packages` would either be redundant or risk upgrading Hermes's own transitive deps — neither is acceptable. Reversible: a `RUN python -m pip install --no-deps -r /corellia/sidecar/requirements.txt` line is a one-line follow-up if Phase 5/7 surfaces a version-skew issue.
+- **`adapters/hermes/.dockerignore`** — adds `sidecar/README.md` and `sidecar/smoke.sh`. Without explicit ignore patterns, `COPY sidecar/` would pull both non-runtime files into the image layer. Net runtime payload from `sidecar/` is exactly two files: `sidecar.py` + `requirements.txt`.
+- **`adapters/hermes/entrypoint.sh`** — extends the existing `CORELLIA_*` translation block with a conditional two-process supervisor branch, reached only when `CORELLIA_CHAT_ENABLED=true` (literal string — default-deny; `True`, `1`, trailing-space variants all fall through to the original `exec` path). Inside the branch: `forward_term()` function fans SIGTERM/SIGINT to both `$SIDECAR_PID` and `$HERMES_PID` with `[ -n "${PID:-}" ]` guards (safe during the brief window before either child has started); `trap forward_term TERM INT`; uvicorn started in background (`--app-dir /corellia/sidecar sidecar:app --host 0.0.0.0 --port "${CORELLIA_SIDECAR_PORT:-8642}"`, `SIDECAR_PID=$!`); upstream entrypoint started in background (`HERMES_PID=$!`); `set +e` brackets the wait/teardown so a non-zero Hermes exit doesn't trip `set -e` before cleanup; `wait "$HERMES_PID"` (Hermes-as-primary — sidecar crashing does not bring the container down); `HERMES_EXIT` captured; sidecar sent SIGTERM + drained via `wait "$SIDECAR_PID" 2>/dev/null || true`; `set -e` restored; `exit "$HERMES_EXIT"`. Chat-disabled path retains the original `exec /opt/hermes/docker/entrypoint.sh "$@"` — single-child exec-replace is correct for one process.
+- **`adapters/hermes/README.md`** — env-var table gains two rows: `CORELLIA_CHAT_ENABLED` (adapter-only, not forwarded to Hermes, default-deny, gates the sidecar at boot) and `CORELLIA_SIDECAR_AUTH_TOKEN` (consumed by the sidecar, required when chat is enabled, empty value → 503 fail-closed per Phase 1's `bearer_auth` middleware). New "Local sanity exec — chat-enabled image" subsection inserted above the existing Fly smoke section: covers `docker build`, `docker run -e CORELLIA_CHAT_ENABLED=true …`, `docker exec … ps -ef` two-process check, and a four-step curl sequence (health unauth → chat no-auth 401 → chat valid bearer 200 → disabled-chat single-process check). Cross-references Phase 1 sidecar smoke (`adapters/hermes/sidecar/smoke.sh`) as the cheapest source-only sidecar probe.
+
+### Design decisions worth noting
+
+- **PID 1 stays as the entrypoint shell with two children.** The M3 single-process `exec` replaced the shell with the child, making the child PID 1 so signals route correctly. With two children, `exec` would orphan one of them — the orphaned process would never receive SIGTERM and Fly would SIGKILL the whole container after its grace period. Staying as PID 1 with an explicit trap-and-fan-out is the only shape that makes both children drainable.
+- **`wait "$HERMES_PID"` (specific PID), not bare `wait`.** Bare `wait` returns early on any child's exit — if the sidecar crashed during Hermes startup, the script would race-exit before Hermes finished booting. `wait "$HERMES_PID"` pins the wait to Hermes's lifetime: Hermes is primary, sidecar dying shows up as connection-refused on `/chat` (Phase 4's `ErrChatUnreachable`) without taking the agent offline.
+- **Default-deny on `CORELLIA_CHAT_ENABLED`.** Literal `"true"` is the sole enabler. A typo on the BE side silently flips chat *off* (observable: chat panel absent in fleet view) rather than *on* (which would mean the sidecar starts without the bearer token provisioned, and every `/chat` call returns 503 — confusing).
+
+### Known pending work
+
+- **Operator docker gate** — `docker build -t corellia/hermes-adapter:dev adapters/hermes` + chat-enabled run, `ps -ef` two-process check, `/health` + `/chat` curl sequence, disabled-chat run confirming no `:8642` listener.
+- **Hermes-readiness gate in `/health`** (`{ok: false, hermes: "starting"}`) is Phase 6's concern. Phase 2's `/health` answers immediately on sidecar startup — brief window where health returns ready while Hermes is still booting.
+- **Multi-arch buildx** (`linux/amd64 + linux/arm64`) — existing M3 multi-arch build should continue to work; operator owed verification after Phase 2 image build.
+
+---
+
+## 0.11.0 — M-chat Hermes Chat Sidecar Phase 1: Sidecar Source + Bearer Auth + LRU Session Cache + Smoke Harness (2026-04-26)
+
+Adapter source layer only. Four new files under a new `adapters/hermes/sidecar/` directory; zero existing files touched. The deployed adapter image and every in-flight agent are unaffected — the sidecar lives in the source tree but will not appear in any deployed machine until Phase 2's `Dockerfile` change. This phase delivers the full FastAPI service surface required by blueprint §3.1 (runtime contract: `/chat`, `/health`, `/tools/invoke`), the constant-time bearer-auth middleware, an `OrderedDict`-based LRU session cache, and a POSIX-bash smoke harness. Passes `python3 -c 'import ast; ast.parse(…)'` and `bash -n` locally. Docker-based smoke is operator-gated.
+
+- **`adapters/hermes/sidecar/sidecar.py`** (~220 LOC) — FastAPI app. `POST /chat`: bearer-authenticated; loads or creates an `AIAgent` keyed on `session_id` from the LRU cache; returns `{content: <reply>}`. `GET /health`: deliberately unauthenticated (Fly health probes run without the token; an authenticated `/health` would either expose the token to Fly's edge or cause every probe to 401, flipping the machine unhealthy); returns `{ok: true, hermes: "ready"}`. `POST /tools/invoke`: bearer-authenticated; returns `501 {detail: "tools/invoke not implemented"}` — explicit anti-scope-creep stub per plan §5, proto reservation not yet earned. Bearer-auth middleware: `secrets.compare_digest` (constant-time, prevents timing oracles); reads `CORELLIA_SIDECAR_AUTH_TOKEN`; exempts `/health`; fails closed with `503` when the token env var is unset or empty (prevents the `compare_digest("","") == True` zero-length bypass). `AIAgent` import is `try/except`-guarded against `ImportError` and any import-time failure: inside the deployed image the upstream package is always importable; outside Docker (workstation, CI without docker) a stub class returns `[stub-aiagent] echo: <message>`, keeping the FastAPI auth/routing surface testable without a model key. Stub prefix is deliberately distinguishable from any real-model output. `_get_or_create_agent` tries `AIAgent(session_id=session_id)` (named-arg form, matching upstream `gateway/session.py` pattern per changelog 0.9.5) and falls back to `AIAgent()` on `TypeError`, insulating the sidecar against upstream constructor churn at no runtime cost. Session cache: `OrderedDict`-based LRU capped at 100 (configurable via `CORELLIA_SIDECAR_MAX_SESSIONS`), `threading.Lock`-protected (uvicorn's worker model can shift sync endpoints into a thread pool). Eviction is safe: durable session state lives in `$HERMES_HOME/sessions/<id>.sqlite`; the in-memory dict is a perf cache, never the source of truth.
+- **`adapters/hermes/sidecar/requirements.txt`** — pins `fastapi==0.115.5`, `uvicorn[standard]==0.32.1`, `pydantic==2.10.3`. All three ship in the upstream image via the `[all]` extra (changelog 0.9.5), but an explicit pin declares the sidecar's dependency surface and documents the version contract for future digest bumps.
+- **`adapters/hermes/sidecar/smoke.sh`** — POSIX-bash smoke harness, `chmod +x`. Boots the sidecar inside the unmodified upstream Hermes image (same pinned digest as the adapter `Dockerfile`) via `--entrypoint /bin/sh` with the sidecar directory bind-mounted read-only — no Dockerfile change needed in Phase 1. Defensively runs `pip install -q -r /corellia/sidecar/requirements.txt` before launching uvicorn so the smoke is self-checking regardless of whether pre-work dep-presence verification was run. Asserts five behaviours in sequence: `GET /health` → `200` with `{ok:true,hermes:"ready"}`; `POST /chat` without `Authorization` → `401`; `POST /chat` with wrong bearer → `401`; `POST /chat` with valid bearer → `200` with non-empty `.content`; `POST /tools/invoke` with valid bearer → `501`. `trap`-on-EXIT cleanup tears down the container on `set -e` abort. The smoke deliberately skips upstream's entrypoint (`--entrypoint /bin/sh`) and runs the sidecar process only — Phase 1's exit gate asserts the FastAPI surface shape, not a Hermes round-trip; composing two processes without modifying `entrypoint.sh` would prefigure Phase 2 design choices.
+- **`adapters/hermes/sidecar/README.md`** — stub cross-referencing binding decisions and the smoke harness.
+
+### Validation gate owed (operator)
+
+`OPENROUTER_API_KEY=sk-or-v1-<key> ./adapters/hermes/sidecar/smoke.sh` — expected: five passing `>> [N/5] …` lines, then `>> all assertions passed`; container removed automatically on exit.
+
+---
+
+## 0.10.7 — Fleet Gallery: 3-Column Grid Match with Spawn + Icon-Only Compact Row Actions (Card Footer Overflow Fix) (2026-04-27)
+
+FE-only. Two-edit cosmetic fix on the fleet gallery view triggered by a screenshot showing the row-action footer overflowing the card boundary at `sm:grid-cols-2` width (LOGS / DEPLOYMENT / STOP / DESTROY ran past the card's right edge, with `STOP` and `DESTROY` colliding visually). Two coupled changes: (1) gallery grid rebreakpointed to match the spawn page's `RosterGrid` (`grid-cols-1 md:grid-cols-2 xl:grid-cols-3`, was `sm:2 / lg:3 / xl:4` — wider cards at every breakpoint, top-end caps at 3 columns); (2) `<AgentRowActions>` gains a `compact?: boolean` prop that flips its buttons to `icon-sm` (square, label dropped, label moved to `title=` for hover tooltip + existing `aria-label` preserved for screen readers). Gallery cards pass `compact`; the list view (`fleet/page.tsx`) is untouched and keeps the labelled treatment. Zero backend, proto, schema, env, or dependency change. Type-check + lint clean.
+
+- **`frontend/src/components/fleet/fleet-gallery.tsx`** — grid breakpoints `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4` → `grid-cols-1 md:grid-cols-2 xl:grid-cols-3`. Mirrors `RosterGrid` in `frontend/src/app/(app)/spawn/page.tsx:147` so the two roster-style surfaces share a single visual rhythm — same card width at the same viewport, same column-count progression.
+- **`frontend/src/components/fleet/agent-row-actions.tsx`** — `Props` gains `compact?: boolean` (default `false`). When set, `buttonSize` resolves to `icon-sm` instead of `sm`; each of the five buttons (Logs / Deployment / Start / Stop / Destroy) renders icon-only (the label child is conditionally rendered via `{!compact && "Logs"}` etc.) and receives a matching `title={compact ? "Logs" : undefined}` for browser hover tooltips. `aria-label` is held on every branch so screen-reader output is unchanged. The `Start`, `Stop`, and `Destroy` branches gain explicit `aria-label`s (previously implicit via button text); the `Logs` and `Deployment` branches already had them.
+- **`frontend/src/components/fleet/agent-card.tsx`** — gallery card footer passes `compact` through to `<AgentRowActions>`. One-line edit; no layout change beyond the button-size flip.
+
+### Behaviour change (known)
+
+- **Gallery card actions are now icon-only.** Hover reveals a browser-native tooltip (`title=`); accessibility label is preserved. List view is unchanged — labelled buttons remain because the row has horizontal room.
+- **Gallery is now capped at 3 columns at the top breakpoint** (was 4 at `xl`). Slightly fewer cards per row at very wide viewports, traded for cards wide enough to fit the icon row + the four-line meta block (name / template / provider+model / region+size, optional replicas+storage) without crowding.
+
+### Resolves
+
+- **Operator screenshot (live, 2026-04-27):** `Screenshot 2026-04-27 at 00.08.44.png` — the row-action footer (LOGS · DEPLOYMENT · STOP · DESTROY) overflowing the card at `sm:grid-cols-2` width, with the `DESTROY` button text overlapping the `STOP` button's icon. Both root causes addressed (cards wider, buttons narrower).
+
+### Notes
+
+- **No `<Tooltip>` component dependency added.** The Base UI `<Tooltip>` primitive exists in the codebase (`components/ui/tooltip.tsx`) but is rare and currently only used inside the sidebar. Native `title=` is consistent with the rest of the fleet surface, has zero JS overhead, and renders identically in the demo recording flow.
+- **`fleet/page.tsx` (list view) untouched.** The single `<AgentRowActions instance={i} onChanged={onChanged} />` call site at line 327 omits `compact`, so the default `false` keeps labelled buttons in the list — the row has the horizontal space to display them.
+
+---
+
+## 0.10.6 — Spawn Page Cosmetic Pass: Locked-Card Particle Cloud Fallback + SaaS-Standard Type Scale Bump (Wizard + Deployment Form + Label/Button Primitives) (2026-04-27)
+
+FE-only cosmetic pass on the spawn page surface. Two unrelated visual fixes bundled into one patch: (1) the locked-harness roster cards no longer render as concentric placeholder ellipses — they now render as a frozen particle cloud in the same visual family as the live Hermes nebula, just static; (2) the wizard's dense `text-[10px]` / `text-[11px]` / `text-xs` vocabulary moves up one notch toward the design-system spec (`text-xs` for labels, `text-sm` for prose body), bringing legibility in line with SaaS platform standards. Zero backend, proto, schema, env, or dependency change. Type-check + lint clean.
+
+- **`frontend/src/components/spawn/avatar-fallback.tsx`** (rewritten) — replaces the three concentric-ellipse SVG ("pearl rings") with a deterministic static particle cloud: 520 primary particles (broad Gaussian, palette-tinted, opacity falls off with radius) + 90 core motes (tight Gaussian near centre, pearl-bright). Uses the same Box-Muller Gaussian + `mulberry32` seeded PRNG pattern as the `<GalaxyOfAgents>` scene (0.10.5) for deterministic per-render output. Per-particle tints picked from `palette.tints` weighted by `palette.intensities` — matches the dominance order the live R3F shader bakes in (Hermes green leads, etc.). `mix-blend-mode: screen` on the particle group fakes the additive blending the live nebula gets from `THREE.AdditiveBlending` without a second WebGL context. Halo backdrop preserved via the existing `radialGradient` + `palette.fallbackAccentHsl`. `seedFor(harness)` is FNV-1a over the harness key, so each locked card has a stable distinct cloud across mounts. Honors decision §21 (one canvas page-wide) — pure SVG, zero GPU pressure, scales to all five locked roster cards + presentation Slide 3's `<OrbitalBay>` without budget impact.
+- **`frontend/src/components/ui/label.tsx`** — Label primitive `text-[11px]` → `text-xs` (11px → 12px). The Label vocabulary is the dominant label voice across spawn / fleet / inspector / bulk-apply, so the change ripples broadly through the form-heavy admin surface in one edit. Matches design-system §13 spec which already calls for `text-xs` on terminal labels.
+- **`frontend/src/components/ui/button.tsx`** — `buttonVariants` size scale rewritten:
+  - `default`: `h-8 px-3 text-xs` → `h-9 px-3.5 text-sm`
+  - `lg`: `h-9 px-4 text-xs` → `h-10 px-4 text-sm`
+  - `sm`: `h-7 px-2.5 text-[11px]` → `h-8 px-3 text-xs`
+  - `xs`: `h-6 px-2 text-[10px]` → `h-6 px-2 text-[11px]` (height held; text bumped)
+  - Heights moved one row up where the larger glyph would have crowded the previous box; padding bumped on `default` and `sm` to match. Consumers using `size="sm"` (the wizard's CONFIRM CTAs) get a subtly taller, more readable button without re-tuning per call site.
+- **`frontend/src/components/spawn/wizard.tsx`** — every dense size moves up one notch:
+  - Eyebrow kickers (`[ LAUNCHPAD // CONFIGURE ]`, `[ LAUNCHPAD // DEPLOYING ]`, `STEP X OF 5`, `IN FLIGHT` / `ERROR`) `text-[10px]` → `text-[11px]`
+  - Step-1 `HARNESS` sub-label `text-[10px]` → `text-[11px]`; agent-name display `text-sm` → `text-base`
+  - Step-1 description, Step-4 deployment intro, Step-5 review intro paragraphs `text-xs` → `text-sm`
+  - All `<dl>` spec sheets and `<ConfirmedSummary>` rows `font-mono text-[11px]` → `font-mono text-xs`
+  - `<SpecRow>` label width unchanged (`w-24`) — only the type size changes; left column `text-[10px]` → `text-[11px]`; deferred-tag `text-[9px]` → `text-[10px]`
+  - DeployLog `<pre>` body `font-mono text-[11px]` → `font-mono text-xs`
+  - Field hints (model identifier hint, API-key disclaimer) `text-xs text-muted-foreground` → `text-sm text-muted-foreground`
+  - WizardError + WizardNotFound branches `font-mono text-xs` → `font-mono text-sm`
+  - Inline `text-sm text-destructive` error messages held (already at the new floor)
+- **`frontend/src/components/fleet/deployment-config-form.tsx`** — same notch-up pass on the shared deployment form (consumed by both the wizard's Step 4 and the fleet inspector's edit pane, so this picks up two surfaces at once):
+  - Size preset chips + `Custom…` toggle `font-mono text-[11px]` → `font-mono text-xs`; chip padding bumped `px-2.5 py-1` → `px-3 py-1.5` so the larger glyph breathes inside the chip.
+  - Restart-policy radio labels `font-mono text-[11px]` → `font-mono text-xs`
+  - All field hint paragraphs (region default, volume mount-path note, replicas-don't-share-state warning, manual-lifecycle disclaimer) `text-xs text-muted-foreground` → `text-sm text-muted-foreground`
+  - All inline error messages `text-xs text-destructive` → `text-sm text-destructive`
+
+### Visual register (preserved)
+
+Mission-control vocabulary held: Space Mono uppercase + `tracking-wider` + hairline borders + terminal-green CTA, halftone substrate, `[ BRACKETED ]` eyebrow voice. Only the *size floor* rose — the design language is unchanged. The Button height bump (h-8 → h-9 on `default`, h-7 → h-8 on `sm`) is the one knock-on that ripples beyond text: any layout that hard-coded button-row heights to the old values may need a one-row reflow check.
+
+### Surfaces that ride along (no per-call-site edits needed)
+
+- Fleet inspector edit pane, bulk-apply modal "Don't change" form, and the spawn wizard's Step 4 all consume `<DeploymentConfigForm>` — they each pick up the new sizes for free.
+- Fleet list / gallery, agent rows, status pills, and any other surface that uses the `Label` and `Button` primitives picks up the bumped vocabulary automatically.
+
+### Notes
+
+- **No design-system.md edit.** §13 already specs `text-xs` for labels and `text-sm` for table/value text — the shipped code was below spec; this brings the wizard surface up to the documented floor rather than redefining it.
+- **No screenshot regression test for the locked cards.** Visual change reviewed manually against the screenshot supplied with the request; no Playwright snapshot suite exists in v1 (per blueprint §13 deferral).
 
 ---
 

@@ -4,6 +4,14 @@
 -- for the initial state, and putting it in the call site would invite
 -- typos. last_started_at / last_stopped_at default to NULL until the
 -- polling goroutine flips status to 'running' (and beyond).
+--
+-- M-chat Phase 3: chat_enabled is written explicitly here (rather than
+-- letting migration 20260427120000's DEFAULT TRUE kick in) so the
+-- service layer's call site is the single source of truth for the
+-- value — Phase 5's wizard checkbox flows through DeployConfig
+-- → SpawnInput → here. Same posture as the M5 nine deploy-config
+-- columns: DB DEFAULTs exist as a fallback, but every BE-driven
+-- spawn carries an explicit value.
 INSERT INTO agent_instances (
     name,
     agent_template_id,
@@ -12,9 +20,10 @@ INSERT INTO agent_instances (
     deploy_target_id,
     model_provider,
     model_name,
-    config_overrides
+    config_overrides,
+    chat_enabled
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
 
 -- name: SetAgentInstanceDeployRef :exec
@@ -132,6 +141,7 @@ SELECT
     ai.lifecycle_mode,
     ai.desired_replicas,
     ai.volume_size_gb,
+    ai.chat_enabled,
     t.name AS template_name
 FROM agent_instances ai
 JOIN agent_templates t ON t.id = ai.agent_template_id

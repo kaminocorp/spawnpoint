@@ -99,11 +99,77 @@ fi
 # before exec'ing upstream so model.default is set from the env var.
 # See README.md §"Known limitations".
 
-# --- Exec upstream ---------------------------------------------------
-# `exec` (not subshell) is load-bearing: without it the wrapper shell
-# stays as PID 1 and the upstream Hermes process becomes PID 2, which
-# means SIGTERM from Fly hits the shell and Hermes never gets a chance
-# to drain in-flight work before the grace-period SIGKILL. With exec,
-# the shell *replaces itself* with the upstream entrypoint, which
-# itself execs into `hermes` after its own bootstrap.
+# --- Chat sidecar branch (M-chat Phase 2) ----------------------------
+# docs/executing/hermes-chat-sidecar.md §4 Phase 2 introduces an
+# optional FastAPI sidecar at /corellia/sidecar/ that exposes the
+# Corellia-shaped /chat + /health HTTP runtime contract (blueprint
+# §3.1). The sidecar source is *always* present in the image (the
+# Dockerfile COPYs it unconditionally); whether it *runs* is gated
+# here by CORELLIA_CHAT_ENABLED, set per-instance by the BE's spawn
+# path (Phase 3). Default-deny per risk 4: only the literal string
+# "true" enables the sidecar — unset, "false", "1", "True" all skip,
+# preserving byte-equivalent behaviour for every M4-era spawn that
+# never sets the var.
+if [ "${CORELLIA_CHAT_ENABLED:-}" = "true" ]; then
+    # Two-process supervision. This is a *deliberate* departure from
+    # the single-process `exec` pattern below: with two children we
+    # MUST stay as PID 1 to fan SIGTERM/SIGINT out to both, otherwise
+    # one child receives Fly's grace-period signal and the other gets
+    # SIGKILLed without draining. The trap below is the fan-out.
+    #
+    # Hermes is the *primary* process — its exit drives container
+    # shutdown. The sidecar is bookkeeping; if Hermes dies we tear it
+    # down and exit with Hermes's status. The reverse (sidecar dies,
+    # Hermes keeps running) leaves /chat returning connection-refused
+    # to Corellia's BE, which surfaces as `ErrChatUnreachable` in
+    # Phase 4 — observable from the operator's fleet view rather than
+    # silently swallowed.
+
+    forward_term() {
+        [ -n "${SIDECAR_PID:-}" ] && kill -TERM "$SIDECAR_PID" 2>/dev/null || true
+        [ -n "${HERMES_PID:-}" ] && kill -TERM "$HERMES_PID" 2>/dev/null || true
+    }
+    trap forward_term TERM INT
+
+    # Sidecar starts first so it's already listening when M4's Health()
+    # poll fires — Phase 6 is what tightens Health() into hitting the
+    # HTTP /health route, but starting the listener early avoids a
+    # post-spawn race regardless. uvicorn binds 0.0.0.0:8642 by default
+    # (decision 4); CORELLIA_SIDECAR_PORT exists as a dev-only override.
+    python -m uvicorn \
+        --app-dir /corellia/sidecar \
+        sidecar:app \
+        --host 0.0.0.0 \
+        --port "${CORELLIA_SIDECAR_PORT:-8642}" \
+        --log-level info &
+    SIDECAR_PID=$!
+
+    /opt/hermes/docker/entrypoint.sh "$@" &
+    HERMES_PID=$!
+
+    # `set +e` around the wait-then-capture so a non-zero exit from
+    # Hermes doesn't trip the script-level `set -e` before we get a
+    # chance to clean up the sidecar. The trap fires asynchronously
+    # if SIGTERM arrives mid-wait; afterward we still fall through to
+    # the kill+wait teardown so the sidecar can drain.
+    set +e
+    wait "$HERMES_PID"
+    HERMES_EXIT=$?
+    kill -TERM "$SIDECAR_PID" 2>/dev/null
+    wait "$SIDECAR_PID" 2>/dev/null
+    set -e
+
+    exit "$HERMES_EXIT"
+fi
+
+# --- Exec upstream (chat-disabled or unset) --------------------------
+# `exec` (not subshell) is load-bearing on this branch: without it the
+# wrapper shell stays as PID 1 and the upstream Hermes process becomes
+# PID 2, which means SIGTERM from Fly hits the shell and Hermes never
+# gets a chance to drain in-flight work before the grace-period
+# SIGKILL. With exec, the shell *replaces itself* with the upstream
+# entrypoint, which itself execs into `hermes` after its own bootstrap.
+# (The chat-enabled branch above accepts staying as PID 1 because it
+# has two children to fan signals to — that's the trade-off the trap
+# pays for.)
 exec /opt/hermes/docker/entrypoint.sh "$@"

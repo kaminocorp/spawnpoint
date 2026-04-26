@@ -92,6 +92,7 @@ SELECT
     ai.lifecycle_mode,
     ai.desired_replicas,
     ai.volume_size_gb,
+    ai.chat_enabled,
     t.name AS template_name
 FROM agent_instances ai
 JOIN agent_templates t ON t.id = ai.agent_template_id
@@ -128,6 +129,7 @@ type GetAgentInstanceByIDRow struct {
 	LifecycleMode     string             `json:"lifecycle_mode"`
 	DesiredReplicas   int32              `json:"desired_replicas"`
 	VolumeSizeGb      int32              `json:"volume_size_gb"`
+	ChatEnabled       bool               `json:"chat_enabled"`
 	TemplateName      string             `json:"template_name"`
 }
 
@@ -171,6 +173,7 @@ func (q *Queries) GetAgentInstanceByID(ctx context.Context, arg GetAgentInstance
 		&i.LifecycleMode,
 		&i.DesiredReplicas,
 		&i.VolumeSizeGb,
+		&i.ChatEnabled,
 		&i.TemplateName,
 	)
 	return i, err
@@ -185,10 +188,11 @@ INSERT INTO agent_instances (
     deploy_target_id,
     model_provider,
     model_name,
-    config_overrides
+    config_overrides,
+    chat_enabled
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, name, agent_template_id, owner_user_id, org_id, deploy_target_id, deploy_external_ref, model_provider, model_name, status, config_overrides, last_started_at, last_stopped_at, created_at, updated_at, region, cpu_kind, cpus, memory_mb, restart_policy, restart_max_retries, lifecycle_mode, desired_replicas, volume_size_gb
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, name, agent_template_id, owner_user_id, org_id, deploy_target_id, deploy_external_ref, model_provider, model_name, status, config_overrides, last_started_at, last_stopped_at, created_at, updated_at, region, cpu_kind, cpus, memory_mb, restart_policy, restart_max_retries, lifecycle_mode, desired_replicas, volume_size_gb, chat_enabled
 `
 
 type InsertAgentInstanceParams struct {
@@ -200,6 +204,7 @@ type InsertAgentInstanceParams struct {
 	ModelProvider   string    `json:"model_provider"`
 	ModelName       string    `json:"model_name"`
 	ConfigOverrides []byte    `json:"config_overrides"`
+	ChatEnabled     bool      `json:"chat_enabled"`
 }
 
 // Full insert at the head of decision 27's order of operations (step 5).
@@ -207,6 +212,14 @@ type InsertAgentInstanceParams struct {
 // for the initial state, and putting it in the call site would invite
 // typos. last_started_at / last_stopped_at default to NULL until the
 // polling goroutine flips status to 'running' (and beyond).
+//
+// M-chat Phase 3: chat_enabled is written explicitly here (rather than
+// letting migration 20260427120000's DEFAULT TRUE kick in) so the
+// service layer's call site is the single source of truth for the
+// value — Phase 5's wizard checkbox flows through DeployConfig
+// → SpawnInput → here. Same posture as the M5 nine deploy-config
+// columns: DB DEFAULTs exist as a fallback, but every BE-driven
+// spawn carries an explicit value.
 func (q *Queries) InsertAgentInstance(ctx context.Context, arg InsertAgentInstanceParams) (AgentInstance, error) {
 	row := q.db.QueryRow(ctx, insertAgentInstance,
 		arg.Name,
@@ -217,6 +230,7 @@ func (q *Queries) InsertAgentInstance(ctx context.Context, arg InsertAgentInstan
 		arg.ModelProvider,
 		arg.ModelName,
 		arg.ConfigOverrides,
+		arg.ChatEnabled,
 	)
 	var i AgentInstance
 	err := row.Scan(
@@ -244,6 +258,7 @@ func (q *Queries) InsertAgentInstance(ctx context.Context, arg InsertAgentInstan
 		&i.LifecycleMode,
 		&i.DesiredReplicas,
 		&i.VolumeSizeGb,
+		&i.ChatEnabled,
 	)
 	return i, err
 }

@@ -65,6 +65,14 @@ type Querier interface {
 	// for the initial state, and putting it in the call site would invite
 	// typos. last_started_at / last_stopped_at default to NULL until the
 	// polling goroutine flips status to 'running' (and beyond).
+	//
+	// M-chat Phase 3: chat_enabled is written explicitly here (rather than
+	// letting migration 20260427120000's DEFAULT TRUE kick in) so the
+	// service layer's call site is the single source of truth for the
+	// value — Phase 5's wizard checkbox flows through DeployConfig
+	// → SpawnInput → here. Same posture as the M5 nine deploy-config
+	// columns: DB DEFAULTs exist as a fallback, but every BE-driven
+	// spawn carries an explicit value.
 	InsertAgentInstance(ctx context.Context, arg InsertAgentInstanceParams) (AgentInstance, error)
 	// M5 fleet-control. agent_volumes is the Corellia-side mirror of Fly's
 	// volume state — one row per provisioned Fly volume, tracking which

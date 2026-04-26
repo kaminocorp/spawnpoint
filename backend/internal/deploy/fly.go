@@ -45,6 +45,18 @@ const (
 	// PlacementResult.Reason). Anything longer is replaced with a
 	// generic redaction.
 	redactFlyErrorMaxLen = 200
+
+	// chatSidecarInternalPort is the canonical Hermes harness port
+	// from blueprint §3.1 — the FastAPI sidecar binds 0.0.0.0:8642
+	// inside the container per the adapter's entrypoint.sh (M-chat
+	// Phase 2). The matching CORELLIA_SIDECAR_PORT entrypoint env var
+	// exists as a dev-only override; production always uses 8642.
+	chatSidecarInternalPort = 8642
+
+	// chatSidecarExternalPort is :443 — TLS-terminated by Fly's edge.
+	// M-chat plan decision 4 + 12: callers reach the agent at
+	// https://corellia-agent-<uuid>.fly.dev/, no custom DNS.
+	chatSidecarExternalPort = 443
 )
 
 // flapsClient is the subset of *flaps.Client that FlyDeployTarget
@@ -714,9 +726,10 @@ func (f *FlyDeployTarget) ExtendVolume(_ context.Context, _ string, _ string, _ 
 
 // machineConfigFor builds the MachineConfig for a fresh Spawn replica.
 // Phase 3.5 will widen this to attach a volume mount; today's body
-// matches the M4 launch shape.
+// matches the M4 launch shape, plus the M-chat Phase 3 services block
+// when cfg.ChatEnabled is true.
 func machineConfigFor(imageRef string, cpus, mem int, cfg DeployConfig) *fly.MachineConfig {
-	return &fly.MachineConfig{
+	mc := &fly.MachineConfig{
 		Image: imageRef,
 		Guest: &fly.MachineGuest{
 			CPUKind:  cfg.CPUKind,
@@ -729,6 +742,37 @@ func machineConfigFor(imageRef string, cpus, mem int, cfg DeployConfig) *fly.Mac
 			MaxRetries: cfg.RestartMaxRetries,
 		},
 	}
+	if cfg.ChatEnabled {
+		mc.Services = chatSidecarServices()
+	}
+	return mc
+}
+
+// chatSidecarServices returns the single fly.MachineService that
+// routes external :443 to the sidecar's internal :8642. M-chat plan
+// decision 4: internal HTTP at :8642 (the canonical Hermes harness
+// port from blueprint §3.1) with TLS terminated at Fly's edge.
+//
+// Two handlers — "http" + "tls" — give Fly's edge proxy the standard
+// HTTP-over-TLS termination path; the sidecar itself binds plain HTTP
+// at :8642 inside the container. ForceHTTPS is not set because Fly's
+// edge already redirects HTTP to HTTPS at the platform level for any
+// services block carrying the "tls" handler.
+//
+// Lifted into its own helper rather than inlined in machineConfigFor
+// so the Phase 5+ "toggle chat on a running agent" Update path can
+// call this directly when the chat-enabled bit flips on, without
+// duplicating the port + handler set.
+func chatSidecarServices() []fly.MachineService {
+	port := chatSidecarExternalPort
+	return []fly.MachineService{{
+		Protocol:     "tcp",
+		InternalPort: chatSidecarInternalPort,
+		Ports: []fly.MachinePort{{
+			Port:     &port,
+			Handlers: []string{"http", "tls"},
+		}},
+	}}
 }
 
 // mergeMachineConfig overlays the deploy-config compute fields onto

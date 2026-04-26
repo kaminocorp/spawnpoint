@@ -29,11 +29,17 @@ import { createApiClient } from "@/lib/api/client";
 type Props = {
   instance: AgentInstance;
   onChanged: () => void;
+  /**
+   * When true, render icon-only buttons with `title` tooltips. Used by the
+   * gallery card footer where horizontal space is tight. List view keeps
+   * the default labelled treatment.
+   */
+  compact?: boolean;
 };
 
 type Pending = "stop" | "destroy" | null;
 
-export function AgentRowActions({ instance, onChanged }: Props) {
+export function AgentRowActions({ instance, onChanged, compact = false }: Props) {
   const [pending, setPending] = useState<Pending>(null);
   const [submitting, setSubmitting] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -86,12 +92,14 @@ export function AgentRowActions({ instance, onChanged }: Props) {
     }
   }
 
+  const buttonSize = compact ? "icon-sm" : "sm";
+
   return (
     <div className="flex items-center justify-end gap-1">
       {hasLogs && (
         <Button
           variant="ghost"
-          size="sm"
+          size={buttonSize}
           render={
             <a
               href={instance.logsUrl}
@@ -100,54 +108,62 @@ export function AgentRowActions({ instance, onChanged }: Props) {
             />
           }
           aria-label={`Logs for ${instance.name}`}
+          title={compact ? "Logs" : undefined}
         >
           <ExternalLinkIcon />
-          Logs
+          {!compact && "Logs"}
         </Button>
       )}
       {canInspect && (
         <Button
           variant="ghost"
-          size="sm"
+          size={buttonSize}
           onClick={() => setInspectorOpen(true)}
           aria-label={`Deployment for ${instance.name}`}
+          title={compact ? "Deployment" : undefined}
         >
           <SettingsIcon />
-          Deployment
+          {!compact && "Deployment"}
         </Button>
       )}
       {canStart && (
         <Button
           variant="ghost"
-          size="sm"
+          size={buttonSize}
           onClick={startInstance}
           disabled={starting}
+          aria-label={`Start ${instance.name}`}
+          title={compact ? "Start" : undefined}
         >
           <PlayIcon />
-          Start
+          {!compact && "Start"}
         </Button>
       )}
       {canStop && (
         <Button
           variant="ghost"
-          size="sm"
+          size={buttonSize}
           onClick={() => setPending("stop")}
           disabled={submitting}
+          aria-label={`Stop ${instance.name}`}
+          title={compact ? "Stop" : undefined}
         >
           <OctagonIcon />
-          Stop
+          {!compact && "Stop"}
         </Button>
       )}
       {canDestroy && (
         <Button
           variant="ghost"
-          size="sm"
+          size={buttonSize}
           onClick={() => setPending("destroy")}
           disabled={submitting}
           className="text-destructive hover:text-destructive"
+          aria-label={`Destroy ${instance.name}`}
+          title={compact ? "Destroy" : undefined}
         >
           <TrashIcon />
-          Destroy
+          {!compact && "Destroy"}
         </Button>
       )}
 

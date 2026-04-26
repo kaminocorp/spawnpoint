@@ -17,6 +17,21 @@ FROM docker.io/nousresearch/hermes-agent@sha256:d4ee57f254aabbe10e41c49533bbf3eb
 # written there at build-time is shadowed by the runtime volume mount).
 USER root
 COPY --chmod=0755 entrypoint.sh /corellia/entrypoint.sh
+
+# M-chat Phase 2 (docs/executing/hermes-chat-sidecar.md §4 Phase 2): the
+# chat sidecar source ships baked into the image. The directory is
+# *always* present in the image; whether the sidecar process *runs* is
+# gated at boot by CORELLIA_CHAT_ENABLED in entrypoint.sh (decision 6,
+# risk 4 — default-deny). No `pip install` step here: per pre-work
+# checklist item 2, fastapi + uvicorn + pydantic ship in the upstream
+# image via the `[all]` extra (changelog 0.9.5 confirmed via the
+# `hermes_cli/web_server.py` import in the same pinned digest). If a
+# future upstream digest bump drops them, the chat-enabled boot path
+# fails fast at uvicorn startup; the chat-disabled path is unaffected.
+# .dockerignore excludes sidecar/README.md + sidecar/smoke.sh so only
+# the runtime files (sidecar.py + requirements.txt) reach the image.
+COPY --chmod=0755 sidecar/ /corellia/sidecar/
+
 USER hermes
 
 # Override upstream entrypoint with our translating wrapper. The wrapper

@@ -1,0 +1,14 @@
+# corellia/hermes-adapter — chat sidecar runtime deps.
+#
+# Pinned for reproducibility (decision 9). Both packages are already
+# present in the upstream Hermes image via the `[all]` extra the
+# upstream Dockerfile installs (verified via the changelog 0.9.5
+# re-inspection — `hermes_cli/web_server.py` imports both). Pinning
+# our own copy here protects against an upstream extra-set change.
+#
+# Phase 1 also uses these for local-bind-mount smoke runs against the
+# unmodified upstream image; if either is missing at runtime, the
+# sidecar exits at boot with the import error.
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3

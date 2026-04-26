@@ -2,6 +2,7 @@ package agents_test
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"sync/atomic"
 	"testing"
@@ -445,6 +446,68 @@ func TestSpawn_HappyPath(t *testing.T) {
 	}
 	if d.lastSpec.Env["CORELLIA_AGENT_ID"] == "" {
 		t.Error("CORELLIA_AGENT_ID missing from deploy spec env")
+	}
+}
+
+// M-chat Phase 3: chat-enabled spawn asserts on the secret-row + env
+// fan-out.
+//
+// Two invariants. (1) Two audit rows insert when ChatEnabled=true
+// (CORELLIA_MODEL_API_KEY *and* CORELLIA_SIDECAR_AUTH_TOKEN), exactly
+// one when ChatEnabled=false. (2) The deploy spec's Env map carries
+// CORELLIA_CHAT_ENABLED=true plus a non-empty CORELLIA_SIDECAR_AUTH_TOKEN
+// when chat is on, and neither key when chat is off (byte-equivalent
+// to the M5 spawn-spec shape).
+func TestSpawn_ChatEnabled_PlumbsTokenAndSecrets(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	in := validSpawnInput()
+	in.DeployConfig.ChatEnabled = true
+	if _, err := s.Spawn(context.Background(), in); err != nil {
+		t.Fatalf("Spawn: %v", err)
+	}
+
+	// Two secret rows = MODEL_API_KEY + SIDECAR_AUTH_TOKEN.
+	if got := atomic.LoadInt32(&q.secretCalls); got != 2 {
+		t.Errorf("InsertSecret calls = %d, want 2 (model key + chat token)", got)
+	}
+
+	if got := d.lastSpec.Env["CORELLIA_CHAT_ENABLED"]; got != "true" {
+		t.Errorf("CORELLIA_CHAT_ENABLED env = %q, want %q (entrypoint default-deny literal)", got, "true")
+	}
+	tok := d.lastSpec.Env["CORELLIA_SIDECAR_AUTH_TOKEN"]
+	if tok == "" {
+		t.Fatal("CORELLIA_SIDECAR_AUTH_TOKEN env is empty; want a generated token")
+	}
+	// Token shape: 32 bytes base64-RawURL = 43 chars. Plan decision 5:
+	// per-instance 32-byte URL-safe random.
+	if got := base64.RawURLEncoding.DecodedLen(len(tok)); got != 32 {
+		t.Errorf("token decoded len = %d, want 32 (decision 5)", got)
+	}
+	if _, err := base64.RawURLEncoding.DecodeString(tok); err != nil {
+		t.Errorf("token does not parse as base64-RawURL: %v", err)
+	}
+}
+
+func TestSpawn_ChatDisabled_OmitsChatPlumbing(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	// Default validSpawnInput has ChatEnabled=false (Go zero) — the
+	// canonical M5 byte-equivalent path.
+	if _, err := s.Spawn(context.Background(), validSpawnInput()); err != nil {
+		t.Fatalf("Spawn: %v", err)
+	}
+
+	if got := atomic.LoadInt32(&q.secretCalls); got != 1 {
+		t.Errorf("InsertSecret calls = %d, want 1 (model key only — no chat audit row)", got)
+	}
+	if got, ok := d.lastSpec.Env["CORELLIA_CHAT_ENABLED"]; ok {
+		t.Errorf("CORELLIA_CHAT_ENABLED env present (=%q); want absent for chat-disabled spawn", got)
+	}
+	if got, ok := d.lastSpec.Env["CORELLIA_SIDECAR_AUTH_TOKEN"]; ok {
+		t.Errorf("CORELLIA_SIDECAR_AUTH_TOKEN env present (=%q); want absent for chat-disabled spawn", got)
 	}
 }
 

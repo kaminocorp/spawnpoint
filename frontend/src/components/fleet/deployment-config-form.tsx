@@ -220,9 +220,9 @@ function RegionField({
         </SelectContent>
       </Select>
       {error ? (
-        <p className="text-xs text-destructive">{error}</p>
+        <p className="text-sm text-destructive">{error}</p>
       ) : (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Where the agent&apos;s machine(s) will run. Default is{" "}
           <code className="text-foreground">{DEFAULT_REGION}</code>.
         </p>
@@ -275,8 +275,8 @@ function SizeField({
               onClick={() => selectPreset(p)}
               className={
                 active
-                  ? "border border-[hsl(var(--feature-deploy))] bg-[hsl(var(--feature-deploy))]/15 px-2.5 py-1 font-mono text-[11px] text-foreground"
-                  : "border border-border bg-card px-2.5 py-1 font-mono text-[11px] text-muted-foreground transition hover:border-[hsl(var(--feature-deploy))]/60 hover:text-foreground"
+                  ? "border border-[hsl(var(--feature-deploy))] bg-[hsl(var(--feature-deploy))]/15 px-3 py-1.5 font-mono text-xs text-foreground"
+                  : "border border-border bg-card px-3 py-1.5 font-mono text-sm text-muted-foreground transition hover:border-[hsl(var(--feature-deploy))]/60 hover:text-foreground"
               }
             >
               {p.label}
@@ -288,8 +288,8 @@ function SizeField({
           onClick={() => setCustomOpen((v) => !v || !matched)}
           className={
             !matched || customOpen
-              ? "border border-[hsl(var(--feature-deploy))] bg-[hsl(var(--feature-deploy))]/15 px-2.5 py-1 font-mono text-[11px] text-foreground"
-              : "border border-border bg-card px-2.5 py-1 font-mono text-[11px] text-muted-foreground transition hover:border-[hsl(var(--feature-deploy))]/60 hover:text-foreground"
+              ? "border border-[hsl(var(--feature-deploy))] bg-[hsl(var(--feature-deploy))]/15 px-3 py-1.5 font-mono text-xs text-foreground"
+              : "border border-border bg-card px-3 py-1.5 font-mono text-sm text-muted-foreground transition hover:border-[hsl(var(--feature-deploy))]/60 hover:text-foreground"
           }
         >
           Custom…
@@ -361,7 +361,7 @@ function VolumeField({
         aria-invalid={!!form.formState.errors.volumeSizeGb}
         {...form.register("volumeSizeGb", { valueAsNumber: true })}
       />
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         Persistent storage for the agent&apos;s memory, skills, and
         conversation history. Mounted at{" "}
         <code className="text-foreground">/opt/data</code>. Can be increased
@@ -394,7 +394,7 @@ function ReplicasField({
         aria-invalid={!!form.formState.errors.desiredReplicas}
         {...form.register("desiredReplicas", { valueAsNumber: true })}
       />
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         How many machines to run for this agent. Use &gt;1 for capacity.{" "}
         <span className="text-foreground">
           Note: each replica gets its own volume — replicas don&apos;t share
@@ -438,7 +438,7 @@ function RestartField({
           return (
             <label
               key={opt.value}
-              className="flex cursor-pointer items-center gap-2 font-mono text-[11px]"
+              className="flex cursor-pointer items-center gap-2 font-mono text-xs"
             >
               <input
                 type="radio"
@@ -519,7 +519,7 @@ function LifecycleField({
         </SelectContent>
       </Select>
       {value === "manual" && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Agent only runs when you start it from the fleet page.
         </p>
       )}

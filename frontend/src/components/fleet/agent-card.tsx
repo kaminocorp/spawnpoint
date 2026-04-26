@@ -90,7 +90,7 @@ export function AgentCard({
       </div>
 
       <footer className="flex items-center justify-end border-t border-border/50 px-2 py-1.5">
-        <AgentRowActions instance={instance} onChanged={onChanged} />
+        <AgentRowActions instance={instance} onChanged={onChanged} compact />
       </footer>
     </article>
   );
