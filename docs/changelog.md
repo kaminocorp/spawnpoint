@@ -2,6 +2,7 @@
 
 Index - short one-liners:
 
+- [0.7.3 — M4 Phase 7: Integration Smoke Pass (Local BE + Prod DB + Live Fly) + Fly Token Swap (PAT → Org-Scoped)](#073--m4-phase-7-integration-smoke-pass-local-be--prod-db--live-fly--fly-token-swap-pat--org-scoped-2026-04-26)
 - [0.7.2 — UX Copy: `/agents` Nav + Page Heading Renamed to "Agents"](#072--ux-copy-agents-nav--page-heading-renamed-to-agents-2026-04-26)
 - [0.7.1 — Frontend Mission-Control Implementation: Spec → Pixels](#071--frontend-mission-control-implementation-spec--pixels-2026-04-26)
 - [0.7.0 — M4: Spawn Flow (Phases 1–6)](#070--m4-spawn-flow-phases-16-2026-04-26)
@@ -23,6 +24,41 @@ Index - short one-liners:
 - [0.1.0 — Backend Scaffolding & Docs Reconciliation](#010--backend-scaffolding--docs-reconciliation-2026-04-24)
 
 Latest on top. Each release has a tight index followed by detail entries (**What / Where / Why** inlined). When a decision contradicts an earlier one, note the supersession in the new entry rather than editing the old one.
+
+---
+
+## 0.7.3 — M4 Phase 7: Integration Smoke Pass (Local BE + Prod DB + Live Fly) + Fly Token Swap (PAT → Org-Scoped) (2026-04-26)
+
+The first end-to-end walkthrough of the M4 spawn flow against a live Fly account — the integration smoke that 0.7.0's *Known pending work* parked as Phase 7. Surfaced one real bug: the operator's Fly **Personal Access Token** in `backend/.env` succeeded against Fly's GraphQL API but returned `unauthorized` on `flaps.CreateApp` against `api.machines.dev`. The Machines API gates more strictly than GraphQL, and PATs — despite working everywhere `flyctl` is used interactively — aren't the right token *shape* for what Corellia is becoming. Two things shipped here, neither involving Go or TS code: (a) the diagnosis was written up as a problem-statement doc (`docs/executing/deploy-target-credentials.md`) framing both today's fix and the v1.5 product evolution (per-user deploy targets, secret-store-backed credentials, OAuth-acquired where the provider supports it); (b) the fix itself — swap the operator's PAT for an **org-scoped Fly token** (`fly tokens create org -o personal --name "corellia-dev" --expiry 8760h`), zero code change, byte-compatible with the v1 code path *and* the same token *shape* users will eventually supply via the v1.5 connect flow. We dogfood the production credential model from day one without writing v1.5 code. Patch version (zero code change, runtime-config + docs only).
+
+### Index
+
+- **`backend/.env:15` — `FLY_API_TOKEN` swapped from PAT to org-scoped token.** *Why:* PATs grant full-account power forever (equivalent to an AWS root key) and — empirically — are gated *out* of the Machines API surface that `flaps.CreateApp` / `flaps.SetAppSecret` / `flaps.Launch` need. An org-scoped token (`fly tokens create org -o <slug>`) is the **narrowest token that satisfies all six flaps endpoints** the M3 `FlyDeployTarget` exercises (`CreateApp`, `DeleteApp`, `SetAppSecret`, `Launch`, `List`, `Stop`) — provider-correct, and the same shape v1.5's connect flow will ask users to mint themselves. `FLY_ORG_SLUG=personal` was already correct; no companion change. Token written without the `FlyV1 ` prefix to match the file's existing convention; `fly-go` / `flaps-go` clients accept both forms.
+- **`docs/executing/deploy-target-credentials.md` — new (66 LOC).** Problem-statement doc, pre-plan, not yet milestone-scoped. Frames three concrete problems (one credential serves all users; PAT-shaped paste UX is wrong; credentials must never live in Corellia's database) and proposes a two-track resolution: today's operator-loop fix (no code) and the v1.5 product evolution (`deploy_targets` schema extension with `owner_org_id` + `display_name` + `credentials_storage_ref`; `resolver.For(ctx, kind)` evolving to `resolver.For(ctx, deployTargetID)`; per-provider connect flow — Fly OAuth, AWS STS, paste-as-fallback). Records two breadcrumbs to commit before they evaporate: a `// TODO(v1.5):` on `FlyCredentials` in `internal/deploy/fly.go:33`, and a new `blueprint.md` section codifying "never PATs from users." **Both breadcrumbs deferred** — not in this entry; queued for the next session that touches either file.
+- **Validation against live Fly account.** `fly apps list -t <new-token>` returned a non-empty result — exercises the Machines API auth path before any Corellia code path is invoked, so the token shape is confirmed *before* we trust it inside the spawn flow. Then the UI walkthrough: sign in → `/agents` → click Deploy → form fills → submit. The spawn produced a `corellia-agent-<uuid>` app under the `personal` org with one machine in `iad` running the pinned Hermes adapter image — the first end-to-end confirmation that the M4 wire connects from React form → Connect-go RPC → `agents.Service.Spawn` → `deploy.Resolver.For(ctx, "fly")` → `FlyDeployTarget.Spawn` → flaps `CreateApp` + `SetAppSecret` + `Launch` against a real Fly account. Machine ran for ~88s before Fly's native auto-stop kicked in — consistent with blueprint §8 ("Auto-stop enabled, auto-start on request"). Backend ran locally via `overmind start` against the prod Supabase DB (no separate dev project; `DATABASE_URL` unchanged).
+
+### Behavior change (known)
+
+- **`flaps.CreateApp` succeeds against `api.machines.dev`.** Pre-fix: `unauthorized`. Post-fix: app + machine created.
+- **No code, generated code, schema, env-var-name, or dependency change.** Pure runtime-config + docs.
+- **The token in `backend/.env` is now scoped to org `personal` only.** Cannot create/delete apps in any other Fly org the operator's account belongs to. This is the intended narrowing — Corellia spawns under `personal` per `FLY_ORG_SLUG`; access to other orgs the operator owns is now intentionally out-of-scope for the running backend.
+
+### Resolves
+
+- **0.7.0 *Known pending work*: "Phase 7 (integration smoke) — first end-to-end walkthrough against a live Fly account + real provider key."** First walkthrough complete; the `pending → running` convergence, the 3s polling cadence, and the `Deploy 5` semaphore behavior remain to be exercised explicitly in subsequent runs but the auth-gated boundary that was blocking *any* spawn is now open.
+- **0.7.0 *Known pending work*: "decision 25's redaction layer (bad provider key should surface as `Unavailable` in the FE toast)."** Not directly tested in this run (the *Fly* token was the failing surface, not the *model provider* key). Still pending for an explicit malformed-key smoke.
+
+### Known pending work
+
+- **M4 Phase 8 hardening — three pre-flagged items unchanged from 0.7.0.** (1) Transactional spawn writes (decision 27 step 6 deferred); (2) `agents_handler_test.go` for the sentinel → Connect code mapping; (3) explicit secrets-row policy decision (one row vs one-per-`CORELLIA_*` var).
+- **v1.5 deploy-target credentials work itself.** Schema extension + resolver evolution + Fly OAuth connect flow per `docs/executing/deploy-target-credentials.md`. Not in this entry; not in M4. Will be a distinct milestone with its own plan.
+- **Two breadcrumbs from `deploy-target-credentials.md` not yet committed.** `// TODO(v1.5):` on `FlyCredentials` in `internal/deploy/fly.go:33`; new `blueprint.md` section on the per-user / secret-store-backed / OAuth-where-possible / never-PATs rule. Cheap to drop in next time either file is open.
+- **Old PAT not yet revoked.** Kept around as a fallback while the new token is exercised in further spawn-flow runs (UI shows the spawn worked, but `pending → running` convergence and the M4 lifecycle endpoints — `Stop`, `Destroy`, `pollHealth` flipping the row — haven't all been confirmed in one session yet). Once Phase 7 is fully green: `fly tokens list` → `fly tokens revoke <id>`.
+- **`pollHealth` → `running` confirmation.** Spawn produced the Fly app + machine, but this entry doesn't pin whether the `agent_instances.status` row reached `running` before the 90s `pollHealth` budget elapsed — the machine was already in Fly's `stopped` state at inspection time, which is consistent with *either* successful health-check + auto-stop *or* `pollHealth` deadline → status `failed` + Fly auto-stop. Worth checking the fleet UI's status badge on the next session and `fly logs -a <app-name>` if it reads `failed`.
+
+### Supersedes
+
+- **The implicit assumption since 0.5.0 that PATs are an acceptable dev-time stand-in for the operator's Fly credential.** Empirically false against the Machines API; the v1 code path now runs against the production-correct token shape from day one.
 
 ---
 
