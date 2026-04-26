@@ -107,6 +107,16 @@ type DeployTarget interface {
 	// agent's lifecycle_mode is "manual".
 	Start(ctx context.Context, externalRef string) error
 
+	// Restart cycles every started machine in the app via the deploy
+	// target's native restart primitive. v1.5 Pillar B Phase 7 — wired
+	// into the fleet inspector's "Restart now" button so operators can
+	// apply restart-required tool-grant changes (e.g. equipping a new
+	// toolset, which only re-reads from config.yaml at boot) without
+	// editing Fly directly. Stopped machines are skipped (Fly's restart
+	// primitive returns an error against a non-running machine — the
+	// operator should Start them instead).
+	Restart(ctx context.Context, externalRef string) error
+
 	Destroy(ctx context.Context, externalRef string) error
 
 	// Health collapses N replica states into one HealthStatus per

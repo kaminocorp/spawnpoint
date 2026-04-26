@@ -83,6 +83,7 @@ type flapsClient interface {
 	Update(ctx context.Context, app string, in fly.LaunchMachineInput, nonce string) (*fly.Machine, error)
 	Stop(ctx context.Context, app string, in fly.StopMachineInput, nonce string) error
 	Start(ctx context.Context, app, machineID, nonce string) (*fly.MachineStartResponse, error)
+	Restart(ctx context.Context, app string, in fly.RestartMachineInput, nonce string) error
 	Destroy(ctx context.Context, app string, in fly.RemoveMachineInput, nonce string) error
 	Wait(ctx context.Context, app, machineID string, opts ...flaps.WaitOption) error
 
@@ -580,6 +581,55 @@ func (f *FlyDeployTarget) startOne(ctx context.Context, app, machineID string) e
 		flaps.WithWaitTimeout(waitTimeout),
 	); err != nil {
 		return fmt.Errorf("fly: wait machine %q: %w", machineID, err)
+	}
+	return nil
+}
+
+// Restart cycles every started machine in the app. v1.5 Pillar B Phase 7 —
+// drives the fleet inspector's "Restart now" button so operators can apply
+// restart-required tool-grant changes (the new platform_toolsets list in
+// $HERMES_HOME/config.yaml only re-reads at boot) without editing Fly
+// directly. Stopped machines are skipped — Fly's restart endpoint returns
+// an error against a non-running machine, and the operator should Start
+// them via the existing fleet row's Start button if needed.
+//
+// One nonce per machine, mirroring Start: lease + restart + release. Wait
+// is bounded by waitTimeout (60s, matching Start's wait) — typical Fly
+// restarts complete well inside that envelope.
+func (f *FlyDeployTarget) Restart(ctx context.Context, externalRef string) error {
+	app, err := parseExternalRef(externalRef)
+	if err != nil {
+		return err
+	}
+	machines, err := f.flaps.List(ctx, app, "")
+	if err != nil {
+		return fmt.Errorf("fly: list machines for %q: %w", app, err)
+	}
+	for _, m := range machines {
+		if m.State != "started" {
+			continue
+		}
+		if err := f.restartOne(ctx, app, m.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (f *FlyDeployTarget) restartOne(ctx context.Context, app, machineID string) error {
+	nonce, release, err := f.acquireLease(ctx, app, machineID)
+	if err != nil {
+		return err
+	}
+	defer release()
+	if err := f.flaps.Restart(ctx, app, fly.RestartMachineInput{ID: machineID}, nonce); err != nil {
+		return fmt.Errorf("fly: restart machine %q: %w", machineID, err)
+	}
+	if err := f.flaps.Wait(ctx, app, machineID,
+		flaps.WithWaitStates("started"),
+		flaps.WithWaitTimeout(waitTimeout),
+	); err != nil {
+		return fmt.Errorf("fly: wait machine %q after restart: %w", machineID, err)
 	}
 	return nil
 }

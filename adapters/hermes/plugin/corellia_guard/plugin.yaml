@@ -1,0 +1,9 @@
+name: corellia_guard
+version: 0.1.0
+description: Corellia per-tool scope enforcement
+author: Corellia
+kind: standalone
+# hooks list is declared here (Phase 2 stub) so Hermes's plugin discovery
+# registers the hook slot. The actual enforcement logic lands in Phase 5;
+# until then register() is a no-op and pre_tool_call is never called.
+hooks: [pre_tool_call]

@@ -87,6 +87,23 @@ export const deploymentConfigSchema = z.object({
 
 export type DeploymentFormValues = z.infer<typeof deploymentConfigSchema>;
 
+/**
+ * Section keys for `labelOverrides` — one per `<Label>` heading the form
+ * surfaces. Wizard Step 4 (redesign-spawn Phase 4) passes loadout-flavoured
+ * names; fleet inspector + bulk-apply omit the prop and keep canonical
+ * labels.
+ */
+export type DeploymentLabelKey =
+  | "region"
+  | "size"
+  | "volumeSizeGb"
+  | "desiredReplicas"
+  | "restartPolicy"
+  | "lifecycleMode"
+  | "chatEnabled";
+
+export type DeploymentLabelOverrides = Partial<Record<DeploymentLabelKey, string>>;
+
 export type DeploymentConfigFormProps = {
   /** Initial values; falls back to `DEFAULT_DEPLOYMENT_VALUES`. */
   defaults?: Partial<DeploymentConfigValues>;
@@ -102,6 +119,12 @@ export type DeploymentConfigFormProps = {
    * inspector locks it and points the operator at destroy + respawn.
    */
   lockedFields?: ReadonlyArray<keyof DeploymentFormValues>;
+  /**
+   * Optional per-section label overrides. The wizard's loadout reskin
+   * passes `{ region: "[ THEATRE ]", size: "[ ARMOR ]", ... }`; other
+   * consumers omit the prop and the canonical labels render.
+   */
+  labelOverrides?: DeploymentLabelOverrides;
 };
 
 export function DeploymentConfigForm({
@@ -109,6 +132,7 @@ export function DeploymentConfigForm({
   onSubmit,
   submitLabel = "› CONFIRM",
   lockedFields = [],
+  labelOverrides,
 }: DeploymentConfigFormProps) {
   const merged = { ...DEFAULT_DEPLOYMENT_VALUES, ...defaults };
   const form = useForm<DeploymentFormValues>({
@@ -117,6 +141,8 @@ export function DeploymentConfigForm({
   });
 
   const isLocked = (k: keyof DeploymentFormValues) => lockedFields.includes(k);
+  const labelFor = (k: DeploymentLabelKey, fallback: string): string =>
+    labelOverrides?.[k] ?? fallback;
 
   return (
     <form
@@ -124,13 +150,17 @@ export function DeploymentConfigForm({
       noValidate
       className="space-y-5"
     >
-      <RegionField form={form} />
-      <SizeField form={form} />
-      <VolumeField form={form} />
-      <ReplicasField form={form} />
-      <RestartField form={form} />
-      <LifecycleField form={form} />
-      <ChatEnabledField form={form} locked={isLocked("chatEnabled")} />
+      <RegionField form={form} label={labelFor("region", "Region")} />
+      <SizeField form={form} label={labelFor("size", "Size")} />
+      <VolumeField form={form} label={labelFor("volumeSizeGb", "Volume size (GB)")} />
+      <ReplicasField form={form} label={labelFor("desiredReplicas", "Replicas per agent")} />
+      <RestartField form={form} label={labelFor("restartPolicy", "Restart policy")} />
+      <LifecycleField form={form} label={labelFor("lifecycleMode", "Lifecycle")} />
+      <ChatEnabledField
+        form={form}
+        locked={isLocked("chatEnabled")}
+        label={labelFor("chatEnabled", "Chat")}
+      />
 
       <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
         <Button size="sm" type="submit">
@@ -182,8 +212,10 @@ function useDeploymentRegions(): {
 
 function RegionField({
   form,
+  label,
 }: {
   form: UseFormReturn<DeploymentFormValues>;
+  label: string;
 }) {
   const value = useWatch({ control: form.control, name: "region" });
   const { regions, loading, error } = useDeploymentRegions();
@@ -210,7 +242,7 @@ function RegionField({
 
   return (
     <div className="space-y-1.5">
-      <Label htmlFor="region">Region</Label>
+      <Label htmlFor="region">{label}</Label>
       <Select
         value={value || DEFAULT_REGION}
         onValueChange={(v) =>
@@ -255,8 +287,10 @@ function RegionField({
 
 function SizeField({
   form,
+  label,
 }: {
   form: UseFormReturn<DeploymentFormValues>;
+  label: string;
 }) {
   const cpuKind = useWatch({ control: form.control, name: "cpuKind" });
   const cpus = useWatch({ control: form.control, name: "cpus" });
@@ -279,7 +313,7 @@ function SizeField({
 
   return (
     <div className="space-y-2">
-      <Label>Size</Label>
+      <Label>{label}</Label>
       <div className="flex flex-wrap gap-1.5">
         {SIZE_PRESETS.map((p) => {
           const active = matched?.id === p.id;
@@ -362,12 +396,14 @@ function SizeField({
 
 function VolumeField({
   form,
+  label,
 }: {
   form: UseFormReturn<DeploymentFormValues>;
+  label: string;
 }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor="volumeSizeGb">Volume size (GB)</Label>
+      <Label htmlFor="volumeSizeGb">{label}</Label>
       <Input
         id="volumeSizeGb"
         type="number"
@@ -395,12 +431,14 @@ function VolumeField({
 
 function ReplicasField({
   form,
+  label,
 }: {
   form: UseFormReturn<DeploymentFormValues>;
+  label: string;
 }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor="desiredReplicas">Replicas per agent</Label>
+      <Label htmlFor="desiredReplicas">{label}</Label>
       <Input
         id="desiredReplicas"
         type="number"
@@ -429,8 +467,10 @@ function ReplicasField({
 
 function RestartField({
   form,
+  label,
 }: {
   form: UseFormReturn<DeploymentFormValues>;
+  label: string;
 }) {
   const policy = useWatch({ control: form.control, name: "restartPolicy" });
 
@@ -442,7 +482,7 @@ function RestartField({
 
   return (
     <div className="space-y-2">
-      <Label>Restart policy</Label>
+      <Label>{label}</Label>
       <div
         role="radiogroup"
         aria-label="Restart policy"
@@ -501,14 +541,16 @@ function RestartField({
 
 function LifecycleField({
   form,
+  label,
 }: {
   form: UseFormReturn<DeploymentFormValues>;
+  label: string;
 }) {
   const value = useWatch({ control: form.control, name: "lifecycleMode" });
 
   return (
     <div className="space-y-1.5">
-      <Label htmlFor="lifecycleMode">Lifecycle</Label>
+      <Label htmlFor="lifecycleMode">{label}</Label>
       <Select
         value={value}
         onValueChange={(v) =>
@@ -552,16 +594,18 @@ function LifecycleField({
 function ChatEnabledField({
   form,
   locked,
+  label,
 }: {
   form: UseFormReturn<DeploymentFormValues>;
   locked?: boolean;
+  label: string;
 }) {
   const checked = useWatch({ control: form.control, name: "chatEnabled" });
   const isOn = checked ?? true;
 
   return (
     <div className="space-y-1.5">
-      <Label>Chat</Label>
+      <Label>{label}</Label>
       <label
         className={
           locked

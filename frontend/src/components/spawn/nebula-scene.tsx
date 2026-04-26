@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import {
   AdditiveBlending,
   type Group,
@@ -66,7 +66,15 @@ function randomFloats(count: number, min: number, max: number): Float32Array {
   return out;
 }
 
-function PrimaryCloud({ palette }: { palette: MoodPalette }) {
+function PrimaryCloud({
+  palette,
+  targetPalette,
+}: {
+  palette: MoodPalette;
+  /** When defined, palette uniforms lerp toward this target each frame.
+   *  When undefined (default), behaviour is byte-identical to before Phase 3. */
+  targetPalette?: MoodPalette;
+}) {
   const materialRef = useRef<ShaderMaterial>(null);
   const groupRef = useRef<Group>(null);
 
@@ -79,10 +87,10 @@ function PrimaryCloud({ palette }: { palette: MoodPalette }) {
     [],
   );
 
-  // Palette-derived uniforms are baked once per `palette` change. The
-  // animation uniforms (uTime / uLowAmp / uMidAmp / uCoherence) update per
-  // frame and intentionally live outside this memo so the material itself
-  // is stable.
+  // Palette-derived uniforms are baked once per `palette` change (the initial
+  // harness). The animation uniforms (uTime / uLowAmp / uMidAmp / uCoherence)
+  // update per frame and intentionally live outside this memo so the material
+  // itself is stable. Palette lerp (Phase 3) mutates these values in useFrame.
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
@@ -104,7 +112,21 @@ function PrimaryCloud({ palette }: { palette: MoodPalette }) {
     [palette],
   );
 
-  useFrame((state) => {
+  // Ref-based target palette — keeps the useFrame closure from going stale
+  // without re-registering it on every render. Updated in useLayoutEffect
+  // (runs synchronously after commit, before the next rAF/useFrame fires)
+  // to avoid the react-hooks/refs "no ref writes during render" rule.
+  const targetRef = useRef<MoodPalette>(targetPalette ?? palette);
+  useLayoutEffect(() => {
+    targetRef.current = targetPalette ?? palette;
+  }, [targetPalette, palette]);
+
+  // Reusable scratch objects — allocated once, mutated each frame to avoid
+  // per-frame heap pressure from `new Vector3/4(...)` inside the render loop.
+  const _s3 = useRef(new Vector3());
+  const _s4 = useRef(new Vector4());
+
+  useFrame((state, delta) => {
     const material = materialRef.current;
     const group = groupRef.current;
     if (!material || !group) return;
@@ -121,6 +143,23 @@ function PrimaryCloud({ palette }: { palette: MoodPalette }) {
     material.uniforms.uLowAmp.value = lowAmp;
     material.uniforms.uMidAmp.value = midAmp;
     material.uniforms.uCoherence.value = coherence;
+
+    // Palette crossfade (redesign-spawn.md Phase 3, decision 3).
+    // α = 1 - exp(-dt * 8) is frame-rate-independent: ~12.5%/frame at 60fps,
+    // half-life ≈ 87ms, visually converged (~96%) after ≈400ms.
+    // When targetRef.current === palette the lerp is an identity (uniforms
+    // are already at their target), so non-carousel use is byte-identical.
+    const tp = targetRef.current;
+    const α = 1 - Math.exp(-delta * 8);
+
+    material.uniforms.uPearl.value.lerp(_s3.current.set(...tp.pearl), α);
+    material.uniforms.uTint0.value.lerp(_s3.current.set(...tp.tints[0]), α);
+    material.uniforms.uTint1.value.lerp(_s3.current.set(...tp.tints[1]), α);
+    material.uniforms.uTint2.value.lerp(_s3.current.set(...tp.tints[2]), α);
+    material.uniforms.uTint3.value.lerp(_s3.current.set(...tp.tints[3]), α);
+    material.uniforms.uTintFreq.value.lerp(_s4.current.set(...tp.frequencies), α);
+    material.uniforms.uTintIntensity.value.lerp(_s4.current.set(...tp.intensities), α);
+    material.uniforms.uSpatialWeights.value.lerp(_s3.current.set(...tp.spatialWeights), α);
 
     group.rotation.y = t * 0.05;
     group.rotation.x = t * 0.02;
@@ -203,14 +242,20 @@ function CoreMotes() {
   );
 }
 
-export default function NebulaScene({ palette }: { palette: MoodPalette }) {
+export default function NebulaScene({
+  palette,
+  targetPalette,
+}: {
+  palette: MoodPalette;
+  targetPalette?: MoodPalette;
+}) {
   return (
     <Canvas
       camera={{ position: [0, 0, 3.2], fov: 50 }}
       gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
     >
       <ambientLight intensity={0.15} />
-      <PrimaryCloud palette={palette} />
+      <PrimaryCloud palette={palette} targetPalette={targetPalette} />
       <CoreMotes />
     </Canvas>
   );

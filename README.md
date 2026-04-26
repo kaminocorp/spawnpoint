@@ -14,6 +14,17 @@
   </p>
 </div>
 
+<!--
+  DEMO VIDEO
+  Run `pnpm install && pnpm frontend:dev` then `pnpm capture:video`.
+  Drag docs/assets/login-animation.mp4 into any GitHub issue/PR comment box
+  to get a CDN URL, then replace VIDEO_URL below and uncomment the block.
+
+<div align="center">
+  <video src="VIDEO_URL" autoplay loop muted playsinline width="900" />
+</div>
+-->
+
 ---
 
 ## What it does

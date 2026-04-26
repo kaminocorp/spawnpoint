@@ -222,6 +222,8 @@ type fakeDeployTarget struct {
 	previewCount        int32
 	startErr            error
 	startCount          int32
+	restartErr          error
+	restartCount        int32
 	listRegions         []deploy.Region
 	listRegionsErr      error
 	placement           deploy.PlacementResult
@@ -300,6 +302,10 @@ func (f *fakeDeployTarget) PreviewUpdate(_ context.Context, _ string, cfg deploy
 func (f *fakeDeployTarget) Start(_ context.Context, _ string) error {
 	atomic.AddInt32(&f.startCount, 1)
 	return f.startErr
+}
+func (f *fakeDeployTarget) Restart(_ context.Context, _ string) error {
+	atomic.AddInt32(&f.restartCount, 1)
+	return f.restartErr
 }
 func (f *fakeDeployTarget) ListRegions(_ context.Context) ([]deploy.Region, error) {
 	return f.listRegions, f.listRegionsErr
@@ -1226,6 +1232,104 @@ func TestStartInstance_NotFound(t *testing.T) {
 	_, err := s.StartInstance(context.Background(), uuid.New(), uuid.New())
 	if !errors.Is(err, agents.ErrInstanceNotFound) {
 		t.Fatalf("err: got %v, want ErrInstanceNotFound", err)
+	}
+}
+
+// ---------- Phase 7 — RestartInstance ----------
+
+// fakeAuditAppender records calls to the tools-audit hook so the Phase 7
+// RestartInstance test can pin the "audit row written on success" invariant
+// without standing up the tools service.
+type fakeAuditAppender struct {
+	calls int
+	last  struct {
+		actor    uuid.UUID
+		org      uuid.UUID
+		instance uuid.UUID
+	}
+}
+
+func (f *fakeAuditAppender) AppendInstanceRestartAudit(_ context.Context, actor, org, instance uuid.UUID) {
+	f.calls++
+	f.last.actor = actor
+	f.last.org = org
+	f.last.instance = instance
+}
+
+func TestRestartInstance_HappyPath(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newReadyInstance("fly-app:corellia-agent-restart")
+	q.getInst = row
+	auditor := &fakeAuditAppender{}
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q}, agents.WithToolsAuditAppender(auditor))
+
+	actorID := uuid.New()
+	if _, err := s.RestartInstance(context.Background(), actorID, row.ID, row.OrgID); err != nil {
+		t.Fatalf("RestartInstance: %v", err)
+	}
+	if atomic.LoadInt32(&d.restartCount) != 1 {
+		t.Errorf("deployer.Restart count: got %d, want 1", d.restartCount)
+	}
+	if auditor.calls != 1 {
+		t.Errorf("audit calls: got %d, want 1", auditor.calls)
+	}
+	if auditor.last.actor != actorID {
+		t.Errorf("audit actor: got %s, want %s", auditor.last.actor, actorID)
+	}
+	if auditor.last.instance != row.ID {
+		t.Errorf("audit instance: got %s, want %s", auditor.last.instance, row.ID)
+	}
+}
+
+func TestRestartInstance_DeployFailure_NoAuditWrite(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newReadyInstance("fly-app:corellia-agent-restart-fail")
+	q.getInst = row
+	d.restartErr = errors.New("flaps boom")
+	auditor := &fakeAuditAppender{}
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q}, agents.WithToolsAuditAppender(auditor))
+
+	_, err := s.RestartInstance(context.Background(), uuid.New(), row.ID, row.OrgID)
+	if !errors.Is(err, agents.ErrFlyAPI) {
+		t.Fatalf("err: got %v, want ErrFlyAPI", err)
+	}
+	if auditor.calls != 0 {
+		t.Errorf("audit calls on failure: got %d, want 0 (audit only on success)", auditor.calls)
+	}
+}
+
+func TestRestartInstance_NotFound(t *testing.T) {
+	q, a, _, r := newSpawnReadyHarness()
+	q.getInstErr = pgx.ErrNoRows
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+	_, err := s.RestartInstance(context.Background(), uuid.New(), uuid.New(), uuid.New())
+	if !errors.Is(err, agents.ErrInstanceNotFound) {
+		t.Fatalf("err: got %v, want ErrInstanceNotFound", err)
+	}
+}
+
+func TestRestartInstance_DestroyedRowRejected(t *testing.T) {
+	q, a, _, r := newSpawnReadyHarness()
+	row := newReadyInstance("fly-app:corellia-agent-destroyed")
+	row.Status = "destroyed"
+	q.getInst = row
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+	_, err := s.RestartInstance(context.Background(), uuid.New(), row.ID, row.OrgID)
+	if !errors.Is(err, agents.ErrInstanceNotFound) {
+		t.Fatalf("err: got %v, want ErrInstanceNotFound for destroyed row", err)
+	}
+}
+
+func TestRestartInstance_NoAuditAppender_StillSucceeds(t *testing.T) {
+	q, a, _, r := newSpawnReadyHarness()
+	row := newReadyInstance("fly-app:corellia-agent-no-audit")
+	q.getInst = row
+	// No WithToolsAuditAppender option — Phase 1/2/3 deployments without
+	// the tools service wired must keep working.
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	if _, err := s.RestartInstance(context.Background(), uuid.New(), row.ID, row.OrgID); err != nil {
+		t.Fatalf("RestartInstance without audit appender: %v", err)
 	}
 }
 

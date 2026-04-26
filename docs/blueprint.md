@@ -93,7 +93,13 @@ these to whatever the upstream harness natively expects.
 - `CORELLIA_MODEL_PROVIDER` — `anthropic` / `openai` / `openrouter` / ...
 - `CORELLIA_MODEL_API_KEY` — provider credential
 - `CORELLIA_MODEL_NAME` — specific model (e.g., `claude-opus-4-7`)
-- `CORELLIA_TOOL_MANIFEST_URL` — post-v1
+- `CORELLIA_TOOL_MANIFEST_URL` — v1.5 Pillar B; URL the adapter polls for the
+  per-instance toolset manifest (set as a Fly app secret at spawn time when
+  `CORELLIA_API_URL` is configured on the control plane)
+- `CORELLIA_INSTANCE_TOKEN` — v1.5 Pillar B; opaque per-instance bearer token
+  the adapter sends with each manifest poll. SHA-256 hash stored in
+  `agent_instance_manifest_tokens`; raw value lives only in the Fly app's
+  secret store (blueprint §11.6)
 - `CORELLIA_MEMORY_ENDPOINT` — post-v1
 
 ### 3.3 Packaging contract

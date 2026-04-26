@@ -14,6 +14,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { useUser } from "@/lib/api/user-context";
 
 type NavItem = {
   href: string;
@@ -21,15 +22,31 @@ type NavItem = {
   ready: boolean;
 };
 
-const items: NavItem[] = [
+const baseItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", ready: true },
   { href: "/spawn", label: "Spawn", ready: true },
   { href: "/fleet", label: "Fleet", ready: true },
+];
+
+// Org-admin-only entry — the BE's SetOrgToolCuration handler is the
+// security boundary; this gate is UX (don't tease admins-only surfaces
+// to non-admins). v1.5 Pillar B Phase 6.
+const adminItems: NavItem[] = [
+  { href: "/settings/tools", label: "Tools", ready: true },
+];
+
+const trailingItems: NavItem[] = [
   { href: "/settings", label: "Settings", ready: false },
 ];
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { user } = useUser();
+  const items: NavItem[] = [
+    ...baseItems,
+    ...(user.role === "admin" ? adminItems : []),
+    ...trailingItems,
+  ];
 
   return (
     <Sidebar collapsible="icon">
@@ -49,7 +66,7 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <div className="px-3 pb-2 pt-3 group-data-[collapsible=icon]:hidden">
-            <span className="font-display text-[10px] uppercase tracking-widest text-muted-foreground/60">
+            <span className="font-display text-[11px] uppercase tracking-widest text-muted-foreground/60">
               [ MODULES ]
             </span>
           </div>
@@ -71,7 +88,7 @@ export function AppSidebar() {
                       }
                     />
                     {!item.ready && (
-                      <SidebarMenuBadge className="font-display text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                      <SidebarMenuBadge className="font-display text-[11px] uppercase tracking-wider text-muted-foreground/60">
                         Soon
                       </SidebarMenuBadge>
                     )}

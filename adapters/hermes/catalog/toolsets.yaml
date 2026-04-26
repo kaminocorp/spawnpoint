@@ -1,0 +1,265 @@
+# Hermes toolset catalog — v1.5 Pillar B, Phase 1
+#
+# Hand-authored source of truth for the tools governance seed migration.
+# Derived from three locations in hermes_cli/tools_config.py at the pinned
+# Hermes digest sha256:d4ee57f254aabbe10e41c49533bbf3eb98e6b026463c42843a07588e45ddd338
+# (nousresearch/hermes-agent:v2026.4.23, _config_version: 22):
+#
+#   1. CONFIGURABLE_TOOLSETS (lines 50–76): 3-tuple (key, display_name, description)
+#   2. _DEFAULT_OFF_TOOLSETS: keys whose default is off in a fresh Hermes deploy
+#   3. _TOOLSET_PLATFORM_RESTRICTIONS: keys restricted to non-cli platforms
+#
+# required_env_vars and scope_shape are Corellia additions — derived by reading
+# each toolset's provider implementation in the pinned source.
+#
+# OMITTED — platform-restricted (non-cli) toolsets:
+#   discord, discord_admin, messaging
+# These three toolsets have _TOOLSET_PLATFORM_RESTRICTIONS entries that exclude
+# 'cli'. Corellia v1/v1.5 deploys on cli only; including them would create an
+# unequippable catalog entry (blueprint §11.4 — no fake UI buttons).
+# Result: 22 upstream toolsets → 19 seeded rows.
+#
+# oauth_only: true toolsets are rendered as locked rows in the wizard
+# (v1.6 tooltip, per blueprint §11.4). Only spotify is OAuth-only at the
+# toolset level; other oauth flows are provider-level (#5 surface, deferred
+# to v1.6).
+#
+# scope_shape drives Phase 4 UI inputs and Phase 5 plugin enforcement.
+# Types: "pattern_list" (glob strings), "regex_list" (Go regexp strings),
+# "path" (single string). default_deny applies when the field is absent or
+# empty in scope_json — false only for working_directory (no pin = allow any).
+#
+# adapter_version keys these rows. When the Hermes upstream digest bumps, a new
+# YAML alongside a new migration leaves existing rows intact.
+
+adapter_version: "v2026.4.23"
+
+toolsets:
+  - toolset_key: web
+    display_name: Web Search & Fetch
+    description: >
+      Search the web and fetch URLs.
+      Backed by Exa, Parallel, or Firecrawl.
+    category: info
+    default_on_in_hermes: true
+    oauth_only: false
+    scope_shape:
+      url_allowlist:
+        type: pattern_list
+        description: "Glob patterns for allowed URLs. Empty list = deny all. Example: \"*.acme.com\""
+        default_deny: true
+    required_env_vars: [EXA_API_KEY]
+
+  - toolset_key: browser
+    display_name: Browser Automation
+    description: >
+      Drive a headless browser to render pages and interact with web UIs.
+    category: info
+    default_on_in_hermes: true
+    oauth_only: false
+    scope_shape:
+      url_allowlist:
+        type: pattern_list
+        description: "Glob patterns for allowed URLs. Empty list = deny all."
+        default_deny: true
+    required_env_vars: []
+
+  - toolset_key: terminal
+    display_name: Terminal
+    description: >
+      Execute shell commands. Backs the agent's ability to run system commands,
+      install packages, and manage processes.
+    category: compute
+    default_on_in_hermes: true
+    oauth_only: false
+    scope_shape:
+      command_allowlist:
+        type: regex_list
+        description: "Regex patterns for allowed commands. Empty list = deny all."
+        default_deny: true
+      working_directory:
+        type: path
+        description: "Pin the working directory. Leave blank for no restriction."
+        default_deny: false
+    required_env_vars: []
+
+  - toolset_key: file
+    display_name: File System
+    description: >
+      Read and write files on the agent's local file system.
+    category: compute
+    default_on_in_hermes: true
+    oauth_only: false
+    scope_shape:
+      path_allowlist:
+        type: pattern_list
+        description: "Glob patterns for allowed file paths. Empty list = deny all."
+        default_deny: true
+      working_directory:
+        type: path
+        description: "Pin the working directory. Leave blank for no restriction."
+        default_deny: false
+    required_env_vars: []
+
+  - toolset_key: code_execution
+    display_name: Code Execution
+    description: >
+      Execute Python code in a sandboxed environment.
+      Note: direct Python egress (urllib.request) bypasses scope enforcement in
+      v1.5 — a network-proxy sidecar is deferred to v1.6.
+    category: compute
+    default_on_in_hermes: true
+    oauth_only: false
+    scope_shape: {}
+    required_env_vars: []
+
+  - toolset_key: vision
+    display_name: Vision
+    description: >
+      Analyse and describe images using the agent's configured vision-capable model.
+      No separate credential required — uses the model API key from DEPLOYMENT.
+    category: info
+    default_on_in_hermes: true
+    oauth_only: false
+    scope_shape: {}
+    required_env_vars: []
+
+  - toolset_key: image_gen
+    display_name: Image Generation
+    description: >
+      Generate images from text prompts.
+      Backed by OpenAI DALL-E or Stability AI.
+    category: compute
+    default_on_in_hermes: false
+    oauth_only: false
+    scope_shape: {}
+    required_env_vars: [OPENAI_API_KEY]
+
+  - toolset_key: moa
+    display_name: Mixture of Agents
+    description: >
+      Orchestrate multiple specialised sub-agents in parallel for a single task (MoA pattern).
+    category: compute
+    default_on_in_hermes: false
+    oauth_only: false
+    scope_shape: {}
+    required_env_vars: []
+
+  - toolset_key: tts
+    display_name: Text-to-Speech
+    description: >
+      Convert text responses to synthesised speech.
+      Backed by OpenAI TTS.
+    category: compute
+    default_on_in_hermes: false
+    oauth_only: false
+    scope_shape: {}
+    required_env_vars: [OPENAI_API_KEY]
+
+  - toolset_key: skills
+    display_name: Skills
+    description: >
+      Equip reusable declarative skills — packaged prompts and lightweight tool stubs
+      from the Hermes built-in skills library. External registry (agentskills.io) is
+      v1.5 Pillar C.
+    category: integration
+    default_on_in_hermes: false
+    oauth_only: false
+    scope_shape: {}
+    required_env_vars: []
+
+  - toolset_key: todo
+    display_name: To-Do List
+    description: >
+      Persistent task tracking with create, update, and query operations scoped
+      to the current agent session.
+    category: compute
+    default_on_in_hermes: true
+    oauth_only: false
+    scope_shape: {}
+    required_env_vars: []
+
+  - toolset_key: memory
+    display_name: Memory
+    description: >
+      Long-term agent memory backed by Hermes's local store (state.db).
+      Governance of retention policy and redaction rules is deferred to v2.
+    category: integration
+    default_on_in_hermes: false
+    oauth_only: false
+    scope_shape: {}
+    required_env_vars: []
+
+  - toolset_key: session_search
+    display_name: Session Search
+    description: >
+      Full-text search across the current and prior conversation sessions stored
+      in Hermes's local state.
+    category: info
+    default_on_in_hermes: true
+    oauth_only: false
+    scope_shape: {}
+    required_env_vars: []
+
+  - toolset_key: clarify
+    display_name: Clarify
+    description: >
+      Ask the user a clarifying question before proceeding with an ambiguous task.
+      Reduces hallucinated assumptions on under-specified requests.
+    category: info
+    default_on_in_hermes: true
+    oauth_only: false
+    scope_shape: {}
+    required_env_vars: []
+
+  - toolset_key: delegation
+    display_name: Delegation
+    description: >
+      Delegate sub-tasks to other agents within Corellia's fleet via the
+      agent-to-agent communication layer.
+    category: compute
+    default_on_in_hermes: false
+    oauth_only: false
+    scope_shape: {}
+    required_env_vars: []
+
+  - toolset_key: cronjob
+    display_name: Cron Jobs
+    description: >
+      Schedule recurring tasks inside the agent using cron syntax.
+    category: compute
+    default_on_in_hermes: false
+    oauth_only: false
+    scope_shape: {}
+    required_env_vars: []
+
+  - toolset_key: rl
+    display_name: Reinforcement Learning
+    description: >
+      Apply reward-based feedback signals to tune the agent's behaviour over time.
+    category: compute
+    default_on_in_hermes: false
+    oauth_only: false
+    scope_shape: {}
+    required_env_vars: []
+
+  - toolset_key: homeassistant
+    display_name: Home Assistant
+    description: >
+      Control Home Assistant devices and automations via the local REST API.
+    category: integration
+    default_on_in_hermes: false
+    oauth_only: false
+    scope_shape: {}
+    required_env_vars: [HA_URL, HA_TOKEN]
+
+  - toolset_key: spotify
+    display_name: Spotify
+    description: >
+      Control Spotify playback and search.
+      Requires OAuth onboarding — deferred to v1.6.
+    category: integration
+    default_on_in_hermes: false
+    oauth_only: true
+    scope_shape: {}
+    required_env_vars: []

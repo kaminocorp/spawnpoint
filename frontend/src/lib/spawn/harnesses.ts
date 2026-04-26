@@ -25,7 +25,7 @@ export type HarnessEntry = {
   readonly vendor: string;
   /** One-line summary rendered as the card body's lede. */
   readonly description: string;
-  /** Determines whether the active or locked variant of `<RosterCard>` renders. */
+  /** Determines whether the available or locked variant of `<HarnessSlide>` renders. */
   readonly status: HarnessStatus;
   /** Optional ETA hint for locked cards (decision §3.5: "ETA where known"). */
   readonly eta?: string;

@@ -19,6 +19,7 @@ import (
 	"github.com/hejijunhao/corellia/backend/internal/deploy"
 	"github.com/hejijunhao/corellia/backend/internal/httpsrv"
 	"github.com/hejijunhao/corellia/backend/internal/organizations"
+	"github.com/hejijunhao/corellia/backend/internal/tools"
 	"github.com/hejijunhao/corellia/backend/internal/users"
 )
 
@@ -68,7 +69,27 @@ func main() {
 		"fly_org", cfg.FlyOrgSlug)
 	deployResolver := deploy.NewStaticResolver(deployTargets)
 
-	agentsSvc := agents.NewService(queries, adaptersSvc, deployResolver, agents.NewPgxTransactor(pool))
+	toolsSvc := tools.NewService(queries, tools.WithTransactor(tools.NewPgxTransactor(pool)))
+
+	// v1.5 Pillar B: wire manifest issuer into the spawn flow if
+	// CORELLIA_API_URL is configured. When it's absent, agents spawn
+	// without tools governance — safe for local dev and pre-Pillar-B
+	// deployments.
+	agentOpts := []agents.ServiceOption{}
+	if cfg.CorelliaAPIURL != "" {
+		agentOpts = append(agentOpts, agents.WithManifestIssuer(toolsSvc, cfg.CorelliaAPIURL))
+		slog.Info("tools governance: manifest issuer wired", "api_url", cfg.CorelliaAPIURL)
+	} else {
+		slog.Info("tools governance: CORELLIA_API_URL not set — manifest token generation disabled")
+	}
+	// Phase 7: tools audit hook for the operator-driven RestartInstance path.
+	// Always wired when toolsSvc exists (which it always does post-Phase 1 —
+	// the Phase 6 curation page also calls into toolsSvc); independent of
+	// CORELLIA_API_URL because audit-row writes work whether or not the
+	// adapter-side manifest endpoint is reachable.
+	agentOpts = append(agentOpts, agents.WithToolsAuditAppender(toolsSvc))
+
+	agentsSvc := agents.NewService(queries, adaptersSvc, deployResolver, agents.NewPgxTransactor(pool), agentOpts...)
 
 	// Boot-time stale-pending sweep (spawn-flow plan decision 32). Reaps
 	// any agent_instances row stuck in 'pending' for >5 min — typically
@@ -81,6 +102,11 @@ func main() {
 		slog.Warn("agents: reaped stale pending instances", "count", len(reaped), "ids", reaped)
 	}
 
+	var manifestHandler *httpsrv.ToolManifestHandler
+	if cfg.CorelliaAPIURL != "" {
+		manifestHandler = httpsrv.NewToolManifestHandler(toolsSvc)
+	}
+
 	handler := httpsrv.New(httpsrv.Deps{
 		Config:               cfg,
 		AuthVerifier:         verifier,
@@ -89,6 +115,8 @@ func main() {
 		AgentsHandler:        httpsrv.NewAgentsHandler(agentsSvc, usersSvc),
 		DeployTargets:        deployResolver,
 		AllowedOrigin:        cfg.FrontendOrigin,
+		ToolManifestHandler:  manifestHandler,
+		ToolsHandler:         httpsrv.NewToolsHandler(toolsSvc, usersSvc),
 	})
 
 	addr := fmt.Sprintf(":%d", cfg.Port)

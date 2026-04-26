@@ -15,6 +15,12 @@ type Props = {
   selected: boolean;
   onToggleSelected: () => void;
   onChanged: () => void;
+  /**
+   * v1.5 Pillar B Phase 7 — passed through to `<AgentRowActions>` so the
+   * Tools button can scope its catalog fetch. Optional: when undefined,
+   * the Tools button hides (e.g., destroyed rows).
+   */
+  harnessAdapterId?: string;
 };
 
 export function AgentCard({
@@ -22,6 +28,7 @@ export function AgentCard({
   selected,
   onToggleSelected,
   onChanged,
+  harnessAdapterId,
 }: Props) {
   const isDestroyed = instance.status === "destroyed";
   const size =
@@ -104,7 +111,12 @@ export function AgentCard({
       </div>
 
       <footer className="flex items-center justify-end border-t border-border/50 px-2 py-1.5">
-        <AgentRowActions instance={instance} onChanged={onChanged} compact />
+        <AgentRowActions
+          instance={instance}
+          onChanged={onChanged}
+          harnessAdapterId={harnessAdapterId}
+          compact
+        />
       </footer>
     </article>
   );

@@ -91,6 +91,27 @@ if [ -n "${CORELLIA_AGENT_ID:-}" ]; then
     export AGENT_ID="${CORELLIA_AGENT_ID}"
 fi
 
+# --- Tool manifest fetch (v1.5 Pillar B Phase 2) ---------------------
+# Fetch the per-instance ToolManifest from the control plane and render
+# $HERMES_HOME/config.yaml (platform_toolsets.cli list) + $HERMES_HOME/.env
+# (per-toolset credential env vars) + copy the corellia_guard plugin stub.
+#
+# Both CORELLIA_TOOL_MANIFEST_URL and CORELLIA_INSTANCE_TOKEN must be set;
+# they are injected as Fly app secrets by the control plane's spawn flow when
+# CORELLIA_API_URL is configured (v1.5 Pillar B Phase 2 onwards). For M4-era
+# agents spawned before Phase 2 these vars are absent — the block is skipped
+# entirely and the boot path is byte-equivalent to the pre-Phase-2 behavior.
+#
+# Failure is logged (prefixed [corellia-render-config]) but non-fatal: the
+# agent boots with Hermes's own defaults. Phase 7 hardening tightens this
+# once the operator-facing grant editor is live.
+if [ -n "${CORELLIA_TOOL_MANIFEST_URL:-}" ] && [ -n "${CORELLIA_INSTANCE_TOKEN:-}" ]; then
+    python /corellia/render_config.py \
+        "${CORELLIA_TOOL_MANIFEST_URL}" \
+        "${CORELLIA_INSTANCE_TOKEN}" \
+        2>&1 | sed 's/^/[corellia-render-config] /' >&2 || true
+fi
+
 # --- Model name ------------------------------------------------------
 # Deliberately unwired in v1. CORELLIA_MODEL_NAME is observability-only
 # at this adapter; the model defaults to upstream's

@@ -9,13 +9,15 @@ import { SlideTangle } from "./slides/slide-2-tangle";
 import { SlideGarage } from "./slides/slide-3-garage";
 import { SlideGuardian } from "./slides/slide-4-guardian";
 import { SlideOpus } from "./slides/slide-5-opus";
+import { SlideAdaptive } from "./slides/slide-adaptive";
 import { SlideThesis } from "./slides/slide-6-thesis";
 import { SlideHandoff } from "./slides/slide-7-handoff";
 
 /**
  * 7-slide deck for `/presentation`. Click / Space / ArrowRight advance;
  * Shift+Space / ArrowLeft go back; number keys 1–7 jump; Home / End jump
- * to ends. Whole surface is the click target.
+ * to ends. Number keys 1–8 jump to a specific slide. Whole surface is
+ * the click target.
  *
  * **Phase 4** — crossfade transitions: each slide fades in/out over
  * 250ms when `index` changes. Linked transitions:
@@ -46,6 +48,7 @@ type SlideId =
   | "garage"
   | "guardian"
   | "opus"
+  | "adaptive"
   | "thesis"
   | "handoff";
 
@@ -64,6 +67,7 @@ const SLIDES: readonly SlideEntry[] = [
   { id: "garage", title: "GARAGE", durationMs: 10000 },
   { id: "guardian", title: "GUARDIAN", durationMs: 10000 },
   { id: "opus", title: "OPUS LOOP", durationMs: 10000 },
+  { id: "adaptive", title: "ADAPTIVE PLANE", durationMs: 10000 },
   { id: "thesis", title: "THESIS", durationMs: 7000 },
   { id: "handoff", title: "HANDOFF", durationMs: 5000 },
 ];
@@ -83,6 +87,8 @@ function renderSlide(id: SlideId, options: { collapsing?: boolean }) {
       return <SlideGuardian />;
     case "opus":
       return <SlideOpus />;
+    case "adaptive":
+      return <SlideAdaptive />;
     case "thesis":
       return <SlideThesis />;
     case "handoff":
@@ -139,7 +145,7 @@ export function Deck({ recordMode = false }: { recordMode?: boolean }) {
     return () => clearTimeout(id);
   }, [recordMode, index, advanceTo]);
 
-  // Keyboard handler — same as 0.9.3 scaffold, expanded to 1–7.
+  // Keyboard handler — same as 0.9.3 scaffold, expanded to 1–8.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLElement) {

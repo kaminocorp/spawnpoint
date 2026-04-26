@@ -23,6 +23,9 @@ type Querier interface {
 	// and is rarely the right action. Per-instance ResizeVolume is the
 	// power-user path.
 	BulkUpdateAgentDeployConfig(ctx context.Context, arg BulkUpdateAgentDeployConfigParams) error
+	// Increment manifest_version after a grant write (Phase 3 SetInstanceGrants).
+	// Invalidates any cached ETag the adapter's poll daemon is holding.
+	BumpManifestVersion(ctx context.Context, agentInstanceID uuid.UUID) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	// Called by the service layer after flaps.DeleteVolume succeeds
 	// (decision 8.5 cascade-delete on agents.Service.Destroy, plus the
@@ -47,6 +50,13 @@ type Querier interface {
 	// delta. The fleet-page list query (ListAgentInstancesByOrg) is
 	// widened in Phase 5/6 when the FE row card needs those fields.
 	GetAgentInstanceByID(ctx context.Context, arg GetAgentInstanceByIDParams) (GetAgentInstanceByIDRow, error)
+	// Existence + org-guard check for tools-governance writes (Phase 3).
+	// Returns the instance ID iff it exists AND belongs to the given org.
+	// pgx.ErrNoRows on any mismatch — the service layer maps that to
+	// ErrInstanceNotForOrg so the handler can render a 404 (not 403) and avoid
+	// leaking cross-org existence (matches the M4 multi-tenancy posture in
+	// GetAgentInstanceByID).
+	GetAgentInstanceOrgGuard(ctx context.Context, arg GetAgentInstanceOrgGuardParams) (uuid.UUID, error)
 	// M4 spawn flow's first step (decision 27 step 2): resolve the chosen
 	// template + its harness_adapter so we know which adapter image to spawn.
 	// Full row including harness_adapter_id and default_config — Spawn needs
@@ -58,7 +68,18 @@ type Querier interface {
 	// code-internal — the user never picks a deploy target in v1.
 	GetDeployTargetByName(ctx context.Context, name string) (DeployTarget, error)
 	GetHarnessAdapterByID(ctx context.Context, id uuid.UUID) (HarnessAdapter, error)
+	// Authenticate an incoming bearer token: hash it on the caller side, then
+	// look up the instance. Returns the full row so the handler can extract
+	// both agent_instance_id and manifest_version in one query.
+	GetManifestTokenByHash(ctx context.Context, tokenHash string) (AgentInstanceManifestToken, error)
+	// Read the current manifest_version for ETag emission without needing
+	// the raw token. Used by the manifest assembler.
+	GetManifestTokenByInstance(ctx context.Context, agentInstanceID uuid.UUID) (AgentInstanceManifestToken, error)
 	GetOrganizationByID(ctx context.Context, id uuid.UUID) (Organization, error)
+	// Single toolset row. Used by ValidateScopeForTool (Phase 1) and the
+	// manifest builder (Phase 2) to fetch scope_shape before validating
+	// a caller-supplied scope_json.
+	GetToolByID(ctx context.Context, id uuid.UUID) (Tool, error)
 	GetUserByAuthID(ctx context.Context, authUserID uuid.UUID) (User, error)
 	// Full insert at the head of decision 27's order of operations (step 5).
 	// Status is omitted — the column DEFAULT 'pending' is the source of truth
@@ -91,6 +112,18 @@ type Querier interface {
 	// runs, so the machine ID isn't known yet (Q10's "unattached is a
 	// legitimate state" — modeled cleanly here).
 	InsertAgentVolume(ctx context.Context, arg InsertAgentVolumeParams) (AgentVolume, error)
+	// Insert a new active grant. The unique partial index (revoked_at IS NULL)
+	// enforces at most one active grant per (instance, tool); a duplicate INSERT
+	// will hit a unique-constraint violation. The service layer calls
+	// RevokeAllActiveToolGrants + InsertInstanceToolGrant (×N) inside a transaction
+	// for atomic full-replacement (Phase 3 SetInstanceGrants). RETURNING * gives
+	// the caller the row ID for the audit table (Phase 7).
+	InsertInstanceToolGrant(ctx context.Context, arg InsertInstanceToolGrantParams) (AgentInstanceToolGrant, error)
+	// Write the SHA-256 hash of the raw bearer token at spawn time.
+	// agent_instance_id is the PK so a second spawn attempt for the same
+	// instance hits a unique violation — use UpsertManifestToken if rotation
+	// is ever needed (Phase 7+ follow-up).
+	InsertManifestToken(ctx context.Context, arg InsertManifestTokenParams) error
 	// Audit-only DB record. The actual secret value is set on the Fly app
 	// via FlyDeployTarget.Spawn → Fly's app-secrets API; storage_ref is the
 	// opaque handle pointing at it. This insert lives in the same pgx.Tx as
@@ -98,6 +131,12 @@ type Querier interface {
 	// half-inserted state — instance row exists, secret rows don't — is
 	// impossible.
 	InsertSecret(ctx context.Context, arg InsertSecretParams) (Secret, error)
+	// Append-only write into the tool_grant_audit log. Phase 7 fills in the
+	// auditAppend(...) no-op call sites planted in Phase 3 with this query.
+	// before_json / after_json are reserved for the v1.6 reader UI — Phase 7
+	// writes pass nil for both; the action + FK columns alone power the
+	// operator-action timeline.
+	InsertToolGrantAudit(ctx context.Context, arg InsertToolGrantAuditParams) error
 	// Fleet view's primary read. Joins agent_templates so the FE can label
 	// each row with the template name without a second round-trip
 	// (decision 31). org_id filter is the multi-tenancy gate (decision 9 —
@@ -107,7 +146,8 @@ type Querier interface {
 	ListAgentInstancesByOrg(ctx context.Context, orgID uuid.UUID) ([]ListAgentInstancesByOrgRow, error)
 	// Narrowed projection (no SELECT *) — keeps created_by_user_id and timestamps
 	// off the row type so the catalog service can't accidentally surface them.
-	// M4 widens this or adds a sibling query when the deploy modal needs default_config.
+	// v1.5 Pillar B Phase 4 added harness_adapter_id so the spawn wizard's TOOLS
+	// step can scope ListTools without a second round-trip.
 	ListAgentTemplates(ctx context.Context) ([]ListAgentTemplatesRow, error)
 	// Hot read path: the deployment inspector (Phase 7) renders one row
 	// per replica volume; DetectDrift (Phase 4) iterates these against
@@ -121,10 +161,26 @@ type Querier interface {
 	// early rationale as secrets.ListSecretsByInstance — querier widening is
 	// free, and the contract surface is more honest with both reads visible.
 	ListDeployTargets(ctx context.Context) ([]DeployTarget, error)
+	// All active (non-revoked) grants for an instance, joined with the tool row
+	// for display fields. The manifest builder (Phase 2) uses this to assemble
+	// the ToolManifest proto; the fleet-view inspector (Phase 7) uses it to render
+	// the per-instance editor. revoked_at IS NULL is the partial-index predicate
+	// from agent_instance_tool_grants_active_uniq.
+	ListInstanceToolGrants(ctx context.Context, agentInstanceID uuid.UUID) ([]ListInstanceToolGrantsRow, error)
+	// Full catalog for a harness + version, with per-org enabled flag merged in.
+	// A missing org_tool_curation row means "enabled" (COALESCE default true).
+	// Phase 3 ListTools RPC returns this shape; the FE merges enabled_for_org
+	// to decide which catalog rows to render as active vs locked.
+	ListOrgToolCuration(ctx context.Context, arg ListOrgToolCurationParams) ([]ListOrgToolCurationRow, error)
 	// Audit read. v1 has no caller; v1.5+ surfaces "which secrets are set
 	// on this agent?" in the fleet detail view. Shipped now because the
 	// query is trivial and querier-interface widening costs nothing.
 	ListSecretsByInstance(ctx context.Context, agentInstanceID uuid.UUID) ([]Secret, error)
+	// All catalog rows for a given (harness, adapter_version) pair. Phase 2
+	// uses this to build the initial config.yaml at boot; Phase 3 exposes it
+	// as the ListTools RPC (pre-org-curation filtering). Ordered by display_name
+	// for deterministic UI rendering.
+	ListToolsForHarness(ctx context.Context, arg ListToolsForHarnessParams) ([]Tool, error)
 	// Boot-time sweep (decision 32). Reaps any pending row older than 5
 	// minutes — the conservative bound that says "if a poll goroutine
 	// existed for this row at process start, its 90s budget plus jitter is
@@ -132,6 +188,16 @@ type Querier interface {
 	// explicitly so a contributor seeing the warn line knows *which* rows
 	// got reaped, not just how many.
 	ReapStalePendingInstances(ctx context.Context) ([]uuid.UUID, error)
+	// Revoke all active grants for an instance in one statement. Used by
+	// SetInstanceGrants (Phase 3) as the first step of its
+	// revoke-all → insert-new atomic replacement pattern. Also called on
+	// instance destroy if the cascade behaviour needs to be audited before drop
+	// (Phase 7 audit rows). Idempotent when there are no active rows.
+	RevokeAllActiveToolGrants(ctx context.Context, agentInstanceID uuid.UUID) error
+	// Soft-delete a single active grant. The corellia_guard plugin (Phase 5) will
+	// pick up the removal on its next manifest poll (≤TTL seconds). Idempotent:
+	// if already revoked, the WHERE revoked_at IS NULL clause no-ops.
+	RevokeInstanceToolGrant(ctx context.Context, arg RevokeInstanceToolGrantParams) error
 	// Called post-Fly-create (decision 27 step 9). Separate query (not folded
 	// into a status update) because the status flip happens later, in the
 	// polling goroutine — these are two different wall-clock events.
@@ -200,6 +266,10 @@ type Querier interface {
 	UpdateHarnessAdapterImageRef(ctx context.Context, arg UpdateHarnessAdapterImageRefParams) (HarnessAdapter, error)
 	UpdateOrganizationName(ctx context.Context, arg UpdateOrganizationNameParams) (Organization, error)
 	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error)
+	// Org-admin enable/disable for a single toolset. ON CONFLICT updates enabled +
+	// curated_by so the audit surface stays current. curated_at is always now() —
+	// Phase 7 tool_grant_audit is the durable history; this column is "last touched".
+	UpsertOrgToolCuration(ctx context.Context, arg UpsertOrgToolCurationParams) error
 }
 
 var _ Querier = (*Queries)(nil)

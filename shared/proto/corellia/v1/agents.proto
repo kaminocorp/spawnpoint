@@ -18,6 +18,12 @@ service AgentsService {
   rpc StopAgentInstance(StopAgentInstanceRequest) returns (StopAgentInstanceResponse);
   rpc DestroyAgentInstance(DestroyAgentInstanceRequest) returns (DestroyAgentInstanceResponse);
 
+  // v1.5 Pillar B Phase 7 — restart every machine in the instance's Fly app.
+  // Drives the fleet inspector's "Restart now" button on grants whose
+  // propagation tier is "restart required" (e.g. equipping a whole new
+  // toolset, where platform_toolsets in config.yaml only re-reads at boot).
+  rpc RestartAgentInstance(RestartAgentInstanceRequest) returns (RestartAgentInstanceResponse);
+
   // M5 fleet-control (plan §4 Phase 5). Service methods land on
   // *agents.Service; handlers stay <30 LOC per blueprint §11.9.
   rpc ListDeploymentRegions(ListDeploymentRegionsRequest) returns (ListDeploymentRegionsResponse);
@@ -78,6 +84,10 @@ message AgentTemplate {
   string id = 1;
   string name = 2;
   string description = 3;
+  // harness_adapter_id is the FK the spawn wizard's TOOLS step uses to scope
+  // ListTools (v1.5 Pillar B Phase 4). Surfaced on the existing read so the
+  // FE doesn't need a second round-trip just to learn which catalog to fetch.
+  string harness_adapter_id = 4;
 }
 
 // DeployConfig is the wire shape of the nine fleet-control fields plus
@@ -301,6 +311,14 @@ message DestroyAgentInstanceRequest {
   string id = 1;
 }
 message DestroyAgentInstanceResponse {
+  AgentInstance instance = 1;
+}
+
+// v1.5 Pillar B Phase 7 — RestartAgentInstance.
+message RestartAgentInstanceRequest {
+  string id = 1;
+}
+message RestartAgentInstanceResponse {
   AgentInstance instance = 1;
 }
 

@@ -37,6 +37,24 @@ type AgentInstance struct {
 	ChatEnabled       bool               `json:"chat_enabled"`
 }
 
+type AgentInstanceManifestToken struct {
+	AgentInstanceID uuid.UUID `json:"agent_instance_id"`
+	TokenHash       string    `json:"token_hash"`
+	ManifestVersion int64     `json:"manifest_version"`
+}
+
+type AgentInstanceToolGrant struct {
+	ID                   uuid.UUID          `json:"id"`
+	AgentInstanceID      uuid.UUID          `json:"agent_instance_id"`
+	ToolID               uuid.UUID          `json:"tool_id"`
+	ScopeJson            []byte             `json:"scope_json"`
+	CredentialStorageRef *string            `json:"credential_storage_ref"`
+	GrantedBy            uuid.UUID          `json:"granted_by"`
+	GrantedAt            pgtype.Timestamptz `json:"granted_at"`
+	RevokedAt            pgtype.Timestamptz `json:"revoked_at"`
+	ExpiresAt            pgtype.Timestamptz `json:"expires_at"`
+}
+
 type AgentTemplate struct {
 	ID               uuid.UUID          `json:"id"`
 	Name             string             `json:"name"`
@@ -82,6 +100,14 @@ type HarnessAdapter struct {
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 }
 
+type OrgToolCuration struct {
+	OrgID     uuid.UUID          `json:"org_id"`
+	ToolID    uuid.UUID          `json:"tool_id"`
+	Enabled   bool               `json:"enabled"`
+	CuratedBy uuid.UUID          `json:"curated_by"`
+	CuratedAt pgtype.Timestamptz `json:"curated_at"`
+}
+
 type Organization struct {
 	ID        uuid.UUID          `json:"id"`
 	Name      string             `json:"name"`
@@ -96,6 +122,34 @@ type Secret struct {
 	StorageRef      string             `json:"storage_ref"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Tool struct {
+	ID                uuid.UUID          `json:"id"`
+	HarnessAdapterID  uuid.UUID          `json:"harness_adapter_id"`
+	ToolsetKey        string             `json:"toolset_key"`
+	DisplayName       string             `json:"display_name"`
+	Description       string             `json:"description"`
+	Category          string             `json:"category"`
+	Icon              *string            `json:"icon"`
+	DefaultOnInHermes bool               `json:"default_on_in_hermes"`
+	OauthOnly         bool               `json:"oauth_only"`
+	ScopeShape        []byte             `json:"scope_shape"`
+	RequiredEnvVars   []string           `json:"required_env_vars"`
+	AdapterVersion    string             `json:"adapter_version"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+}
+
+type ToolGrantAudit struct {
+	ID          uuid.UUID          `json:"id"`
+	ActorUserID uuid.UUID          `json:"actor_user_id"`
+	OrgID       pgtype.UUID        `json:"org_id"`
+	InstanceID  pgtype.UUID        `json:"instance_id"`
+	ToolID      pgtype.UUID        `json:"tool_id"`
+	Action      string             `json:"action"`
+	BeforeJson  []byte             `json:"before_json"`
+	AfterJson   []byte             `json:"after_json"`
+	At          pgtype.Timestamptz `json:"at"`
 }
 
 type User struct {

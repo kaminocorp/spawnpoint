@@ -46,10 +46,11 @@ type flapsClientFake struct {
 	launchSeq []*fly.Machine
 	launchErr error
 	updateErr error
-	stopErr   error
-	startErr  error
+	stopErr    error
+	startErr   error
+	restartErr error
 	destroyErr error
-	waitErr   error
+	waitErr    error
 
 	leases       map[string]*fly.MachineLease
 	leaseErr     error
@@ -172,6 +173,11 @@ func (f *flapsClientFake) Start(_ context.Context, _, _, _ string) (*fly.Machine
 		return nil, f.startErr
 	}
 	return &fly.MachineStartResponse{Status: "ok"}, nil
+}
+
+func (f *flapsClientFake) Restart(_ context.Context, _ string, _ fly.RestartMachineInput, _ string) error {
+	f.record("Restart")
+	return f.restartErr
 }
 
 func (f *flapsClientFake) Destroy(_ context.Context, _ string, _ fly.RemoveMachineInput, _ string) error {

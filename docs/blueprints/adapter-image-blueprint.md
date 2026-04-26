@@ -776,17 +776,17 @@ is fully implemented. (Source: `adapters/hermes/README.md`.)
    `harness_adapters.signature_verified_at TIMESTAMPTZ NULL` column. Out
    of scope for hackathon; flagged as the canonical "real governance
    posture" follow-up.
-6. **No tool / scope enforcement.** The v1 entrypoint translates only
-   the four `CORELLIA_*` model-binding env vars; `CORELLIA_TOOL_MANIFEST_URL`
-   is reserved in `blueprint.md` §3.2 but unread. Per-tool grants
-   (toolset enable/disable, MCP per-server tool allowlists), per-toolset
-   scopes (URL / path / command / channel allowlists), and skill-equipping
-   flows are all absent. Closing this gap is the scope of v1.5 Pillar B
-   (Tools governance), implemented as the in-process plugin described
-   in [§4.4](#44-what-v15-pillar-b-adds-the-in-process-plugin-corellia_guard).
-   Source-grounded feasibility study:
-   `docs/plans/v1.5-tools-governance-technical-overview.md`. Vision:
-   `docs/plans/v1.5-tools-and-skills-vision.md`.
+6. **Tool / scope enforcement: implemented in v1.5 Pillar B.** The v1
+   entrypoint translated only the four `CORELLIA_*` model-binding env
+   vars; v1.5 Pillar B added the manifest-poll integration (`CORELLIA_TOOL_MANIFEST_URL`
+   + `CORELLIA_INSTANCE_TOKEN` per `blueprint.md` §3.2), the
+   `corellia_guard` Hermes plugin (URL / command / path allowlist
+   enforcement on `pre_tool_call`), the org-curation page at
+   `/settings/tools`, and the per-instance grant editor + restart
+   button on the fleet view. Per-tool granularity (#2 in the §1.0
+   taxonomy of `docs/executing/tools-governance.md`) and MCP / Skills
+   governance (#3, #4) remain v1.6+ work. Implementation reference:
+   completion notes `docs/completions/tools-governance-phase-{1..7}.md`.
 
 ---
 

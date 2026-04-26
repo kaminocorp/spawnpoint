@@ -36,6 +36,7 @@ type agentsService interface {
 	Get(ctx context.Context, instanceID, orgID uuid.UUID) (*corelliav1.AgentInstance, error)
 	Stop(ctx context.Context, instanceID, orgID uuid.UUID) (*corelliav1.AgentInstance, error)
 	Destroy(ctx context.Context, instanceID, orgID uuid.UUID) (*corelliav1.AgentInstance, error)
+	RestartInstance(ctx context.Context, actorUserID, instanceID, orgID uuid.UUID) (*corelliav1.AgentInstance, error)
 
 	// M5 fleet-control surface (plan §4 Phase 5). Keeps the seam
 	// shape consistent with M2/M4: domain types in / proto types out
@@ -201,6 +202,29 @@ func (h *AgentsHandler) DestroyAgentInstance(
 		return nil, agentsErrToConnect(err)
 	}
 	return connect.NewResponse(&corelliav1.DestroyAgentInstanceResponse{Instance: instance}), nil
+}
+
+// RestartAgentInstance — v1.5 Pillar B Phase 7. The actor is captured for
+// the audit row written by the service-layer Restart path, so this method
+// reads userID alongside orgID (Stop / Destroy don't need it because their
+// audit chain runs through tool_grant_audit's instance-grants writes).
+func (h *AgentsHandler) RestartAgentInstance(
+	ctx context.Context,
+	req *connect.Request[corelliav1.RestartAgentInstanceRequest],
+) (*connect.Response[corelliav1.RestartAgentInstanceResponse], error) {
+	userID, orgID, err := h.users.CallerIdentity(ctx)
+	if err != nil {
+		return nil, agentsErrToConnect(err)
+	}
+	instanceID, err := uuid.Parse(req.Msg.GetId())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, agents.ErrInstanceNotFound)
+	}
+	instance, err := h.svc.RestartInstance(ctx, userID, instanceID, orgID)
+	if err != nil {
+		return nil, agentsErrToConnect(err)
+	}
+	return connect.NewResponse(&corelliav1.RestartAgentInstanceResponse{Instance: instance}), nil
 }
 
 // M5 fleet-control handlers. Each <30 LOC per blueprint §11.9; no

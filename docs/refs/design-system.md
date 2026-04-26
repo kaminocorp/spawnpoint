@@ -1797,23 +1797,49 @@ infrastructure topologies.
 
 ### 33.5 `/spawn` — RPG Character Creation (the showcase)
 
-The spawn surface is split across **two routes**:
+The spawn surface is **a single wizard mounted at two URLs**:
 
-- **`/spawn`** — the **roster** page. Six harness cards (1 active, 5
-  locked) per `agents-ui-mods.md` §3.5; layout is `grid-cols-1
-  md:grid-cols-2 xl:grid-cols-3`. The active card carries a live 3D
-  nebula avatar (`<NebulaAvatar>`); locked cards render the static SVG
-  fallback (`<AvatarFallback>`) per the performance ceiling decision —
-  exactly **one** `<canvas>` element on the page at any time. CTA on
-  active cards is `› SELECT`, which routes to:
-- **`/spawn/[templateId]`** — the **wizard**. See §34. The 5-step
-  character-creation flow lives here as a full route (not a modal),
-  with the harness's nebula avatar at ~180px anchoring Step 1.
+- **`/spawn`** — wizard in *gallery mode*. Step 1 is a horizontal
+  scroll-snap **harness carousel** (`<HarnessCarousel>`); Steps 2–5 are
+  visible as `opacity-40 inert` shells (`PENDING` meta tag) so the
+  operator sees the full shape of the flow before selecting a harness.
+- **`/spawn/[templateId]`** — wizard in *confirmed mode*. Step 1 is
+  pre-confirmed and renders as a compact horizontal card (~56 px avatar
+  + name + spec rows); Step 2 is active. Bookmark-friendly entry point.
 
-Both routes share the schematic grid background and feature-color
-accents per §5.4. The roster's vocabulary is `[ AVAILABLE HARNESSES ]`
-(not "Catalog" / "Templates"); locked cards read `[ LOCKED ]` rather
-than a disabled-button affordance.
+Both URLs mount the same client `<Wizard>` component — `getInitialState(mode)`
+is the single factory that decides which step is current and which are
+confirmed. There is **no separate roster page**. Selecting a harness
+from the gallery routes to the per-template URL via `router.replace`,
+which remounts the wizard in confirmed mode (history-clean, no
+back-button trap).
+
+**One `<canvas>` page-wide, always.** The carousel's nebula is a
+fixed `position: absolute` overlay anchored to the scroll container's
+wrapper div — never inside a slide — so swipe gestures cause no canvas
+remounts. Every slide renders the static SVG fallback
+(`<AvatarFallback>`); the canvas overlays whichever slide is centred.
+Inside the wizard, Steps 2 and 5 each mount their own
+`<NebulaAvatar>` (64 px preview beside the callsign input; 180 px
+portrait on the review character sheet); these are sequenced — Step
+1's gallery canvas unmounts before Step 2's preview mounts, and Step
+5's portrait mounts only on the review screen — so exactly one
+`<canvas>` is live at any moment across the wizard's lifetime.
+
+**Palette + accent transitions.** Swiping between harnesses lerps the
+nebula's palette uniforms toward the new harness's `MoodPalette`
+inside the existing `useFrame` loop (`α = 1 - exp(-dt * 8)` —
+frame-rate-independent, ~87 ms half-life, ~400 ms to visual
+convergence). Shape stays shared across harnesses; only palette,
+intensities, frequencies, and spatial weights shift. This honours
+agents-ui-mods.md decision 5: shape says "this is a Corellia-spawnable
+harness," palette says which one.
+
+**Vocabulary.** Gallery header reads `[ SELECT YOUR HARNESS ]`;
+confirmed-mode header reverts to `[ LAUNCHPAD // CONFIGURE ]`. Locked
+slides render a `[ LOCKED ]` overlay + `disabled` SELECT button (not
+hidden) — visible per blueprint §11.4 (deferred features stub as real
+interface implementations).
 
 ### 33.6 `/adapters/[id]` — Docker Schematic
 
@@ -1848,6 +1874,49 @@ than a disabled-button affordance.
 - **Motif**: actor × resource grid; cells filled with permission glyphs
 - **Color**: amber dominant (IAM)
 
+### 33.10 `/settings/tools` — Org Tool Curation (v1.5 Pillar B Phase 6)
+
+The first surface in the **org-settings family** — operator-facing
+admin knobs that shape what other operators in the workspace can do.
+Org-admin gated; non-admins see a `[ ADMIN ONLY ]` failed-accent
+terminal with a "ask an admin" hint instead of the catalog grid.
+
+- **Atmosphere**: grid background (default app chrome)
+- **Motif**: a single section per harness adapter, framed as
+  `[ HARNESS <adapter_version> ]` (`accent="tools"` — amber, the
+  feature color introduced in 0.13.3 for the spawn-wizard TOOLS
+  step). Inside, one row per toolset with display name, category
+  pill, scope-shape preview (read-only — `scope: url_allowlist ·
+  command_allowlist`), and required-credential hint.
+- **Color**: amber dominant (Tools); failed-red on the admin-only
+  guard.
+- **Toggle vocabulary**: per-row `[ ✓ ENABLED ]` / `[ DISABLED ]`
+  Button — `default` variant when enabled, `outline` when disabled.
+  Mid-flight saves render `[ … SAVING ]`. OAuth-only toolsets render
+  a disabled toggle plus a `lock-icon · OAUTH · v1.6` chip rather
+  than a fake clickable affordance (blueprint §11.4).
+- **Save model**: optimistic UI + per-tool single-flight latch. Toggle
+  reflects locally on click, fires `setOrgToolCuration`, rolls back
+  with a sonner error toast on failure. No "save" button — every
+  toggle is its own commit, mirroring how org-curation rows are
+  individually addressable on the BE.
+- **Discovery**: the catalog scope is per-harness-adapter. The page
+  derives the in-org adapter set from `listAgentTemplates` (each
+  template carries `harnessAdapterId`); v1.5 ships one Hermes adapter
+  so the usual case is a single section. When v2 introduces a second
+  adapter, the page will render two sections without code change.
+- **Wiring back to /spawn**: disabled toolsets are filtered out of the
+  spawn wizard's TOOLS step (Phase 4 already wires the
+  `enabledForOrg` filter at the row level). Locked-row rendering on
+  /spawn is reserved for OAuth-only toolsets — org-curated-out rows
+  are hidden entirely (no "why can't I equip this?" UX gap).
+- **Sidebar surface**: a top-level `Tools` entry appears in the
+  `[ MODULES ]` group only when `useUser().user.role === "admin"`.
+  Non-admins navigating directly to `/settings/tools` see the
+  `[ ADMIN ONLY ]` notice; the BE's `SetOrgToolCuration` handler is
+  the actual security boundary (`PermissionDenied` for non-admin
+  callers).
+
 ---
 
 ## 34. The RPG Character Creation Flow
@@ -1858,17 +1927,20 @@ filling out a form.
 
 ### 34.1 Structure
 
-Five steps, each in its own terminal container, only one active at a
-time. The shipped step list (per `agents-ui-mods.md` decision 19)
-collapses provider + key + model into a single `MODEL` panel and adds
-a deployment-posture step that absorbs M5's coming knobs:
+Six steps, each in its own terminal container, only one active at a
+time. The shipped step list (per `agents-ui-mods.md` decision 19 +
+v1.5 Pillar B Phase 4) collapses provider + key + model into a single
+`MODEL` panel, inserts a `TOOLS` panel for per-toolset equipping +
+scope capture, and ends with a deployment-posture step that absorbs
+M5's knobs:
 
 ```
 [ STEP 1 // HARNESS ]        ── catalog cyan accent
 [ STEP 2 // IDENTITY ]       ── secrets pink accent
 [ STEP 3 // MODEL ]          ── adapter violet accent
-[ STEP 4 // DEPLOYMENT ]     ── deploy blue accent
-[ STEP 5 // REVIEW ]         ── running green primary CTA
+[ STEP 4 // TOOLS ]          ── tools amber accent (`--feature-tools`)
+[ STEP 5 // DEPLOYMENT ]     ── deploy blue accent
+[ STEP 6 // REVIEW ]         ── running green primary CTA
 ```
 
 The active step's container glows with the step's accent color via the
@@ -1932,7 +2004,7 @@ success: redirect to **`/fleet`** (matches M4 behavior — the new agent
 appears in the fleet table as it transitions `pending → running`). On
 RPC error: the log flips to its `failed` accent, appends `› error:
 <message>`, and offers `› BACK TO REVIEW` which re-mounts the wizard
-with all five steps still confirmed and editable.
+with all six steps still confirmed and editable.
 
 ### 34.4 Spawn-N (deferred)
 
@@ -1943,6 +2015,49 @@ unreached from this UI. If a fan-out shortcut is needed it returns
 later as a fleet-page action (e.g. "duplicate this agent ×N"),
 composing with M5's bulk-apply pattern rather than as a wizard
 variant.
+
+### 34.5 Gallery a11y contract
+
+The Step 1 carousel is the only added kinetic surface in the wizard;
+its accessibility contract is explicit so the kinetics never become a
+keyboard or assistive-tech tax.
+
+**Keyboard (carousel container, `tabIndex=0`):**
+
+| Key | Action |
+|-----|--------|
+| `←` / `→` | Move ±1 slide |
+| `Home` / `End` | Jump to first / last slide |
+| `1`–`6` | Jump to slide by ordinal |
+| `Tab` | `[prev arrow] → [scroll container] → [active SELECT button] → [next arrow]` |
+
+Non-active SELECT buttons are `tabIndex=-1` so the Tab order through
+the carousel is always exactly one button. Dot indicators are
+decorative (`aria-hidden`, `tabIndex=-1`) — the arrow buttons + arrow
+keys cover keyboard navigation redundantly.
+
+**Roles + labels:**
+
+- Outer: `<section role="region" aria-label="Select your harness">`.
+- Each slide: `role="group" aria-roledescription="harness"`; the
+  centred slide carries `aria-current="true"`.
+- Locked slides: `aria-disabled="true"` on the SELECT button so AT
+  announces "Locked — coming soon" rather than a dead control.
+
+**`prefers-reduced-motion: reduce`** collapses the carousel to a
+`grid-cols-1 md:grid-cols-2 xl:grid-cols-3` static grid of all six
+harness slides. The nebula overlay is not mounted in this mode — the
+canvas is the only motion surface, and reduced-motion users see
+`<AvatarFallback>` everywhere. Palette transitions are therefore moot
+under reduced motion (no canvas to lerp); this is the floor.
+
+**WebGL ceiling.** When `WebGL2RenderingContext` is unavailable, the
+nebula cascade in `<NebulaAvatar>` drops to `<AvatarFallback>` at all
+sizes (gallery overlay, Step 2 preview, Step 5 portrait). The wizard
+remains fully functional; the visual loses the live shimmer. No
+fallback for the carousel itself — `scroll-snap` and
+`IntersectionObserver` are universally available in supported
+browsers.
 
 ---
 

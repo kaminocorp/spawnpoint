@@ -8,6 +8,7 @@ import {
   PlayIcon,
   SettingsIcon,
   TrashIcon,
+  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -23,12 +24,21 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { DeploymentInspector } from "@/components/fleet/deployment-inspector";
+import { InstanceToolEditor } from "@/components/fleet/instance-tool-editor";
 import type { AgentInstance } from "@/gen/corellia/v1/agents_pb";
 import { createApiClient } from "@/lib/api/client";
 
 type Props = {
   instance: AgentInstance;
   onChanged: () => void;
+  /**
+   * v1.5 Pillar B Phase 7: the harness adapter id for this instance's
+   * template. Threaded from the fleet page (which fetches the template
+   * list once) so the InstanceToolEditor can scope its catalog fetch.
+   * When empty, the Tools button is hidden — typically only happens on
+   * destroyed rows or pre-Phase-4 templates that lack the FK on the wire.
+   */
+  harnessAdapterId?: string;
   /**
    * When true, render icon-only buttons with `title` tooltips. Used by the
    * gallery card footer where horizontal space is tight. List view keeps
@@ -39,10 +49,16 @@ type Props = {
 
 type Pending = "stop" | "destroy" | null;
 
-export function AgentRowActions({ instance, onChanged, compact = false }: Props) {
+export function AgentRowActions({
+  instance,
+  onChanged,
+  harnessAdapterId,
+  compact = false,
+}: Props) {
   const [pending, setPending] = useState<Pending>(null);
   const [submitting, setSubmitting] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [starting, setStarting] = useState(false);
 
   const canStop = instance.status === "running";
@@ -54,6 +70,11 @@ export function AgentRowActions({ instance, onChanged, compact = false }: Props)
   const canStart =
     instance.lifecycleMode === "manual" && instance.status === "stopped";
   const canInspect = instance.status !== "destroyed";
+  // v1.5 Pillar B Phase 7: edit grants on running / stopped / pending
+  // agents. Destroyed rows hide the action entirely; without a harness
+  // adapter id we have no catalog to fetch.
+  const canEditTools =
+    instance.status !== "destroyed" && !!harnessAdapterId;
 
   async function confirm() {
     if (!pending) return;
@@ -126,6 +147,18 @@ export function AgentRowActions({ instance, onChanged, compact = false }: Props)
           {!compact && "Deployment"}
         </Button>
       )}
+      {canEditTools && (
+        <Button
+          variant="ghost"
+          size={buttonSize}
+          onClick={() => setToolsOpen(true)}
+          aria-label={`Tools for ${instance.name}`}
+          title={compact ? "Tools" : undefined}
+        >
+          <Wrench />
+          {!compact && "Tools"}
+        </Button>
+      )}
       {canStart && (
         <Button
           variant="ghost"
@@ -173,6 +206,16 @@ export function AgentRowActions({ instance, onChanged, compact = false }: Props)
         instance={instance}
         onChanged={onChanged}
       />
+
+      {harnessAdapterId && (
+        <InstanceToolEditor
+          open={toolsOpen}
+          onOpenChange={setToolsOpen}
+          instance={instance}
+          harnessAdapterId={harnessAdapterId}
+          onChanged={onChanged}
+        />
+      )}
 
       <AlertDialog
         open={pending !== null}

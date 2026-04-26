@@ -27,6 +27,7 @@ import type { AgentInstance } from "@/gen/corellia/v1/agents_pb";
 import { createApiClient } from "@/lib/api/client";
 import { formatCreated, providerLabel } from "@/lib/fleet-format";
 import { setFleetView, useFleetView } from "@/lib/fleet-view-pref";
+import { useTemplateAdapterMap } from "@/lib/fleet-templates";
 import { describeSize } from "@/lib/spawn/deployment-presets";
 import type { CpuKind } from "@/lib/spawn/deployment-presets";
 
@@ -47,6 +48,7 @@ export default function FleetPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const view = useFleetView();
+  const templateAdapterMap = useTemplateAdapterMap();
 
   const fetchInstances = useCallback(async () => {
     try {
@@ -205,6 +207,7 @@ export default function FleetPage() {
           onToggleOne={toggleOne}
           onToggleAll={toggleAll}
           onChanged={fetchInstances}
+          templateAdapterMap={templateAdapterMap}
         />
       )}
       {state.kind === "ready" && view === "gallery" && (
@@ -213,6 +216,7 @@ export default function FleetPage() {
           selectedIds={effectiveSelectedIds}
           onToggleOne={toggleOne}
           onChanged={fetchInstances}
+          templateAdapterMap={templateAdapterMap}
         />
       )}
 
@@ -242,6 +246,7 @@ function FleetTable({
   onToggleOne,
   onToggleAll,
   onChanged,
+  templateAdapterMap,
 }: {
   instances: AgentInstance[];
   selectedIds: Set<string>;
@@ -249,6 +254,7 @@ function FleetTable({
   onToggleOne: (id: string) => void;
   onToggleAll: () => void;
   onChanged: () => void;
+  templateAdapterMap: Record<string, string>;
 }) {
   const allSelectableIds = selectableInstances.map((i) => i.id);
   const headerChecked =
@@ -329,7 +335,11 @@ function FleetTable({
                 {formatCreated(i.createdAt)}
               </TableCell>
               <TableCell>
-                <AgentRowActions instance={i} onChanged={onChanged} />
+                <AgentRowActions
+                  instance={i}
+                  onChanged={onChanged}
+                  harnessAdapterId={templateAdapterMap[i.templateId]}
+                />
               </TableCell>
             </TableRow>
           ))}

@@ -61,6 +61,7 @@
   --color-feature-adapter: hsl(var(--feature-adapter));
   --color-feature-deploy: hsl(var(--feature-deploy));
   --color-feature-secrets: hsl(var(--feature-secrets));
+  --color-feature-tools: hsl(var(--feature-tools));
 
   /* Chart colors (shadcn) — mapped onto the feature palette. */
   --color-chart-1: hsl(var(--status-running));
@@ -126,6 +127,7 @@
   --feature-adapter: 258 90% 76%;
   --feature-deploy: 213 94% 68%;
   --feature-secrets: 351 95% 71%;
+  --feature-tools: 32 95% 58%;
 }
 
 .dark {
@@ -188,6 +190,7 @@
   --feature-adapter: 258 90% 76%;
   --feature-deploy: 213 94% 68%;
   --feature-secrets: 351 95% 71%;
+  --feature-tools: 32 95% 58%;
 }
 
 @layer base {
@@ -201,6 +204,7 @@
   }
   html {
     font-family: var(--font-geist-sans);
+    font-size: 17px;
   }
   /* Headings default to Space Mono — uppercase + tracking is applied per-use. */
   h1, h2, h3, h4, h5, h6 {

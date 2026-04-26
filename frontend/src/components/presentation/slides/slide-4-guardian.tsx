@@ -1,39 +1,33 @@
 "use client";
 
-import { PolicyCheckpoint } from "../scenes/policy-checkpoint";
+import { AgentProfileScene } from "../scenes/agent-profile-scene";
 
 /**
- * Slide 4 — GUARDIAN · "Per-agent scopes. Revoke without restart."
+ * Slide 4 — THE AGENT · "Skills. Tools. Memory. All wired in."
  *
- * The substantive product claim: Corellia governs *what each agent
- * can do*, not just deploys them.
- *
- * Visual: tool-call inspection visualised as a checkpoint. Three
- * sample requests stream through; the safe one passes (cyan), the
- * dangerous ones dissolve at the checkpoint (failed-red).
- *
- * Hermes-real call examples per Q6.
+ * RPG character-sheet visual: one agent at the center, five capability
+ * nodes (Skills, Tools, MCPs, Memory, Context) radiating out with
+ * hairline connections. Each node fades in with a stagger so the slide
+ * builds as the presenter speaks to each capability.
  */
 export function SlideGuardian() {
   return (
-    <div className="flex size-full min-h-[70vh] w-full max-w-6xl flex-col items-center justify-center gap-12">
+    <div className="flex size-full min-h-[70vh] w-full max-w-6xl flex-col items-center justify-center gap-8">
       <div className="flex flex-col items-center gap-3">
-        <p className="font-display text-[11px] uppercase tracking-widest text-[hsl(var(--status-running))]">
-          [ THE GUARDIAN ]
+        <p className="font-display text-[11px] uppercase tracking-widest text-[hsl(var(--feature-catalog))]">
+          [ THE AGENT ]
         </p>
         <h2 className="text-center font-display text-3xl font-black uppercase tracking-[0.15em] text-foreground sm:text-5xl">
-          Per-agent scopes.
+          Skills. Tools. Memory.
           <br />
-          <span className="text-muted-foreground">Revoke without restart.</span>
+          <span className="text-muted-foreground">All wired in.</span>
         </h2>
       </div>
 
-      <div className="relative flex h-[200px] w-full max-w-5xl items-center justify-center">
-        <PolicyCheckpoint />
-      </div>
+      <AgentProfileScene />
 
       <p className="font-mono text-sm uppercase tracking-wider text-muted-foreground">
-        every tool call passes through a policy you wrote
+        skills · tools · memory · mcps · context — all per-agent
       </p>
     </div>
   );

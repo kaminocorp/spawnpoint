@@ -320,6 +320,49 @@ func (s *Service) StartInstance(ctx context.Context, instanceID, orgID uuid.UUID
 	return s.Get(ctx, instanceID, orgID)
 }
 
+// RestartInstance cycles every started machine in the instance's Fly app.
+// v1.5 Pillar B Phase 7: drives the fleet inspector's "Restart now" button
+// so operators can apply restart-required tool-grant changes (the new
+// platform_toolsets list in $HERMES_HOME/config.yaml only re-reads at boot)
+// without editing Fly directly.
+//
+// Skips and stays graceful in two cases:
+//   - row is in a terminal state (destroyed) → returns ErrInstanceNotFound
+//     so the FE 404s instead of issuing a no-op flaps call;
+//   - row.deploy_external_ref is unset → ErrInstanceNotFound (a pending
+//     instance with no Fly app has nothing to restart).
+//
+// On success, appends an `instance_restart` audit row through the
+// tools-governance audit hook (no-op when WithToolsAuditAppender wasn't
+// wired, e.g. local dev without CORELLIA_API_URL).
+func (s *Service) RestartInstance(ctx context.Context, actorUserID, instanceID, orgID uuid.UUID) (*corelliav1.AgentInstance, error) {
+	row, err := s.queries.GetAgentInstanceByID(ctx, db.GetAgentInstanceByIDParams{ID: instanceID, OrgID: orgID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrInstanceNotFound
+		}
+		return nil, err
+	}
+	if row.Status == "destroyed" {
+		return nil, ErrInstanceNotFound
+	}
+	if row.DeployExternalRef == nil || *row.DeployExternalRef == "" {
+		return nil, ErrInstanceNotFound
+	}
+	target, err := s.flyTarget(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := target.Restart(ctx, *row.DeployExternalRef); err != nil {
+		slog.Error("agents: restart", "instance_id", instanceID, "err", err)
+		return nil, ErrFlyAPI
+	}
+	if s.auditAppender != nil {
+		s.auditAppender.AppendInstanceRestartAudit(ctx, actorUserID, orgID, instanceID)
+	}
+	return s.Get(ctx, instanceID, orgID)
+}
+
 // ResizeReplicas changes only the desired replica count. Plan §4
 // Phase 4: validate desired in [1, 10], persist, call deployer.Update
 // for the reconciliation. The per-replica volume provisioning /

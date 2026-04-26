@@ -6,6 +6,10 @@
     "frontend:dev": "pnpm -C frontend dev",
     "frontend:build": "pnpm -C frontend build",
     "frontend:type-check": "pnpm -C frontend type-check",
-    "frontend:lint": "pnpm -C frontend lint"
+    "frontend:lint": "pnpm -C frontend lint",
+    "capture:video": "node scripts/capture-login-video.mjs"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^22.0.0"
   }
 }

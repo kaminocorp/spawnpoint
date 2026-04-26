@@ -2,6 +2,21 @@
 
 Index - short one-liners:
 
+- [0.13.8 — v1.5 Pillar B Phase 7: Fleet Inspector Tool Editor + `RestartAgentInstance` + `tool_grant_audit` + Manifest Rate-Limit (Pillar B Complete)](#0138--v15-pillar-b-phase-7-fleet-inspector-tool-editor--restartagentinstance--tool_grant_audit--manifest-rate-limit-pillar-b-complete-2026-04-27)
+- [0.13.7 — README Demo Video: `capture:video` Script (Puppeteer + ffmpeg → MP4)](#0137--readme-demo-video-capturevideo-script-puppeteer--ffmpeg--mp4-2026-04-27)
+- [0.13.6 — v1.5 Pillar B Operator Gate: Adapter Image Push + Migrations Applied + Tools Governance Activated](#0136--v15-pillar-b-operator-gate-adapter-image-push--migrations-applied--tools-governance-activated-2026-04-27)
+- [0.13.5 — v1.5 Pillar B Phase 6: Org Tool Curation Page (`/settings/tools`)](#0135--v15-pillar-b-phase-6-org-tool-curation-page-settingstools-2026-04-27)
+- [0.13.4 — v1.5 Pillar B Phase 5: `corellia_guard` Plugin (URL / Command / Path Enforcement + Manifest Poll Daemon)](#0134--v15-pillar-b-phase-5-corellia_guard-plugin-url--command--path-enforcement--manifest-poll-daemon-2026-04-27)
+- [0.13.3 — v1.5 Pillar B Phase 4: Wizard TOOLS Step](#0133--v15-pillar-b-phase-4-wizard-tools-step-2026-04-27)
+- [0.13.2 — v1.5 Pillar B Phase 3: Backend RPCs (ListTools / Grant / Curation)](#0132--v15-pillar-b-phase-3-backend-rpcs-listtools--grant--curation-2026-04-27)
+- [0.13.1 — v1.5 Pillar B Phase 2: Manifest Plumbing (Proto + Bearer-Token Endpoint + Adapter Integration)](#0131--v15-pillar-b-phase-2-manifest-plumbing-proto--bearer-token-endpoint--adapter-integration-2026-04-27)
+- [0.13.0 — v1.5 Pillar B Phase 1: Tools Governance Schema + Scope Validator + Service Foundation](#0130--v15-pillar-b-phase-1-tools-governance-schema--scope-validator--service-foundation-2026-04-27)
+- [0.12.6 — Spawn Redesign Post-Phase-5 Hardening: Carousel Canvas Overlay Self-Measures + Stale `<RosterCard>` JSDoc Cleanup + `<HarnessSlide>` `isActive` Contract Note](#0126--spawn-redesign-post-phase-5-hardening-carousel-canvas-overlay-self-measures--stale-rostercard-jsdoc-cleanup--harnessslide-isactive-contract-note-2026-04-27)
+- [0.12.5 — Spawn Redesign Phase 5: Compact Step-1 Confirmed Pane + design-system §33.5 / §34.5 Reconciliation](#0125--spawn-redesign-phase-5-compact-step-1-confirmed-pane--design-system-335--345-reconciliation-2026-04-27)
+- [0.12.4 — Spawn Redesign Phase 4: Steps 2–5 RPG Reskin (Callsign Card / Faction × Class / Loadout / Character Sheet + READY TO LAUNCH)](#0124--spawn-redesign-phase-4-steps-25-rpg-reskin-callsign-card--faction--class--loadout--character-sheet--ready-to-launch-2026-04-27)
+- [0.12.3 — Spawn Redesign Phase 3: Live `<NebulaAvatar>` Carousel Overlay + Palette Crossfade](#0123--spawn-redesign-phase-3-live-nebulaavatar-carousel-overlay--palette-crossfade-2026-04-27)
+- [0.12.2 — Spawn Redesign Phase 2: `<HarnessCarousel>` + `<HarnessSlide>` + `roster-card.tsx` Deleted](#0122--spawn-redesign-phase-2-harnesscarousel--harnessslide--roster-cardtsx-deleted-2026-04-27)
+- [0.12.1 — Global Type-Scale Bump: `html font-size 17px` + Chrome Label / Card Text Increases](#0121--global-type-scale-bump-html-font-size-17px--chrome-label--card-text-increases-2026-04-27)
 - [0.12.0 — Spawn Redesign Phase 1: Wizard Reducer `harnessMode` + `getInitialState(mode)` + `GalleryWizardShell` + `spawn/page.tsx` Server Component](#0120--spawn-redesign-phase-1-wizard-reducer-harnessmode--getinitialstatemode--gallerywizardshell--spawnpagetsx-server-component-2026-04-27)
 - [0.11.10 — `BulkUpdateDeployConfig` Correctness: `errgroup.Wait()` Error Propagation + Context-Cancellation Test (Code Assessment §2.1)](#01110--bulkupdatedeployconfig-correctness-errgroupwait-error-propagation--context-cancellation-test-code-assessment-21-2026-04-27)
 - [0.11.9 — M-chat Post-Operator-Gate P1 Polish: Sidecar Stub Fail-Fast + Honest `/health` + Schema Hardening + Smoke Negative Paths + Probe-Timeout Bump + 401-Drain](#0119--m-chat-post-operator-gate-p1-polish-sidecar-stub-fail-fast--honest-health--schema-hardening--smoke-negative-paths--probe-timeout-bump--401-drain-2026-04-27)
@@ -58,6 +73,389 @@ Index - short one-liners:
 - [0.1.0 — Backend Scaffolding & Docs Reconciliation](#010--backend-scaffolding--docs-reconciliation-2026-04-24)
 
 Latest on top. Each release includes detailed entries (**What / Where / Why** changes were made).
+
+--
+
+## 0.13.8 — v1.5 Pillar B Phase 7: Fleet Inspector Tool Editor + `RestartAgentInstance` + `tool_grant_audit` + Manifest Rate-Limit (Pillar B Complete) (2026-04-27)
+
+Closes v1.5 Pillar B. Operators can now revoke or edit tool grants on running agents from the fleet view; every grant change appends to a new `tool_grant_audit` table; the manifest endpoint is rate-limited per instance; the new `RestartAgentInstance` RPC closes the "restart required" loop for `platform_toolsets`-tier changes. `pnpm proto:generate` (RestartAgentInstance RPC + messages) and `cd backend && sqlc generate` (tool_grant_audit query) both re-run without further diff. `cd backend && go test ./... && go vet ./... && go build ./...` and `pnpm -C frontend type-check && lint && build` all green.
+
+- **`backend/migrations/20260427190000_tool_grant_audit.sql`** — new. Append-only `tool_grant_audit` table per plan §3 Phase 7. `actor_user_id` is required; `org_id` / `instance_id` / `tool_id` are nullable FKs with `ON DELETE SET NULL` so audit rows survive orphaning. `action` is a closed CHECK enum: `org_curation_set` | `instance_grants_set` | `instance_restart` (matches the live write taxonomy after Phase 3 collapsed grant + revoke + scope-edit into one atomic `instance_grants_set` event). `before_json` / `after_json` reserved for the v1.6 reader UI; Phase 7 writes leave both NULL. Two partial indexes — `(instance_id, at DESC)` and `(org_id, at DESC)` — scoped to non-NULL keys so the v1.6 reader's per-instance / per-org timeline queries don't table-scan.
+- **`backend/queries/tool_grant_audit.sql`** — new. `InsertToolGrantAudit :exec`. Generates `db.InsertToolGrantAuditParams` + `Queries.InsertToolGrantAudit`.
+- **`backend/internal/tools/service.go`** — extended. `auditAppend` was a Phase 3 no-op stub; Phase 7 fills it in with the real `InsertToolGrantAudit` call. Signature widened to take `actorUserID uuid.UUID` first; existing call sites already had the actor in hand (`curatedBy` / `grantedBy`) so the rewire was mechanical. New exported `AppendInstanceRestartAudit(ctx, actor, org, instance)` — agents.Service calls it from the new `RestartInstance` path without importing tools' internal types. Audit-write failures are **logging-only**: a failed append must NOT roll back the surrounding business write. `uuidPtrToPg` helper projects nullable `*uuid.UUID` into the `pgtype.UUID` shape sqlc emits.
+- **`shared/proto/corellia/v1/agents.proto`** — extended. New `rpc RestartAgentInstance(RestartAgentInstanceRequest) returns (RestartAgentInstanceResponse)` matching the existing Stop / Destroy shape. Generated Go + TS via `pnpm proto:generate`.
+- **`backend/internal/deploy/{target,fly,stubs}.go`** — extended. New `DeployTarget.Restart(ctx, externalRef)` interface method. `FlyDeployTarget.Restart` lists machines, skips non-`started` ones, lease + `flaps.Restart` (new flapsClient interface method) + Wait + release per machine; partial restart of a multi-replica app is a defect surfaceable to the operator, not silent best-effort. `LocalDeployTarget` / `AWSDeployTarget` return `ErrNotImplemented` per blueprint §11.4.
+- **`backend/internal/agents/{service,fleet}.go`** — extended. New private interface `toolsAuditAppender` (single method: `AppendInstanceRestartAudit`) so the audit hook plugs in without importing `*tools.Service` (mirrors `toolManifestIssuer`). New option `agents.WithToolsAuditAppender(a)` (nil = no-op). New method `RestartInstance(ctx, actorUserID, instanceID, orgID)` in `fleet.go`: loads the instance, asserts it isn't destroyed and has a Fly external ref, calls `target.Restart`, then on success calls `auditAppender.AppendInstanceRestartAudit`. Failures redact through `ErrFlyAPI`; audit only on success.
+- **`backend/internal/httpsrv/agents_handler.go`** — extended. `agentsService` interface gains `RestartInstance(ctx, actor, instance, org)`. New handler `RestartAgentInstance` reads userID alongside orgID (Phase 7 needs the actor for the audit row), parses the instance UUID, calls `svc.RestartInstance`. <30 LOC per blueprint §11.9.
+- **`backend/internal/httpsrv/tool_manifest_ratelimit.go`** — new. Per-instance counting-window token bucket: `60 requests / minute / instance` default. The legitimate steady-state poll rate is ≤12/min (30s default TTL with 5s lower clamp), so the cap absorbs a 5× burst above that. Operator-driven manifest changes (fleet-inspector save) trigger an ETag-mismatch poll within TTL — a handful of requests per change-event, well inside the cap. In-process state — a misbehaving adapter pinned to one Corellia instance is rate-limited by that instance only (acceptable for v1.5 single-machine control plane; horizontal scale → swap to Redis behind the same `allow(instanceID)` interface).
+- **`backend/internal/httpsrv/tool_manifest.go`** — extended. `ToolManifestHandler` gains `*manifestRateLimiter`; `NewToolManifestHandler` constructs the default-tuned bucket. 429 path returns `Retry-After: 60` + `{"code":"resource_exhausted","message":"manifest poll rate exceeded"}`. Applied **after** auth so unauthenticated floods can't pollute the bucket table.
+- **`backend/cmd/api/main.go`** — `agents.WithToolsAuditAppender(toolsSvc)` always wired (independent of `CORELLIA_API_URL`, since audit-row writes work whether or not the manifest endpoint is reachable).
+- **`frontend/src/components/fleet/instance-tool-editor.tsx`** — new (~410 LOC). The Phase 7 fleet-view per-instance editor. Mounted as a `<Sheet>` slide-over from each fleet row's new Tools action. Fetches grants + catalog in parallel on open; renders each grant row with the wizard's scope-input components (`<UrlAllowlistInput>`, `<CommandAllowlistInput>`, `<PathAllowlistInput>`, `<WorkingDirectoryInput>`); revoke clears the row from the staged set; catalog dropdown adds a new toolset (defaulted to empty scope). **Propagation tier banner** computed from the diff: `plugin-tick` (only scope changed → applies within ~35s on next tool call); `restart-required` (any toolset added or removed → applies on next agent boot); `no-change` (Save disabled). Save is atomic via `setInstanceToolGrants`; the BE replaces the active grant set in one tx + bumps `manifest_version` for ETag invalidation; refetches canonical post-write state into the editor. **Restart now** button only renders when tier is `restart-required`; calls `restartAgentInstance` RPC.
+- **`frontend/src/components/fleet/agent-row-actions.tsx`** — extended. New Tools action (Wrench icon) opens the editor. Hidden on destroyed rows and when `harnessAdapterId` is absent. Prop threaded through fleet-page → table + gallery → row-actions.
+- **`frontend/src/lib/fleet-templates.ts`** — new. `useTemplateAdapterMap()` hook: single-shot fetch of `listAgentTemplates` on mount; builds `Record<templateId, harnessAdapterId>`. Best-effort — errors silently leave the map empty (Tools button hides). v2 (multi-template) refetches on visibility regain.
+- **Fleet wiring** — `fleet/page.tsx`, `fleet/[id]/page.tsx`, `fleet-gallery.tsx`, `agent-card.tsx` — threaded the template-adapter map from each fleet entry-point through to `<AgentRowActions>`. No other behavioural change.
+- **Tests** — `tools/service_test.go` (audit-row pin on `SetInstanceGrants` happy path + new `TestAppendInstanceRestartAudit` + `fakeToolQueries.InsertToolGrantAudit`); `agents/service_test.go` (5 RestartInstance cases: happy path, deploy-failure-no-audit, NotFound, destroyed-row-rejected, no-audit-appender-still-succeeds; `fakeAuditAppender`; `fakeDeployTarget.Restart` + `restartCount` + `restartErr`); `httpsrv/tool_manifest_test.go` (rate-limit hits 429 + Retry-After; per-instance bucket isolation); `deploy/fly_test.go` (`flapsClientFake.Restart` + `restartErr`).
+- **Doc updates** — `docs/blueprint.md` §3.2 (`CORELLIA_TOOL_MANIFEST_URL` + `CORELLIA_INSTANCE_TOKEN` documented as v1.5 Pillar B reserved env vars, semantics moved from "post-v1" to live); `docs/blueprints/adapter-image-blueprint.md` §12 #6 (rewritten as "implemented in v1.5 Pillar B" with forward-pointer to completion notes); `CLAUDE.md` frontend route map (`/settings/tools` named, `/fleet`'s `<InstanceToolEditor>` slide-over named); `docs/completions/tools-governance-phase-7.md` (new — full Phase 7 narrative + 6 deviations + operator smoke list + done-checklist).
+
+**Deviations from plan:** (1) **`Restart` lives on `DeployTarget`, not in a Fly-specific path.** Plan §3 deliverable 3 implied a Fly-only concrete method; the interface-method shape was the right cut per blueprint §11.1, with stubs returning `ErrNotImplemented`. (2) **Per-row propagation-tier label became a single banner above Save.** The tier is a property of the diff, not of the grant itself in a stable state — labeling each row would either be redundant or confusing. Mirrors `<DeploymentInspector>`'s `UpdateResult` preview banner. (3) **No credential capture in the inspector.** In-flight credential editing has its own UX surface (key rotation, "are you sure" modal) and lands in v1.6; today the inspector preserves existing credentials via the BE's atomic revoke-all-then-insert-N tx. (4) **Audit table CHECK is a closed enum (3 actions), not free-form text.** Matches the actual write taxonomy (Phase 3 collapsed grant + revoke + scope-edit into one atomic `instance_grants_set` event); future actions are a CHECK widening. (5) **No SSE / WebSocket** — pull-with-TTL only per plan §1.2 ("push-on-change deferred to v1.6+"). (6) **No bulk grant-set apply** — single-instance editing covers the v1.5 demo path; the M5 bulk-fleet-ops surface doesn't grow a tools lane.
+
+**v1.5 Pillar B done.** Plan §7 done-definition checklist: 7/10 items pass automatically (all 7 phases shipped, `go test`, `go vet`, frontend gates, `pytest`, completion notes, walk-through readiness); 3 remain operator-gated (3-clean-runs of the §1.3 demo, adapter smoke, governance-roadmap docs update). Forward pointers (v1.6): credential editor in the inspector, audit reader UI at `/settings/audit`, `before_json` / `after_json` populated, Redis-backed rate limiter at horizontal scale, MCP / Skills / per-tool / Tool-providers governance plans (taxonomy items #2/#3/#4/#5).
+
+---
+
+## 0.13.7 — README Demo Video: `capture:video` Script (Puppeteer + ffmpeg → MP4) (2026-04-27)
+
+Adds a one-command tool for generating a video of the sign-in page WebGL particle animation, suitable for embedding at the top of `README.md` as a GitHub-hosted video. No product behaviour changed; no backend, proto, or migration touched.
+
+The animation is a 28 000-particle Three.js / R3F swarm with custom GLSL shaders and six morphing shapes (chevron → octahedron → torus → globe → network → wordmark). Because it runs in WebGL on the GPU there is no static asset to grab — the only reliable capture path is a real browser. Headless Chromium uses a software renderer that washes out the additive-blended particles; headed Chrome with full GPU WebGL is required for colour-accurate output.
+
+Capture approach: `puppeteer-core` + system Chrome (no Chromium download) navigates to `localhost:3000/sign-in`, waits 4 s for the shape `.bin` files to load and WebGL to initialise, then screenshots as fast as CDP allows (~10–15 fps on a local machine), measures the actual elapsed fps, and hands the frame sequence to ffmpeg which encodes H.264 MP4. One morph cycle is drift (4–8 s) + morph (7 s) + hold (7 s) ≈ 18 s; the script captures 20 s to land a clean clip. The resulting `docs/assets/login-animation.mp4` is gitignored — it is uploaded to GitHub (drag into any issue/PR comment box to get a CDN URL) rather than committed as a binary.
+
+- **`scripts/capture-login-video.mjs`** — new. ESM Node script. `findChrome()` walks three candidate paths (`Google Chrome`, `Chromium`, `Chrome Canary`) and throws with a clear message if none is found. Launches `headless: false` with `--window-size=1280,720` and `defaultViewport` set to match, so the captured frames are exactly 1280 × 720 with no OS chrome bleeding in. Navigates to `PAGE_URL` (`http://localhost:3000/sign-in`) with `waitUntil: networkidle0`. 4 s init wait, then `page.screenshot()` loop until `CAPTURE_MS` (20 000 ms) elapses; actual fps calculated from frame count ÷ elapsed ms and passed to ffmpeg so the video plays at the same rate it was captured. ffmpeg flags: `-c:v libx264 -pix_fmt yuv420p -crf 20 -movflags +faststart` (yuv420p for broad player compatibility; `faststart` places the moov atom at front for GitHub's inline player). Prints next-step instructions (drag-to-upload → get CDN URL → fill README placeholder) on completion.
+- **`package.json`** — `"puppeteer-core": "^22.0.0"` added to `devDependencies`; `"capture:video": "node scripts/capture-login-video.mjs"` added to `scripts`. `puppeteer-core` is used over `puppeteer` to avoid the ~170 MB Chromium download — system Chrome is already present on any dev machine.
+- **`.gitignore`** — `docs/assets/login-animation.mp4` excluded. The MP4 is a derived artifact and a large binary; it belongs on GitHub's CDN, not in the tree.
+- **`README.md`** — commented-out `<video>` embed block added between the centered header `</div>` and the first `---` separator. Includes inline instructions: run `capture:video`, drag the output into a GitHub issue, replace `VIDEO_URL` in the tag, uncomment. The block uses `autoplay loop muted playsinline width="900"` — the attributes GitHub's Markdown renderer honours for inline video playback.
+
+**Operator workflow (two-step, one-time):**
+```
+pnpm install && pnpm frontend:dev   # terminal 1 — leave running
+pnpm capture:video                  # terminal 2 — Chrome opens 20s, encodes, exits
+```
+Then drag `docs/assets/login-animation.mp4` into any GitHub issue/PR, copy the CDN URL, replace `VIDEO_URL` in `README.md`, and uncomment the block.
+
+---
+
+## 0.13.6 — v1.5 Pillar B Operator Gate: Adapter Image Push + Migrations Applied + Tools Governance Activated (2026-04-27)
+
+Completes the operator exit gates for Phases 2 and 5. Three migrations applied to production (two planned, one opportunistic). Backend config updated in both local dev and production; Fly machine rolled and confirmed healthy. Tools governance is now active end-to-end for newly spawned agents.
+
+- **Adapter image** — Phase 5 image (`v2026-04-27-pillar-b-phase5`, multi-platform `linux/amd64,linux/arm64`) built from current `adapters/hermes/` and pushed to GHCR. Digest captured and filled into both pending migration files. Phase 2 intermediate image was skipped — Phases 2–5 were deployed together, so both adapter migrations pin the same digest.
+- **`backend/migrations/20260427170000_adapter_image_ref_bump_pillar_b_phase2.sql`** — digest placeholder filled and migration applied. `harness_adapters.adapter_image_ref` for `hermes` updated to the Phase 5 image.
+- **`backend/migrations/20260427180000_adapter_image_ref_bump_pillar_b_phase5.sql`** — digest placeholder filled and migration applied. Down migration revert target filled with the M-chat Phase 7 image digest (the last known-good pre-Pillar-B image, since no Phase 2 intermediate image exists).
+- **`backend/migrations/20260427190000_tool_grant_audit.sql`** — applied opportunistically. File was already present in the migration tree; `goose up` picked it up alongside the two planned migrations. Creates `tool_grant_audit` (Phase 7's audit table — append-only log for curation and grant writes, indexed by `instance_id` and `org_id`). Additive and safe: the Phase 3 `auditAppend` stubs are wired at every write call site but currently no-ops; Phase 7 makes them persistent.
+- **Backend config** — local dev config and production Fly secrets updated to activate tools governance. Fly performed a rolling machine update; confirmed `1/1 healthy`.
+
+**Net effect:** New agents spawned from production now receive a manifest bearer token and manifest endpoint URL injected as Fly secrets at spawn time. The Phase 5 adapter image fetches the toolset manifest at boot, writes `$HERMES_HOME/config.yaml` and `corellia/scope.json` atomically, and enforces URL / command / path allowlists at `pre_tool_call` via `corellia_guard`. The poll daemon refreshes scope state every ~30 s, so grant changes propagate without a redeploy.
+
+---
+
+## 0.13.5 — v1.5 Pillar B Phase 6: Org Tool Curation Page (`/settings/tools`) (2026-04-27)
+
+First surface in the **org-settings family**. Org-admins curate which toolsets agents in the workspace may equip when spawned; disabled toolsets disappear from the spawn-wizard TOOLS step (Phase 4 already wires the `enabledForOrg` filter — Phase 6 wires the knob that drives the flag). Pure frontend work — the three RPCs the page consumes (`listAgentTemplates`, `getOrgToolCuration`, `setOrgToolCuration`) all shipped earlier. `pnpm -C frontend type-check`, lint, build, `go test ./...`, `go vet ./...` all green. No proto, migration, sqlc, or backend changes.
+
+- **`frontend/src/app/(app)/settings/tools/page.tsx`** — new. Server component shell, `metadata.title = "Tools — Settings — Corellia"`, renders `<OrgToolCuration>`. Mirrors `/spawn/page.tsx → <Wizard>`: the auth + org bootstrap lives in `(app)/layout.tsx`, so `useUser()` is populated by the time the client component mounts and a server-side session lookup is unnecessary.
+- **`frontend/src/components/settings/org-tool-curation.tsx`** — new (~220 LOC). Three responsibilities: **role gate** (`useUser().user.role !== "admin"` → failed-accent `<TerminalContainer title="ADMIN ONLY">` with shield-alert glyph; BE's `SetOrgToolCuration` handler is the actual security boundary, this is UX); **catalog discovery** (no `ListHarnessAdapters` RPC in v1.5 — derive the in-org adapter set from `listAgentTemplates`'s `harnessAdapterId` field, dedupe, fetch curation per adapter in parallel); **save model** (per-tool optimistic UI + single-flight latch — toggle reflects locally on click, fires `setOrgToolCuration`, replaces the row with the canonical server-returned `Tool` on success, rolls back the optimistic patch + sonner-toasts the error on failure; button stays disabled mid-flight as `[ … SAVING ]`).
+- **`frontend/src/components/app-sidebar.tsx`** — extended. New `Tools` entry in the `[ MODULES ]` group between `Fleet` and the existing `Settings (Soon)` placeholder, **conditional on `user.role === "admin"`**. Refactored the flat `items` array into three concatenations (`baseItems`, `adminItems`, `trailingItems`) so ordering is deterministic without a `.filter()` on a mixed list.
+- **`docs/refs/design-system.md` §33.10** — new page-motif entry under `## 33. Page Motifs (per route)`. Documents the surface for future contributors: amber accent (matches the spawn-wizard TOOLS step from 0.13.3), `[ ✓ ENABLED ]` / `[ DISABLED ]` / `[ … SAVING ]` toggle vocabulary, OAuth-only rows render a disabled toggle + `lock-icon · OAUTH · v1.6` chip per blueprint §11.4, the `listAgentTemplates`-derived adapter discovery model, the relationship to /spawn's TOOLS step (org-curated-out → hidden, OAuth-only → locked), and the sidebar gating model. Reuses §33's slot rather than the §35 the plan called for — §35 was already taken before the plan was drafted, and the page-motif family is the closer fit anyway.
+
+**Deviations from plan:** (1) **No new sidebar group; flat top-level entry.** Plan §3 Phase 6 deliverable 2 says "new 'Tools' item under Settings"; the current sidebar has no nested-sub-group primitive, and adding one for a single sub-item is more structural change than the surface warrants. The `Tools` entry sits adjacent to the `Settings (Soon)` placeholder; once the broader `/settings` family lands (workspace name, members, billing) and a second org-settings sub-route exists, a sub-group becomes worth carving. (2) **No debounce; single-flight latch instead.** Each toggle is a discrete operator intent (no fast-fire continuous input like a slider), so the failure mode "5 RPCs in flight from 5 rapid clicks" is best prevented by disabling the button while one write is in flight. Mid-flight `[ … SAVING ]` doubles as the "click-in-progress" cue. (3) **Audit row append: not wired in this phase.** Per Phase 3 completion notes, `auditAppend` no-op stubs are already planted at every BE write site; Phase 7 fills them mechanically. Phase 6 is FE-only, so the audit chain becomes live the moment Phase 7 lands. (4) **No frontend rendering tests; no backend test extension.** Phase 3's `TestListAvailableForOrg` already pins "ListTools honours curation"; the repo has no FE rendering test framework wired (per stack.md §13), so colocated tests drop in mechanically once one lands.
+
+---
+
+## 0.13.4 — v1.5 Pillar B Phase 5: `corellia_guard` Plugin (URL / Command / Path Enforcement + Manifest Poll Daemon) (2026-04-27)
+
+The Phase 2 `register(ctx): pass` stub is replaced with the real enforcement implementation. Three non-native scopes — URL allowlist on `web`, command-pattern allowlist on `terminal`, path allowlist on `file` — plus the working-directory pin on `terminal` are now enforced at `pre_tool_call`. Scope state is read from `$HERMES_HOME/corellia/scope.json`; a daemon thread keeps that file fresh by ETag-aware polling of `CORELLIA_TOOL_MANIFEST_URL` on a 30 s TTL. Phase 4's `[ ENFORCEMENT IN PILLAR B PHASE 5 ]` notices removed from the wizard scope inputs. Adapter image rebuild is operator-gated. 49 pytest cases added; no proto, SQL, or Go changes. All check gates green.
+
+- **`adapters/hermes/plugin/corellia_guard/scope.py`** — new. Pure-logic dataclasses + matchers; no Hermes imports, no I/O. `ToolsetScope` (url/command/path allowlists + working_directory; `from_dict` decays bad types to empty defaults). `Scope` (keyed by toolset_key + `manifest_version`; `Scope.deny_all()` is the fail-safe when scope.json is missing or unparseable). Four matchers: `match_url` (fnmatch globs; host-only pattern matches any path under that host; scheme-stripped before matching; default-deny on empty list or `None`), `match_command` (`re.search`; invalid regexes silently skipped; default-deny), `match_path` (fnmatch with `**`; default-deny), `match_working_dir` (prefix-on-path-boundary; trailing-slash insensitive; default-allow on empty pin per Phase 1 decision).
+- **`adapters/hermes/plugin/corellia_guard/hook.py`** — new. `ScopeCache(path)` — mtime-aware reader; `os.stat` once per call, re-parses only when mtime advances; `threading.Lock` around parse-and-set; disappearing file → deny-all immediately (stale-allow is the explicitly unsafe failure mode). `make_pre_tool_call(cache)` — returns the hook callable. Tool-name routing via three curated frozensets: `_WEB_TOOLS = {"web_search", "web_fetch", "browser_navigate"}`, `_TERMINAL_TOOLS = {"shell_exec", "terminal_exec", "execute_command", "run_command"}`, `_FILE_TOOLS = {"read_file", "write_file", "edit_file", "delete_file", "list_files", "list_directory", "search_files"}`. Tool names outside all frozensets pass through (toolset-level gate at `platform_toolsets.cli` remains the safety net). Reject return shape: `{"action": "block", "message": "<reason>"}`. Argument extraction is defensive (`query`/`href` fallbacks for URL; `command`/`argv` string-or-list for terminal; `path`/`file_path`/`filename` for file; non-string values coerce to empty string → default-deny).
+- **`adapters/hermes/plugin/corellia_guard/__init__.py`** — replaced (was Phase 2 `register(ctx): pass` stub). `register(ctx)` is now real. Single-flight guard (module-level `_STARTED` sentinel + `Lock`) — first call constructs `ScopeCache`, builds the hook closure, spawns the daemon; subsequent calls only re-attach the hook to the new ctx (sub-agents, future session-isolation patterns) without duplicating threads. Daemon thread: `threading.Thread(daemon=True)` polling `CORELLIA_TOOL_MANIFEST_URL` with `Bearer $CORELLIA_INSTANCE_TOKEN`; ETag-aware (`If-None-Match` on every poll after the first; 304 = no-op); on 200, `_manifest_to_scope_doc` projects the four plugin-enforced keys and rewrites `scope.json` atomically via `os.replace`; on error, exponential backoff 5 s → 60 s. TTL: 30 s default, `CORELLIA_MANIFEST_POLL_TTL` env-overridable, clamped 5 s..5 min; bogus values fall back to default with a warning. Daemon skipped when either env var is unset (local-dev quiet path; production spawn always sets both).
+- **`adapters/hermes/plugin/corellia_guard/tests/`** — new. 49 pytest cases across 6 files: `test_url_matcher.py` (12 — demo case, multiple patterns, scheme normalisation, default-deny, host-only vs path-aware semantics, missing-scope deny), `test_command_matcher.py` (8 — anchored/unanchored regex, default-deny, invalid-regex skip), `test_path_matcher.py` (8 — `**` glob, exact paths, default-deny), `test_working_dir.py` (9 — default-allow on empty, exact equality, prefix admit, trailing-slash insensitivity, sibling-directory rejection), `test_scope_reload.py` (5 — initial load, mtime-advance reload, missing file → deny-all, unparseable → deny-all, disappearing mid-process → deny-all), `test_hook_dispatch.py` (9 — routing for web/terminal/file, allow + block paths, cwd outside pin → block, unknown tool → pass-through, extra kwargs forward-compat).
+- **`adapters/hermes/render_config.py`** — extended. `write_scope_json(home, manifest)` writes the initial `$HERMES_HOME/corellia/scope.json` from the manifest (projects the four enforced shape keys; omits toolsets that carry none of them). Now writes scope.json **always**, even when the manifest has no toolsets — without the file the plugin reads `Scope.deny_all()` and rejects every governed call until the first poll.
+- **`adapters/hermes/Dockerfile`** — comment-only: Phase 5 block above `COPY plugin/` updated to reflect the real enforcement plugin, not a stub. No structural change.
+- **`frontend/src/components/spawn/scope-inputs/pattern-list-input.tsx`** — `pillarBPhase5Notice` prop and its conditional render dropped.
+- **`frontend/src/components/spawn/scope-inputs/url-allowlist.tsx`, `command-allowlist.tsx`, `path-allowlist.tsx`** — `pillarBPhase5Notice` prop dropped from their `PatternListInput` calls.
+- **`backend/migrations/20260427180000_adapter_image_ref_bump_pillar_b_phase5.sql`** — new, operator-gated. Fill `<IMAGE-DIGEST-PENDING>` after `docker buildx build --push adapters/hermes` + `imagetools inspect` digest capture; `adapter_image_ref_digest_pinned CHECK` rejects placeholder if run prematurely. Down migration reverts to Phase 2 image (digest also a placeholder for the operator to fill from the Phase 2 build).
+
+**Operator exit gate (pending):** build + push Phase 5 adapter image → capture digest → fill migration → `goose up` → three live smokes: (a) URL allowlist allow + block, (b) revoke grant without redeploy (plugin picks it up within 35 s), (c) manifest endpoint down → plugin keeps enforcing last-known-good scope.
+
+---
+
+## 0.13.3 — v1.5 Pillar B Phase 4: Wizard TOOLS Step (2026-04-27)
+
+Six-step spawn wizard. TOOLS inserted between MODEL and DEPLOYMENT; DEPLOYMENT shifts to step 5, REVIEW to step 6. Operator equips per-toolset, configures URL / command / path / working-directory scopes, and notes required credentials. On deploy, `setInstanceToolGrants` fires after `spawnAgent` succeeds; grant-write failure triggers single-shot rollback via `destroyAgentInstance`. `pnpm -C frontend type-check`, lint, build, `go test ./...`, `go vet ./...` all green.
+
+- **`shared/proto/corellia/v1/agents.proto`** — `AgentTemplate.harness_adapter_id` (field 4, non-breaking add). TOOLS step calls `ListTools(harnessAdapterId)` off the existing `ListAgentTemplates` response — no second round-trip.
+- **`backend/queries/agent_templates.sql`** — `ListAgentTemplates` widened to include `harness_adapter_id`. `backend/internal/db/agent_templates.sql.go` regenerated.
+- **`backend/internal/agents/service.go`** — `toProtoTemplate` populates the new field.
+- **`frontend/src/app/globals.css`** — `--feature-tools: 32 95% 58%` (amber) added to both light + dark blocks and `@theme`. Matches the accent-per-step pattern established in design-system.md §34.1.
+- **`frontend/src/components/ui/terminal-container.tsx`** — `TerminalAccent` union and `ACCENT_BORDER` / `ACCENT_CHEVRON` records gain `"tools"` entry.
+- **`frontend/src/components/spawn/scope-inputs/`** — new directory: `pattern-list-input.tsx` (shared chrome — textarea, count chip, optional enforcement-notice slot); `url-allowlist.tsx`, `command-allowlist.tsx`, `path-allowlist.tsx` (pattern-list scope shapes; command allowlist also validates each entry as a Go-compatible `RegExp`); `working-directory.tsx` (single-line; empty = default-allow per Phase 1 decision).
+- **`frontend/src/components/spawn/steps/tools-step.tsx`** — new (~360 LOC). Fetches `listTools(api.tools, { harnessAdapterId })` on mount. Filters `enabled_for_org=false` rows entirely. `oauth_only` toolsets render a locked card (`[ OAUTH REQUIRED — v1.6 ]`). Scope inputs dispatched by `scopeShape` key; unknown keys render an inert dashed-border preview (forward-compatible with new catalog shapes). Confirm runs all `validate*` helpers + "credential present iff required" check. Exports `toolsetMapToGrants` and `toolsetSummaryRows` for the wizard.
+- **`frontend/src/components/spawn/wizard.tsx`** — `STEPS` 5 → 6; `STEP_META.tools` ordinal 4, accent `"tools"`; DEPLOYMENT shifts to 5, REVIEW to 6. `WizardFields.toolsets: ToolsetStateMap` added; participates in existing cascading-invalidation contract unchanged. `StepBody` switch: `case "tools"` with `<ToolsStepBody>`. Review character sheet `loadoutRows` prepends `toolsetSummaryRows(...)`. `GalleryWizardShell` inert preview includes TOOLS. `onDeploy`: after `spawnAgent` success + toolsets equipped, `fetchToolIdsByKey` → `toolsetMapToGrants` → `setInstanceToolGrants`; failure triggers best-effort `destroyAgentInstance` rollback (error surfaces to the streaming-log).
+- **`docs/refs/design-system.md` §34.1** — five-step layout rewritten as six-step; TOOLS slot (amber accent) inserted.
+- **`CLAUDE.md`** — frontend route map names the six-step flow: HARNESS → IDENTITY → MODEL → **TOOLS** → DEPLOYMENT → REVIEW.
+
+**Deviation:** Credential capture wired in the UI with `[ STASH WIRING IN PILLAR B PHASE 4.5 ]` notices; `ToolGrantInput.credential_storage_ref` sent empty until the BE secret-stash leg lands in Phase 4.5.
+
+---
+
+## 0.13.2 — v1.5 Pillar B Phase 3: Backend RPCs (ListTools / Grant / Curation) (2026-04-27)
+
+Five Connect-go RPCs added to `ToolService`. `SetInstanceGrants` is atomic: scope validation runs pre-tx; inside the tx, revoke-all → insert × N → bump-manifest-version or full rollback. All operator-facing RPCs run under Supabase JWT. 20 new test cases (11 handler, 9 service). `go test ./...`, `go vet ./...`, `go build ./...`, `pnpm type-check`, lint, build all green.
+
+- **`shared/proto/corellia/v1/tools.proto`** — five new RPCs: `ListTools` (catalog with `enabled_for_org` merged), `GetOrgToolCuration`, `SetOrgToolCuration` (org-admin only), `GetInstanceToolGrants`, `SetInstanceToolGrants`. New messages: `Tool`, `ToolGrant`, `ToolGrantInput`. `Tool.enabled_for_org` merges curation flag so FE needs no second round-trip. `ToolGrant.has_credential` (bool) — raw storage ref never crosses the wire (§11.6). `SetInstanceToolGrantsResponse.manifest_version` echoes post-write version for ETag-aware callers. Generated: `tools.pb.go` + `tools.connect.go` + TS equivalents.
+- **`backend/queries/tools.sql`** — `GetAgentInstanceOrgGuard :one` added. Returns instance ID iff `(id, org_id)` matches; `pgx.ErrNoRows` on any mismatch — no cross-org 403/404 differential, matching M4 multi-tenancy posture.
+- **`backend/internal/tools/transactor.go`** — new. `GrantsTx` interface (narrow tx surface: `RevokeAllActiveToolGrants` / `InsertInstanceToolGrant` / `BumpManifestVersion`). `Transactor` interface (`WithGrantsTx`). `PgxTransactor` production impl over `*pgxpool.Pool`; rollback errors logged at warn and dropped (consistent with `agents.PgxTransactor`).
+- **`backend/internal/tools/errors.go`** — three new sentinels: `ErrInstanceNotForOrg` → `NotFound`, `ErrForbidden` → `PermissionDenied`, `ErrTransactorMissing` → `Internal`.
+- **`backend/internal/tools/service.go`** — `NewService` gains options pattern (`WithTransactor`). Five new methods: `ListAvailableForOrg`, `SetOrgCuration`, `GetInstanceGrants`, `SetInstanceGrants` (scope validation pre-tx; revoke-all → insert × N → bump inside tx), plus `GrantInput` struct. `auditAppend` no-op stub planted at every write; Phase 7 fills it in mechanically.
+- **`backend/internal/users/service.go`** — `CallerIdentityWithRole` added. Returns `(userID, orgID, role)` in one DB lookup for the `SetOrgToolCuration` admin gate.
+- **`backend/internal/httpsrv/tools_handler.go`** — new. `ToolsHandler` implementing `ToolServiceHandler`: six methods (five Phase 3 + `GetToolManifest` stub; bearer-token plain handler in `tool_manifest.go` keeps owning that path via chi exact-route precedence). Each <30 LOC per §11.9. `SetOrgToolCuration` gate: `role == "admin"` literal (v1.5 single-role RBAC). `toolsErrToConnect` redacts unknown errors.
+- **`backend/internal/httpsrv/server.go`** — `Deps.ToolsHandler` added, mounted inside `auth.Middleware` group.
+- **`backend/cmd/api/main.go`** — `tools.NewService(queries, tools.WithTransactor(tools.NewPgxTransactor(pool)))`. `ToolsHandler: httpsrv.NewToolsHandler(toolsSvc, usersSvc)` added to `httpsrv.Deps`.
+- **`frontend/src/lib/api/client.ts`** — `tools` Connect client added to `createApiClient()`.
+- **`frontend/src/lib/api/tools.ts`** — new. Five thin RPC wrappers: `listTools`, `getOrgToolCuration`, `setOrgToolCuration`, `getInstanceToolGrants`, `setInstanceToolGrants`. Phase 4 wizard step, Phase 6 settings page, and Phase 7 fleet inspector consume them directly.
+- **`backend/internal/httpsrv/tools_handler_test.go`** — new. 11 cases: happy paths, identity errors, invalid-argument paths, role gate (non-admin `SetOrgToolCuration` → `PermissionDenied`), sentinel mapping pins.
+- **`backend/internal/tools/service_test.go`** — extended. `fakeTransactor` + 9 new cases: happy-path revoke+insert+bump, cross-org rejection, scope-validation-rejects-pre-tx atomicity pin, `ErrTransactorMissing`, `ErrCredentialMissing`, empty-grant-set valid, `GetInstanceGrants` org-guard, `SetOrgCuration` merged-row echo, `ListAvailableForOrg` empty-version resolution.
+
+---
+
+## 0.13.1 — v1.5 Pillar B Phase 2: Manifest Plumbing (Proto + Bearer-Token Endpoint + Adapter Integration) (2026-04-27)
+
+**Migration applied to production:** `20260427160000_manifest_tokens.sql` — `agent_instance_manifest_tokens` table live. **Operator-gated:** `20260427170000_adapter_image_ref_bump_pillar_b_phase2.sql` (placeholder digest; run after GHCR image build + digest capture).
+
+Control plane issues a per-instance bearer token at spawn time; adapter fetches its toolset grants at boot via `POST /corellia.v1.ToolService/GetToolManifest` and writes `$HERMES_HOME/config.yaml` atomically. ETag / HTTP 304 keeps re-boots cheap. Pre-Phase-2 agents (no `CORELLIA_TOOL_MANIFEST_URL` / `CORELLIA_INSTANCE_TOKEN`) skip the new entrypoint block entirely — boot path byte-equivalent to before. Adapter image rebuild is operator-gated. 6 new handler tests. `go test ./...`, `go vet ./...`, `go build ./...` green.
+
+- **`shared/proto/corellia/v1/tools.proto`** — new. `ToolService` with `GetToolManifest` RPC. `ToolManifest`: `instance_id`, `adapter_version`, `toolsets` (`EquippedToolset[]`), `env` (always empty in Phase 2; Phase 7 populates for post-spawn credential edits), `manifest_version`. `EquippedToolset.scope` is `google.protobuf.Struct`. Generated: `tools.pb.go` + `tools.connect.go` + TS equivalents.
+- **`backend/migrations/20260427160000_manifest_tokens.sql`** — `agent_instance_manifest_tokens`. PK: `agent_instance_id` (one active token per instance). `token_hash TEXT UNIQUE` (SHA-256 hex; raw token lives in Fly secrets only — §11.6). `manifest_version BIGINT DEFAULT 1`. `ON DELETE CASCADE` from `agent_instances`.
+- **`backend/queries/manifest_tokens.sql`** — four queries: `InsertManifestToken`, `GetManifestTokenByHash`, `GetManifestTokenByInstance`, `BumpManifestVersion`. Generates `backend/internal/db/manifest_tokens.sql.go`.
+- **`backend/internal/config/config.go`** — `CORELLIA_API_URL` optional (no `required` tag; empty = tools governance disabled, pre-Pillar-B behaviour preserved).
+- **`backend/internal/tools/manifest.go`** — new. `IssueManifestToken` (32-byte `crypto/rand` → hex → store SHA-256). `AuthenticateManifestToken` (SHA-256 lookup → `ErrInvalidManifestToken` on miss). `BuildManifestForInstance` (reads grants → `ToolManifest` with `scope_json` → `*structpb.Struct`). `BumpManifestVersion` thin wrapper.
+- **`backend/internal/httpsrv/tool_manifest.go`** — new. Plain `http.Handler` (not Connect-go — gives full HTTP control for ETag/304 without response-writer wrapping). Bearer-token auth. ETag = `"<manifestVersion>"`; `If-None-Match` match → 304. Stable wire types (`manifestResponseWire` etc.) independent of proto field numbering.
+- **`backend/internal/httpsrv/server.go`** — `Deps.ToolManifestHandler http.Handler` mounted at `/corellia.v1.ToolService/GetToolManifest` **outside** `auth.Middleware` (bearer-token auth, not Supabase JWT). Nil = not registered.
+- **`backend/internal/httpsrv/tool_manifest_test.go`** — new. 6 cases: missing token → 401, invalid token → 401, happy path → 200 + ETag + JSON body, `If-None-Match` match → 304, stale → 200 full body, build error → 500.
+- **`backend/cmd/api/main.go`** — creates `tools.NewService`. If `CorelliaAPIURL != ""`: wires `WithManifestIssuer` + `NewToolManifestHandler`. Logs whether tools governance is active at startup.
+- **`backend/internal/agents/service.go`** — `toolManifestIssuer` private interface + `WithManifestIssuer(issuer, baseURL)` option. In `Spawn`: issues token → injects `CORELLIA_INSTANCE_TOKEN` + `CORELLIA_TOOL_MANIFEST_URL` as Fly secrets. Failure is non-fatal (logged; agent spawns without tools governance).
+- **`adapters/hermes/render_config.py`** — new (stdlib only; no pip install). Fetches manifest, installs plugin stub, writes `config.yaml` atomically via temp + rename if toolsets non-empty. Writes `.env` file if `env` map non-empty.
+- **`adapters/hermes/entrypoint.sh`** — new block: if `CORELLIA_TOOL_MANIFEST_URL` + `CORELLIA_INSTANCE_TOKEN` set, runs `render_config.py` (stdout prefixed `[corellia-render-config]`; `|| true` keeps failures non-fatal).
+- **`adapters/hermes/Dockerfile`** — two new `COPY`: `render_config.py → /corellia/` and `plugin/ → /corellia/plugin/`.
+- **`adapters/hermes/plugin/corellia_guard/plugin.yaml`** — new stub (declares `hooks: [pre_tool_call]` for Hermes plugin discovery).
+- **`adapters/hermes/plugin/corellia_guard/__init__.py`** — new stub (`register(ctx): pass`; no hooks registered; safe no-op).
+- **`backend/migrations/20260427170000_adapter_image_ref_bump_pillar_b_phase2.sql`** — new, operator-gated. Fill `<IMAGE-DIGEST-PENDING>` after `docker buildx build --push adapters/hermes` + `imagetools inspect` digest capture; `adapter_image_ref_digest_pinned CHECK` will reject placeholder if run prematurely.
+
+---
+
+## 0.13.0 — v1.5 Pillar B Phase 1: Tools Governance Schema + Scope Validator + Service Foundation (2026-04-27)
+
+**Migration applied to production:** `20260427150000_tools_governance.sql` — three tables + 19-row Hermes catalog seed live.
+
+Foundation layer for v1.5 tools governance. Three DB tables, 8 sqlc queries, a pure `ValidateScope` function, 4 sentinel errors, and a `tools.Service` with 3 methods. 20 unit tests (14 scope-validator pure-logic, 6 service via fakes). No proto, frontend, or adapter changes in this phase. `go test ./internal/tools/...`, `go vet ./...`, `go build ./...` all green.
+
+- **`adapters/hermes/catalog/toolsets.yaml`** — new. Canonical human-readable source for the Hermes toolset catalog: 19 toolsets (22 upstream minus 3 platform-restricted: `discord`, `discord_admin`, `messaging`), derived from `hermes_cli/tools_config.py` at digest `sha256:d4ee57f…ddd338` (`_config_version: 22`). `scope_shape` keys: `url_allowlist` (pattern_list), `command_allowlist` (regex_list), `path_allowlist` (pattern_list), `working_directory` (path). `spotify` flagged `oauth_only: true` (Phase 4 renders locked with v1.6 tooltip).
+- **`backend/migrations/20260427150000_tools_governance.sql`** — three tables:
+  - **`tools`** — PK UUID; natural key `UNIQUE (harness_adapter_id, toolset_key, adapter_version)` (digest bumps add rows without disturbing existing grant FKs). `scope_shape JSONB`, `required_env_vars TEXT[]`, `category CHECK ('info','compute','integration')`.
+  - **`org_tool_curation`** — PK `(org_id, tool_id)`; absence of row = enabled. `curated_by` + `curated_at` lightweight audit.
+  - **`agent_instance_tool_grants`** — partial unique index on `(agent_instance_id, tool_id) WHERE revoked_at IS NULL`. `credential_storage_ref TEXT NULL` (opaque Fly secret ref per §11.6). `ON DELETE CASCADE` from `agent_instances`.
+  - Seed: 19 rows via `CROSS JOIN (VALUES …)` on `harness_adapters WHERE harness_name = 'hermes'`. `ON CONFLICT DO NOTHING` (idempotent re-run).
+- **`backend/queries/tools.sql`** — new. 8 queries: `GetToolByID`, `ListToolsForHarness`, `ListOrgToolCuration`, `UpsertOrgToolCuration`, `ListInstanceToolGrants`, `InsertInstanceToolGrant`, `RevokeInstanceToolGrant`, `RevokeAllActiveToolGrants`. Generates `backend/internal/db/tools.sql.go` + model types `Tool`, `AgentInstanceToolGrant`, `OrgToolCuration`.
+- **`backend/internal/tools/errors.go`** — new. Four sentinels: `ErrToolNotFound` → `NotFound`, `ErrToolNotAvailableForOrg` → `PermissionDenied`, `ErrInvalidScope` → `InvalidArgument`, `ErrCredentialMissing` → `InvalidArgument`.
+- **`backend/internal/tools/scope_validator.go`** — new. `ValidateScope(scopeShape, scopeJSON json.RawMessage) error`, pure function, no DB dependency. Three field types: `pattern_list` (≤64 entries, ≤200 chars each, no empty strings; used for `url_allowlist` + `path_allowlist`), `regex_list` (≤64 entries, each must compile as Go `regexp`; used for `command_allowlist`), `path` (single string ≤200 chars; empty valid). Absent/null fields in `scopeJSON` silently skipped (default-deny enforced by Phase 5 plugin). Extra keys silently ignored (forward-compatible). Empty `scopeShape` always returns nil.
+- **`backend/internal/tools/service.go`** — new. `Service` with three methods: `GetTool` (maps `pgx.ErrNoRows → ErrToolNotFound`), `ListToolsForHarness`, `ValidateScopeForTool`. Narrow `toolQueries` interface (widened in Phase 3).
+- **`backend/internal/tools/service_test.go`** — new. 20 cases: 14 scope-validator (empty-shape nil for nil/`{}`/`null`; pattern_list valid / too-many / too-long / empty-string / absent-field-skipped; regex_list valid / invalid-regex / too-many / not-array; path valid / empty-valid / too-long / not-string; multiple fields; unknown-keys-ignored); 6 service via fake `toolQueries` (`GetTool` found/not-found; `ListToolsForHarness`; `ValidateScopeForTool` valid / invalid-scope / tool-not-found / empty-shape-passes).
+
+---
+
+## 0.12.6 — Spawn Redesign Post-Phase-5 Hardening: Carousel Canvas Overlay Self-Measures + Stale `<RosterCard>` JSDoc Cleanup + `<HarnessSlide>` `isActive` Contract Note (2026-04-27)
+
+Post-ship hardening pass on the spawn redesign (Phases 1–5). Surfaced from a code-quality re-audit; no behaviour change for the operator. Three frontend files modified, one doc file updated. No proto, no migration, no sqlc, no backend. `pnpm -C frontend type-check` → 0 errors · `pnpm -C frontend lint` → 0 errors · `pnpm -C frontend build` → clean.
+
+- **`frontend/src/components/spawn/harness-carousel.tsx`** — canvas overlay `top` is now measured at runtime instead of hard-coded as `top-[49px]`. Phase 3 positioned the `<NebulaAvatar>` overlay with a magic `top-[49px]` derived from `<HarnessSlide>`'s internal chrome (header `py-2 + text-sm + 1px border` ≈ 37 px + avatar-section `py-3` 12 px). That pinned the overlay to a constant defined in another file's Tailwind classes — any future change to slide header padding would silently slip the canvas off the avatar. Replaced with a `useLayoutEffect` that calls `getBoundingClientRect` on the first slide's avatar slot relative to the wrapper div and stores the offset in `overlayTopPx` state, applied as inline `style={{ top }}`. Resize listener attached for responsive cases. Overlay renders only after measurement (`overlayTopPx !== null`) to avoid a one-frame flash at `top: 0`. The first slide doubles as the layout probe (`avatarSlotRef={idx === 0 ? probeSlotRef : undefined}`); since every slide shares the same chrome, one probe is enough. `useLayoutEffect` import added.
+- **`frontend/src/components/spawn/harness-slide.tsx`** — accepts an optional `avatarSlotRef?: Ref<HTMLDivElement>` and threads it onto the avatar slot div. The slide itself doesn't measure anything; the prop just exposes the slot to the carousel for measurement. JSDoc updated to make the `isActive` contract explicit (it only controls SELECT-button `tabIndex`; the carousel reads it for `aria-current` but does not vary slide chrome) — a Phase-3 deviation from plan that was load-bearing but only previously documented in `docs/completions/redesign-spawn-phase-3.md`.
+- **`frontend/src/components/spawn/wizard.tsx`** — `GalleryWizardShell` JSDoc rewritten to reflect post-Phase-2 reality: deleted `<RosterCard>` references, named `<HarnessCarousel>` + `router.replace` as the active navigation path, called out the back-button-history rationale for `replace` over `push`. Phase 1's "Phase 2 will replace the grid" forward-looking comment is now obsolete — replaced with the actual current state.
+- **`frontend/src/app/(app)/spawn/page.tsx`** — page-header JSDoc updated for the same reason: the `<RosterCard>` Link and "vertical grid" framing both predated Phases 2–3. Now describes the carousel + reduced-motion grid fallback and the `router.replace` flow accurately.
+- **`frontend/src/lib/spawn/harnesses.ts`** — one-line JSDoc on `HarnessEntry.status` retargeted from `<RosterCard>` (deleted Phase 2) to `<HarnessSlide>`.
+
+### Why now
+
+- The `top-[49px]` constant was the only fragility flagged in the post-Phase-5 audit. Touching it now (vs. waiting for the first slide-chrome change to break it visually) costs three lines and removes a class of silent regression.
+- Three stale JSDoc references to `<RosterCard>` had survived Phases 2–5 because the component was deleted but the prose around its old call sites wasn't re-read. They didn't break code but they sent future readers (and the next code-reviewer agent) chasing a deleted symbol.
+- `<HarnessSlide>`'s `isActive` semantics — narrow by design (Phase 3 chose the fixed-overlay route, so `isActive` doesn't drive avatar swap) — were only documented in the completion notes. Inlined into the component JSDoc so anyone editing the slide reads the constraint at the point of change.
+
+### What did NOT change
+
+- Reducer + Zod schemas + RPC contract — byte-identical to Phase 5.
+- `<DeploymentConfigForm>` + `labelOverrides` — unchanged. Fleet inspector + bulk-apply still render canonical labels.
+- `<NebulaAvatar>`, `<NebulaScene>`, palette lerp — unchanged.
+- `<CharacterSheet>`, `<ReadyToLaunch>` — unchanged.
+- Visual output of the carousel overlay — `getBoundingClientRect` on first paint returns the same 49 px the magic constant encoded, so pixel-perfect parity with 0.12.5.
+- `prefers-reduced-motion` and WebGL fallback paths — unchanged (overlay isn't mounted in either case, so the measurement never runs).
+
+### LOC delta
+
+- `harness-carousel.tsx` ≈ +25 (probe ref + `useLayoutEffect` + measurement-gated render).
+- `harness-slide.tsx` ≈ +15 (Ref import + prop + JSDoc).
+- `wizard.tsx` / `spawn/page.tsx` / `harnesses.ts` ≈ −20 / +20 (JSDoc rewrites).
+
+Net 0.12.6: **≈ +40 LOC**, all in component bodies + JSDoc; no new dependencies.
+
+### Verdict
+
+Spawn redesign Phases 1–5 are now production-ready: type-check, lint, build are green; the only structural fragility is removed; stale prose is reconciled. Phase 6 (live integration smoke with real Fly token + real Hermes adapter) remains an operator task, unaffected by this hardening.
+
+---
+
+## 0.12.5 — Spawn Redesign Phase 5: Compact Step-1 Confirmed Pane + design-system §33.5 / §34.5 Reconciliation (2026-04-27)
+
+Polish + cleanup pass. One file modified (`wizard.tsx`), two doc files updated (`docs/refs/design-system.md`, `docs/changelog.md`). No proto, no migration, no sqlc, no backend. `pnpm -C frontend type-check` → 0 errors · `pnpm -C frontend lint` → 0 errors · `pnpm -C frontend build` → clean.
+
+- **`frontend/src/components/spawn/wizard.tsx`** — `HarnessStep` gains a `isConfirmed && !isCurrent` early-return branch rendering a compact horizontal row card (per redesign-spawn.md §3 note 2): 56 px `<NebulaAvatar>` + harness display name + a single inline spec line (`adapter · hand-written · deploy · fly.io`). The full 180 px portrait + description + spec table is preserved for the `isCurrent` branch (e.g. when the operator hits `[ EDIT ]` on Step 1 to swap harnesses, the full surface returns). The 56 px avatar size keeps the live nebula cheap (smaller texture, smaller mesh) on the wizard's confirmed-and-cascading-down view, where the canvas is one of three live nebulas across the wizard's lifetime (Step 1 confirmed pane → Step 2 preview → Step 5 portrait, sequenced).
+
+- **`docs/refs/design-system.md` §33.5** — rewritten from "two-routes" framing to "one wizard mounted at two URLs":
+  - `/spawn` = wizard in *gallery mode* (carousel Step 1, inert Steps 2–5).
+  - `/spawn/[templateId]` = wizard in *confirmed mode* (compact Step 1, active Step 2).
+  - Single `<Wizard>` component, single `getInitialState(mode)` factory.
+  - Selecting a harness routes via `router.replace` (history-clean).
+  - One-canvas-per-page invariant restated: carousel overlay is fixed (never inside a slide); Steps 2 + 5 each mount their own avatar, sequenced so exactly one `<canvas>` is live at any moment across the wizard's lifetime.
+  - Palette + accent transitions documented (lerp formula, "shape stays shared" decision 5).
+  - Vocabulary: `[ SELECT YOUR HARNESS ]` (gallery) / `[ LAUNCHPAD // CONFIGURE ]` (confirmed); locked slides render `[ LOCKED ]` overlay + `disabled` button.
+
+- **`docs/refs/design-system.md` §34.5** (new) — gallery a11y contract:
+  - Keyboard table for the carousel container (`←/→`, `Home/End`, numeric `1–6` jump, Tab order through `[prev → container → SELECT → next]`).
+  - Roles + labels (`role="region" aria-label="Select your harness"`; per-slide `role="group" aria-roledescription="harness"`; `aria-current="true"` on centred slide; `aria-disabled` on locked SELECT).
+  - `prefers-reduced-motion: reduce` collapses to a static `grid-cols-1 md:grid-cols-2 xl:grid-cols-3` grid; nebula overlay not mounted; palette transitions moot.
+  - WebGL ceiling: cascade drops to `<AvatarFallback>` for the gallery overlay + Step 2 preview + Step 5 portrait when `WebGL2RenderingContext` is unavailable; carousel itself has no fallback (scroll-snap + IO universally available in supported browsers).
+
+### Cleanup audit
+
+The plan called for "remove the now-orphaned roster grid layout helpers from `spawn/page.tsx`." Phase 1 already deleted these (`RosterCardSlot`, `RosterSkeleton`, `RosterGrid` were removed when `spawn/page.tsx` collapsed to `<Wizard initialMode="gallery" />`). Re-audited in Phase 5: nothing else lingers — `spawn/page.tsx` is a 6-line server component, `spawn/[templateId]/page.tsx` is a 6-line server component, and no other call sites import from `spawn/`-prefixed roster helpers.
+
+`<RosterCard>` was deleted in Phase 2; `<DeployModal>` was deleted in 0.9.2; the M4 "agents catalog" redirect shim was deleted in 0.9.2. No dead code remains in the spawn surface.
+
+### What did NOT change
+
+- Wizard reducer + Zod schemas + RPC wiring — byte-identical to Phase 4.
+- `<DeploymentConfigForm>` — unchanged from Phase 4 (still accepts `labelOverrides`; fleet inspector + bulk-apply continue to render canonical labels).
+- `<HarnessCarousel>`, `<HarnessSlide>`, `<NebulaAvatar>`, `<NebulaScene>` — unchanged from Phase 3.
+- §34.1 step accents, §34.2 acknowledgement pattern, §34.3 READY TO LAUNCH spec, §34.4 Spawn-N deferral note — unchanged.
+
+### Phase 6 entry points
+
+Live integration smoke (per the plan): `overmind start`, walk `/spawn` → carousel swipe → confirm → callsign → faction → loadout → review → deploy with a real Fly token + real Hermes adapter. Verify keyboard, touch (Safari iOS), `prefers-reduced-motion`, deep-link `/spawn/{templateId}` lands at Step 2.
+
+---
+
+## 0.12.4 — Spawn Redesign Phase 4: Steps 2–5 RPG Reskin (Callsign Card / Faction × Class / Loadout / Character Sheet + READY TO LAUNCH) (2026-04-27)
+
+Frontend only. Two new files, three modified; no proto change, no migration, no sqlc, no backend change. `pnpm -C frontend type-check` → 0 errors · `pnpm -C frontend lint` → 0 errors · `pnpm -C frontend build` → clean.
+
+Re-flavours Steps 2–5 of the spawn wizard from a vertical-form posture to an RPG character-creation register without touching reducer state, Zod schemas, RPC contract, or the shared `<DeploymentConfigForm>`'s field topology. Reskin is presentation + an additive `labelOverrides` prop on the shared form.
+
+- **`frontend/src/components/spawn/ready-to-launch.tsx`** (new, ~55 LOC) — full-width green-bordered §34.3 panel for Step 5's commit moment. Header strip (`[ READY TO LAUNCH ]` kicker + `STAND BY FOR DEPLOY` right-side label) above the body; body holds summary copy, embedded `<PlacementBanner>`, and the deploy button. CTA: `<Button size="lg">` (`h-10 px-4 text-sm`, the largest variant in the project's button vocabulary) + `font-display uppercase tracking-widest`. Placement gating accepted as a `blocked: boolean` prop — the placement-check effect stays in `ReviewStep` where it owns the cancellation guard; the panel is presentational.
+
+- **`frontend/src/components/spawn/character-sheet.tsx`** (new, ~120 LOC) — Step 5's portrait + 3-column stat block. Portrait: 180 px live `<NebulaAvatar>` + agent callsign in `text-3xl font-display uppercase` + harness display name as `font-mono text-xs` subtitle. Stat block: `grid-cols-1 md:grid-cols-3`, three columns with 2 px top borders coloured by inline `style={{ borderTopColor: hsl(var(<accent>)) }}` from a `--feature-*` CSS variable: IDENTITY = `--feature-secrets` (rose), INTELLIGENCE = `--feature-adapter` (violet), LOADOUT = `--feature-deploy` (blue) — same accents `STEP_META` uses for the wizard's terminal-container chrome, so Step 5 visually re-summarises the journey. Local `<dl>` chrome (not the shared `<SpecRow>`) so values can `flex-1 break-all` and wrap inside the column rather than forcing it wide.
+
+- **`frontend/src/components/fleet/deployment-config-form.tsx`** — additive `labelOverrides?: DeploymentLabelOverrides` prop. Two new exports: `DeploymentLabelKey` union (region | size | volumeSizeGb | desiredReplicas | restartPolicy | lifecycleMode | chatEnabled) and `DeploymentLabelOverrides = Partial<Record<…, string>>`. Form root resolves each section's label via `labelFor(key, fallback)` returning `labelOverrides?.[key] ?? fallback`. Each field component (RegionField / SizeField / VolumeField / ReplicasField / RestartField / LifecycleField / ChatEnabledField) gained a `label: string` prop and threads it into its `<Label>`. **Default behaviour unchanged**: callers omitting `labelOverrides` (fleet inspector, bulk-apply modal) get the same canonical English labels as before.
+
+- **`frontend/src/components/spawn/wizard.tsx`** — render-branch edits per step:
+  - **Step 2 IDENTITY (callsign card)** — `IdentityForm` now takes `harness: HarnessEntry | undefined`. Layout: 64 px `<NebulaAvatar>` left, hero callsign input right. Hero input is a raw `<input>` (not the shared `<Input>`, which carries box-border chrome that fights the spec) with `border-0 border-b border-border/60 bg-transparent px-0 py-2 font-display text-2xl uppercase tracking-widest`; on focus the underline switches to `hsl(var(--feature-secrets))`. Rotating ghost-text placeholder via `useRotatingPlaceholder(["obi-1", "bb-9", "kessel-runner"])` — 2.4 s `setInterval` cycling the placeholder; values never become the field's value, so Zod's `min(1)` validation stays honest. Below the input: an `OPERATOR LABEL · <UPPERCASE-LIVE-NAME>` echo row + error slot. Confirmed summary row relabelled `NAME` → `CALLSIGN`.
+  - **Step 3 MODEL (faction × class)** — rewritten around three new helpers: `PROVIDER_FACTIONS` data (`Record<ProviderValue, { glyph, tagline, modelExample }>` — Α / Ω / ✦; "Careful and considered." / "Generalist with reach." / "Any model, any provider."; `claude-opus-4-7` / `gpt-5` / `meta-llama/llama-4-405b-instruct`); `<FactionPicker>` (radiogroup over three button-cards, active card full opacity + `border-[hsl(var(--feature-adapter))]`, inactive cards `opacity-40` lifting on hover); `<SigilField>` (`[ PROVIDE YOUR SIGIL ]` kicker + `KeyIcon` glyph in `--feature-secrets`, masked input + show/hide pattern preserved verbatim). Class hero input mirrors Step 2's underline treatment at `text-xl tracking-wider`; placeholder + hint reflect the selected faction's `modelExample` reactively via `useWatch`. Confirmed summary rows: PROVIDER / MODEL / API KEY → FACTION / CLASS / SIGIL. Old `Field`, `ProviderField`, `ApiKeyField` helpers (~60 LOC) deleted; imports trimmed (`Label` + the `Select*` family no longer imported).
+  - **Step 4 DEPLOYMENT (loadout panel)** — wraps the shared form with a `[ LOADOUT ]` kicker (`text-[hsl(var(--feature-deploy))]`), reframed intro copy ("Equip the agent. Theatre and armor lock at deploy; …"), and `LOADOUT_LABEL_OVERRIDES = { region: "[ THEATRE ]", size: "[ ARMOR ]", volumeSizeGb: "[ SUPPLY ]", desiredReplicas: "[ SQUAD ]", restartPolicy: "[ DOCTRINE ]", lifecycleMode: "[ MODE ]" }` passed as `labelOverrides`. `chatEnabled` left canonical inside the loadout. Fleet inspector + bulk-apply unchanged (omit the prop).
+  - **Step 5 REVIEW** — `ReviewStep` now composes `<CharacterSheet>` + `<ReadyToLaunch>` instead of an inline `<dl>` and a small ghost button. Three `StatRow[]` arrays built locally (identityRows / intelligenceRows / loadoutRows) and handed to the sheet. The placement-check `useEffect` and its cancellation guard remain in `ReviewStep`; only rendering moved out. `<ReadyToLaunch>` renders only when `isCurrent` (the confirmed-not-current branch shows the sheet without the launch panel, matching pre-Phase-4 behaviour-on-edit). Synthesised summary string ("Deploying spins up one Fly machine in <region>…" / "Deploying spins up N Fly machines in <region>…") built once and passed as a prop.
+
+### Deviations from plan
+
+**`chatEnabled` carried into `DeploymentLabelKey` for type totality.** Plan named six labels for the loadout reflavour. The key was added to the union so future loadout extensions can override it without a type-level change; the wizard does not override it today (canonical "Chat" label renders inside the loadout). Zero behavioural impact on either call site.
+
+**Hero callsign / class inputs use raw `<input>`, not `<Input>`.** Shared `<Input>` carries box-border chrome that conflicts with "hairline underline only (no box border)". Wrapping `<Input>` and stripping its border via Tailwind would fight the cascade; dropping to a raw `<input>` with the same a11y attributes is cleaner.
+
+**`<Button size="lg">` for the deploy CTA, not a custom large size.** Project's button vocabulary defines `lg` (h-10 px-4 text-sm) as the largest variant. Plan called for "a large `› DEPLOY AGENT` CTA"; introducing a new `xl` variant for one callsite would be plan-creep.
+
+**One-canvas-per-page invariant honoured by sequencing.** Steps 1, 2, and 5 each mount a `<NebulaAvatar>`. They are never co-mounted: Step 1's gallery canvas unmounts on harness select; Step 2's 64 px preview unmounts when the operator confirms identity (the form unmounts and the `ConfirmedSummary` renders); Step 5's 180 px portrait mounts only on Review. At any moment, exactly one `<canvas>` is live on `/spawn/[templateId]`.
+
+### LOC delta
+
+- New: `ready-to-launch.tsx` (~55) + `character-sheet.tsx` (~120) ≈ +175
+- Modified: `wizard.tsx` (Steps 2–5 reskin + delete `Field` / `ProviderField` / `ApiKeyField`) ≈ +120 net
+- Modified: `deployment-config-form.tsx` (`labelOverrides` plumbing) ≈ +20
+
+Net Phase 4: **≈ +315 LOC**, against the plan's estimate of ~250.
+
+### Phase 5 entry points
+
+- `HarnessStep` confirmed-pane compact card (plan §3 note 2).
+- `docs/refs/design-system.md` §33.5 reconciliation (collapse to wizard-with-gallery-step), new §34.5 (gallery a11y contract).
+- Changelog entries (this version + 0.12.5).
+
+---
+
+## 0.12.3 — Spawn Redesign Phase 3: Live `<NebulaAvatar>` Carousel Overlay + Palette Crossfade (2026-04-27)
+
+Frontend only (TypeScript). Three files modified; no proto change, no migration, no sqlc, no backend change. `pnpm -C frontend type-check` → 0 errors · `pnpm -C frontend lint` → 0 errors.
+
+Adds a live nebula canvas fixed over the active carousel slide and wires palette crossfade to the active harness. The canvas is a single long-lived overlay anchored to the scroll container's wrapper div — never mounted inside a slide — so swipe gestures cause no canvas remounts.
+
+- **`frontend/src/components/spawn/nebula-scene.tsx`** — `PrimaryCloud` gains an optional `targetPalette?: MoodPalette` prop. A `useFrame` callback lerps every palette-derived uniform toward `targetPalette` each frame using the frame-rate-independent formula `α = 1 - exp(-delta * 8)` (~87 ms half-life, visually converged at ≈400 ms at 60 fps). When `targetPalette` is omitted the lerp target falls back to `palette` and the per-frame update is a no-op — behaviour is byte-identical to before Phase 3. Uniforms lerped: `uPearl` (Vector3), `uTint0–3` (Vector3 × 4), `uTintFreq` (Vector4), `uTintIntensity` (Vector4), `uSpatialWeights` (Vector3). `CoreMotes` is unchanged (no palette uniforms). Allocation avoidance: two `useRef` scratch objects (`_s3: Vector3`, `_s4: Vector4`) are mutated in-place each frame instead of constructing `new Vector3/4(...)` on every tick. Stale-closure fix: the `targetRef` read by the `useFrame` closure is kept in sync via `useLayoutEffect` — synchronous after React's commit phase and before the next `requestAnimationFrame`/`useFrame` fires, so the ref is always current. `NebulaScene` default export forwards `targetPalette?: MoodPalette` through to `PrimaryCloud`.
+
+- **`frontend/src/components/spawn/nebula-avatar.tsx`** — gains `targetHarness?: HarnessKey`. When defined, computes `targetPalette = paletteFor(targetHarness)` and passes it down to `<NebulaScene>`. All existing logic (reduced-motion guard, WebGL detection, lazy IO mount) is unchanged. Typical consumer: `<NebulaAvatar harness={harnesses[0].key} targetHarness={activeKey} size={240} />` — `harness` sets the initial palette at canvas construction; `targetHarness` is the lerp destination and updates on each swipe.
+
+- **`frontend/src/components/spawn/harness-carousel.tsx`** — adds a `position: absolute` `<NebulaAvatar>` overlay anchored to the scroll container's `relative` wrapper div, not inside any slide's DOM. All six `<HarnessSlide>` components continue to render `<AvatarFallback>` as a layout placeholder. Positioning: `absolute left-1/2 -translate-x-1/2 top-[49px]` places the canvas top edge at the `<AvatarFallback>` SVG's top — `top-[49px]` = card header height (~37 px: `py-2` 16 px + `text-sm` 20 px line-height + 1 px border) + avatar-section `py-3` top padding (12 px). `pointer-events-none` on the overlay preserves click-through to the SELECT button below. The overlay passes `harness={harnesses[0].key}` as a stable initial palette (never changes across the carousel's lifetime; canvas is never remounted) and `targetHarness={activeKey as HarnessKey}` as the lerp destination, updated on every IO-confirmed slide change.
+
+### Deviations from plan
+
+**`prefers-reduced-motion` instant-cut mode skipped.** `HarnessCarousel` already collapses to a static grid under reduced motion, so the canvas overlay is never mounted — there is no palette transition to cut. Adding a `reduceMotion` prop to force `α = 1.0` would be unreachable in practice; deferred as a non-issue for Phase 3.
+
+**`harness-slide.tsx` not modified.** The plan listed adding `isActive`-conditional `<NebulaAvatar>` inside each slide. The plan's own risk note supersedes this: the fixed-overlay approach avoids canvas mount/unmount on every swipe. `isActive` remains used for `tabIndex` control only (Phase 2 intent preserved).
+
+### Phase 4 entry points
+
+- **Peek effect** (plan §3 note 3, Phase 2 deferral): change slide wrapper from `w-full` to `w-[85%]`; add `scroll-padding-inline: 7.5%` on the container. Canvas overlay width stays 240 px — `left-1/2` centres it on the full-width container midpoint, which coincides with a symmetric 85%-width slide midpoint. Validate on Safari iOS after the change.
+- **Steps 2–5 RPG reskin** (plan Phase 4): starts at `wizard.tsx` render branches and new `character-sheet.tsx` / `ready-to-launch.tsx` components; no nebula or carousel changes needed.
+
+---
+
+## 0.12.2 — Spawn Redesign Phase 2: `<HarnessCarousel>` + `<HarnessSlide>` + `roster-card.tsx` Deleted (2026-04-27)
+
+Frontend only (TypeScript). Two files added, one deleted, one modified; no proto change, no migration, no sqlc, no backend change. `pnpm -C frontend type-check` → 0 errors · `pnpm -C frontend lint` → 0 errors.
+
+Replaces the Phase 1 static roster grid inside `GalleryWizardShell` with a horizontal scroll-snap carousel. The atomic harness card is now `<HarnessSlide>`; `<RosterCard>` is deleted.
+
+- **`frontend/src/components/spawn/harness-slide.tsx`** (new) — atomic card primitive for one harness entry. Props: `harness: HarnessEntry`, `template?: AgentTemplate` (undefined = locked), `isActive: boolean`, `onSelect: (templateId: string) => void`. Active slides expose the `› SELECT` button at `tabIndex={0}`; inactive slides set `tabIndex={-1}` so the Tab order is always exactly one button. Locked treatment: `[ LOCKED ]` overlay (absolute-positioned over the avatar area), `disabled` + `aria-disabled` on the button (rendered but inert), 70% opacity on the whole card. Spec-sheet rows mirror the old `<RosterCard>` split: available → `HARNESS / ADAPTER / DEPLOY`; locked → `VENDOR / STATUS / ETA`. No `<NebulaAvatar>` in Phase 2 — all slides use `<AvatarFallback>`. The `isActive` prop is already threaded so Phase 3 can overlay the canvas without touching the slide's internal structure.
+
+- **`frontend/src/components/spawn/harness-carousel.tsx`** (new) — horizontal scroll-snap carousel (no new dependencies; CSS scroll-snap + `IntersectionObserver` + ~175 LOC). Key implementation decisions:
+  - **Layout:** `scroll-snap-type: x mandatory` container; slide wrappers are `w-full flex-shrink-0 scroll-snap-align: center`. Full-width slides in Phase 2; peek geometry (`w-[85%]` + `scroll-padding-inline`) lands in Phase 3 alongside the nebula overlay.
+  - **Active-slide tracking:** `IntersectionObserver` with `root = container` and `threshold = 0.5`. The centred slide is the sole entry ≥ 50% intersecting the container viewport; this is the source of truth rather than scroll position, which diverges on Safari iOS < 16 with certain snap configurations. `scroll-snap-stop: always` and `overscroll-behavior-x: contain` added for cross-browser safety.
+  - **Navigation:** prev/next `<button>` elements (disabled at endpoints, 40% opacity); keyboard on the scroll container (`tabIndex={0}`) — `ArrowLeft / Right` move ±1, `Home / End` jump to endpoints, `1–6` jump to slide by number; dot indicators are decorative / mouse-only (`aria-hidden` on the container, `tabIndex={-1}` on each dot).
+  - **a11y:** outer `<section role="region" aria-label="Select your harness">`; each slide wrapper carries `role="group" aria-roledescription="harness"` and `aria-current="true"` on the active slide. Tab order: `[prev]` → `[scroll container]` → `[active SELECT button]` → `[next]`.
+  - **`prefers-reduced-motion` fallback:** inline `useReducedMotion` hook (no external dep). When true, renders the same `grid-cols-1 / md:grid-cols-2 / xl:grid-cols-3` grid as Phase 1 — all slides at once, no scroll-snap. Initial state is read via a `useState` lazy initializer (`typeof window !== "undefined" && window.matchMedia(...)`) to satisfy the project's `react-hooks/set-state-in-effect` lint rule.
+
+- **`frontend/src/components/spawn/roster-card.tsx`** (deleted) — superseded by `<HarnessSlide>`. The Phase 1 import in `wizard.tsx` is replaced by `<HarnessCarousel>`.
+
+- **`frontend/src/components/spawn/wizard.tsx`** (modified, three changes):
+  1. `import { RosterCard }` → `import { HarnessCarousel }`.
+  2. `GalleryWizardShell` gains `useState<string>` for `activeKey` and `useRouter` for `router.replace`; replaces the `<GalleryHarnessStep>` call with `<HarnessCarousel harnesses={HARNESSES} templates={templates} activeKey={activeKey} onActiveChange={setActiveKey} onSelect={...} />`. The `onSelect` callback calls `router.replace(\`/spawn/${templateId}\`)`, remounting the Wizard in `confirmed` mode with Step 1 pre-confirmed. `useState<string>` is explicit because `useState(HARNESSES[0].key)` infers the narrow `HarnessKey` union, which is incompatible with `onActiveChange: (key: string) => void`.
+  3. `GalleryHarnessStep` function deleted (the Phase 1 placeholder grid; `HarnessCarousel`'s reduced-motion branch serves the same role).
+
+### Deviations from plan
+
+**Peek effect deferred to Phase 3.** Decision 2 calls for sub-100%-width slides so adjacent slides peek. Deferred because it couples naturally with the nebula overlay (both touch the slide-wrapper width and the canvas's absolute bounds), the static `<AvatarFallback>` peek is less compelling than the live nebula peek, and full-width slides have fewer Safari snap quirks. Phase 3 entry point: change each slide wrapper from `w-full` to `w-[85%]` and add `scroll-padding-inline: 7.5%` to the container — no other structural change needed.
+
+### LOC delta
+
+−167 (`roster-card.tsx`) + ~130 (`harness-slide.tsx`) + ~175 (`harness-carousel.tsx`) = **net +138**.
+
+### Phase 3 entry points
+
+- **`HarnessSlide`** — avatar section already `position: relative`. Phase 3 overlays a `<NebulaAvatar>` canvas as a `position: absolute` sibling inside `HarnessCarousel`, driven by `isActive`.
+- **`HarnessCarousel`** — add `targetPalette` prop; wire `activeKey → debounced palette change` into the nebula overlay.
+- **`nebula-scene.tsx`** — add optional `targetPalette` prop; `useFrame` lerps palette uniforms toward target at `1 - exp(-dt * 8)`.
+- **Slide width** — `w-full` → `w-[85%]` on slide wrapper; add `scroll-padding-inline` on container. Validate on Safari iOS.
+
+---
+
+## 0.12.1 — Global Type-Scale Bump: `html font-size 17px` + Chrome Label / Card Text Increases (2026-04-27)
+
+Frontend only. Five files touched; no proto change, no migration, no backend change. `pnpm -C frontend type-check` → 0 errors.
+
+All text across the dashboard was reading small. Two complementary fixes:
+
+1. **`frontend/src/app/globals.css`** — `html { font-size: 17px }` added to `@layer base`. Lifts every `rem`-based Tailwind class (`text-xs`, `text-sm`, `text-base`, …) ~6% without touching individual callsites. Nav items, form labels, wizard body text, and any other `rem`-sized element benefit automatically.
+
+2. **Hardcoded `px` sizes bumped** (these are immune to the root-font change):
+   - `app-sidebar.tsx` — `[ MODULES ]` section label and "Soon" badge: `text-[10px]` → `text-[11px]`.
+   - `app-top-bar.tsx` — `[ WORKSPACE ]` / `[ UTC ]` bracket labels: `text-[10px]` → `text-[11px]`; workspace name and clock: `text-xs` → `text-sm`; avatar fallback and email: `text-[10px]` → `text-xs`; dropdown items: `text-xs` → `text-sm`.
+   - `harness-slide.tsx` — card title: `text-xs` → `text-sm`; status badge: `text-[10px]` → `text-[11px]`; description: `text-xs` → `text-sm`; spec-sheet values: `text-[11px]` → `text-xs`; spec-sheet labels: `text-[10px]` → `text-[11px]`.
+   - `wizard.tsx` — `[ SELECT YOUR HARNESS ]` gallery sub-label: `text-[11px]` → `text-xs`.
+
+Net result: minimum visible text rises from 10 px → 11 px; card descriptions from 12 px → ~14 px (`text-sm` at the 17 px root); all rem-scaled chrome nudges up uniformly.
 
 ---
 

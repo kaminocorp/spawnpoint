@@ -70,19 +70,19 @@ export function AppTopBar({ workspaceName, userName, email }: Props) {
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-3">
       <SidebarTrigger />
       <div className="flex items-center gap-2">
-        <span className="font-display text-[10px] uppercase tracking-widest text-muted-foreground/60">
+        <span className="font-display text-[11px] uppercase tracking-widest text-muted-foreground/60">
           [ WORKSPACE ]
         </span>
-        <span className="font-display text-xs uppercase tracking-wider text-foreground">
+        <span className="font-display text-sm uppercase tracking-wider text-foreground">
           {workspaceName}
         </span>
       </div>
       <div className="flex-1" />
       <div className="hidden items-center gap-3 md:flex">
-        <span className="font-display text-[10px] uppercase tracking-widest text-muted-foreground/60">
+        <span className="font-display text-[11px] uppercase tracking-widest text-muted-foreground/60">
           [ UTC ]
         </span>
-        <span className="font-mono text-xs tabular-nums text-foreground/80">
+        <span className="font-mono text-sm tabular-nums text-foreground/80">
           {clock || "—"}
         </span>
       </div>
@@ -91,7 +91,7 @@ export function AppTopBar({ workspaceName, userName, email }: Props) {
           render={
             <Button variant="ghost" size="icon" aria-label="Account menu">
               <Avatar className="size-7 rounded-sm">
-                <AvatarFallback className="rounded-sm bg-secondary font-mono text-[10px] text-foreground">
+                <AvatarFallback className="rounded-sm bg-secondary font-mono text-xs text-foreground">
                   {initials(userName, email)}
                 </AvatarFallback>
               </Avatar>
@@ -101,10 +101,10 @@ export function AppTopBar({ workspaceName, userName, email }: Props) {
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuGroup>
             <DropdownMenuLabel className="space-y-0.5">
-              <div className="font-display text-xs uppercase tracking-wider text-foreground">
+              <div className="font-display text-sm uppercase tracking-wider text-foreground">
                 {userName || email}
               </div>
-              <div className="font-mono text-[10px] text-muted-foreground">
+              <div className="font-mono text-xs text-muted-foreground">
                 {email}
               </div>
             </DropdownMenuLabel>
@@ -112,20 +112,20 @@ export function AppTopBar({ workspaceName, userName, email }: Props) {
           <DropdownMenuSeparator />
           <DropdownMenuItem render={<Link href="/settings" />}>
             <UserIcon />
-            <span className="font-display text-xs uppercase tracking-wider">
+            <span className="font-display text-sm uppercase tracking-wider">
               Profile
             </span>
           </DropdownMenuItem>
           <DropdownMenuItem render={<Link href="/settings" />}>
             <SettingsIcon />
-            <span className="font-display text-xs uppercase tracking-wider">
+            <span className="font-display text-sm uppercase tracking-wider">
               Settings
             </span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={signOut}>
             <LogOutIcon />
-            <span className="font-display text-xs uppercase tracking-wider">
+            <span className="font-display text-sm uppercase tracking-wider">
               Sign out
             </span>
           </DropdownMenuItem>

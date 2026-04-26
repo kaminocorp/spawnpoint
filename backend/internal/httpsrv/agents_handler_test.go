@@ -79,6 +79,13 @@ func (f *fakeAgentsSvc) Destroy(_ context.Context, _, _ uuid.UUID) (*corelliav1.
 	return &corelliav1.AgentInstance{}, nil
 }
 
+func (f *fakeAgentsSvc) RestartInstance(_ context.Context, _, _, _ uuid.UUID) (*corelliav1.AgentInstance, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &corelliav1.AgentInstance{}, nil
+}
+
 // M5 fleet-control surface.
 
 func (f *fakeAgentsSvc) ListRegions(_ context.Context) ([]deploy.Region, error) {

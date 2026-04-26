@@ -5,6 +5,7 @@ type TerminalAccent =
   | "adapter"
   | "deploy"
   | "secrets"
+  | "tools"
   | "running"
   | "pending"
   | "failed"
@@ -33,6 +34,7 @@ const ACCENT_BORDER: Record<TerminalAccent, string> = {
   adapter: "border-b-[hsl(var(--feature-adapter))]/60",
   deploy: "border-b-[hsl(var(--feature-deploy))]/60",
   secrets: "border-b-[hsl(var(--feature-secrets))]/60",
+  tools: "border-b-[hsl(var(--feature-tools))]/60",
   running: "border-b-[hsl(var(--status-running))]/60",
   pending: "border-b-[hsl(var(--status-pending))]/60",
   failed: "border-b-[hsl(var(--status-failed))]/60",
@@ -43,6 +45,7 @@ const ACCENT_CHEVRON: Record<TerminalAccent, string> = {
   adapter: "text-[hsl(var(--feature-adapter))]",
   deploy: "text-[hsl(var(--feature-deploy))]",
   secrets: "text-[hsl(var(--feature-secrets))]",
+  tools: "text-[hsl(var(--feature-tools))]",
   running: "text-[hsl(var(--status-running))]",
   pending: "text-[hsl(var(--status-pending))]",
   failed: "text-[hsl(var(--status-failed))]",

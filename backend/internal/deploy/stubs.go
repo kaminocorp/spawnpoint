@@ -28,6 +28,7 @@ func (*LocalDeployTarget) PreviewUpdate(_ context.Context, _ string, _ DeployCon
 }
 func (*LocalDeployTarget) Stop(_ context.Context, _ string) error    { return ErrNotImplemented }
 func (*LocalDeployTarget) Start(_ context.Context, _ string) error   { return ErrNotImplemented }
+func (*LocalDeployTarget) Restart(_ context.Context, _ string) error { return ErrNotImplemented }
 func (*LocalDeployTarget) Destroy(_ context.Context, _ string) error { return ErrNotImplemented }
 func (*LocalDeployTarget) Health(_ context.Context, _ string, _ bool) (HealthStatus, error) {
 	return HealthUnknown, ErrNotImplemented
@@ -66,6 +67,7 @@ func (*AWSDeployTarget) PreviewUpdate(_ context.Context, _ string, _ DeployConfi
 }
 func (*AWSDeployTarget) Stop(_ context.Context, _ string) error    { return ErrNotImplemented }
 func (*AWSDeployTarget) Start(_ context.Context, _ string) error   { return ErrNotImplemented }
+func (*AWSDeployTarget) Restart(_ context.Context, _ string) error { return ErrNotImplemented }
 func (*AWSDeployTarget) Destroy(_ context.Context, _ string) error { return ErrNotImplemented }
 func (*AWSDeployTarget) Health(_ context.Context, _ string, _ bool) (HealthStatus, error) {
 	return HealthUnknown, ErrNotImplemented

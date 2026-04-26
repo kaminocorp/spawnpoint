@@ -75,10 +75,20 @@ function useHasIntersectionObserver(): boolean {
  */
 export function NebulaAvatar({
   harness,
+  targetHarness,
   size = 240,
   className,
 }: {
   harness: HarnessKey;
+  /**
+   * When provided, `NebulaScene` lerps its palette toward this harness's
+   * palette over ~400ms (redesign-spawn.md Phase 3 / decision 3).
+   * Used by `<HarnessCarousel>` to crossfade between harnesses as the
+   * active slide changes — a single canvas is mounted at the carousel
+   * centre slot and `targetHarness` updates on each IO-detected swipe.
+   * Omitting this prop (default) leaves behaviour byte-identical to today.
+   */
+  targetHarness?: HarnessKey;
   size?: number;
   className?: string;
 }) {
@@ -119,6 +129,7 @@ export function NebulaAvatar({
   }, [reduceMotion, webglOk, hasIO]);
 
   const palette = paletteFor(harness);
+  const targetPalette = targetHarness ? paletteFor(targetHarness) : undefined;
   const showFallback = reduceMotion || !webglOk;
   // No-IO browsers fail open: render the scene immediately. They are rare
   // enough that the lazy-mount optimisation isn't worth a third branch.
@@ -133,7 +144,7 @@ export function NebulaAvatar({
       {showFallback ? (
         <AvatarFallback harness={harness} size={size} />
       ) : shouldRenderScene ? (
-        <NebulaScene palette={palette} />
+        <NebulaScene palette={palette} targetPalette={targetPalette} />
       ) : null}
     </div>
   );

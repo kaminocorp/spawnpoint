@@ -32,6 +32,16 @@ COPY --chmod=0755 entrypoint.sh /corellia/entrypoint.sh
 # the runtime files (sidecar.py + requirements.txt) reach the image.
 COPY --chmod=0755 sidecar/ /corellia/sidecar/
 
+# v1.5 Pillar B Phase 2 + 5: manifest renderer + corellia_guard plugin.
+# render_config.py fetches the per-instance ToolManifest at boot and writes
+# $HERMES_HOME/config.yaml + $HERMES_HOME/.env + $HERMES_HOME/corellia/scope.json.
+# plugin/ ships the Phase 5 corellia_guard implementation: pre_tool_call
+# enforcement (URL / command / path allowlists + working-directory pin) and
+# the manifest poll daemon thread that keeps scope.json fresh on a TTL.
+# render_config.py copies the plugin to $HERMES_HOME/plugins/ at runtime.
+COPY --chmod=0644 render_config.py /corellia/render_config.py
+COPY plugin/ /corellia/plugin/
+
 USER hermes
 
 # Override upstream entrypoint with our translating wrapper. The wrapper

@@ -9,6 +9,7 @@ type Props = {
   selectedIds: Set<string>;
   onToggleOne: (id: string) => void;
   onChanged: () => void;
+  templateAdapterMap: Record<string, string>;
 };
 
 export function FleetGallery({
@@ -16,6 +17,7 @@ export function FleetGallery({
   selectedIds,
   onToggleOne,
   onChanged,
+  templateAdapterMap,
 }: Props) {
   return (
     <TerminalContainer
@@ -31,6 +33,7 @@ export function FleetGallery({
             selected={selectedIds.has(i.id)}
             onToggleSelected={() => onToggleOne(i.id)}
             onChanged={onChanged}
+            harnessAdapterId={templateAdapterMap[i.templateId]}
           />
         ))}
       </div>

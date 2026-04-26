@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { ConnectError } from "@connectrpc/connect";
 
 import { AgentRowActions } from "@/components/fleet/agent-row-actions";
+import { useTemplateAdapterMap } from "@/lib/fleet-templates";
 import { ChatPanel } from "@/components/fleet/chat-panel";
 import { StatusBadge } from "@/components/fleet/status-badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ type State =
 export default function AgentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<State>({ kind: "loading" });
+  const templateAdapterMap = useTemplateAdapterMap();
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +124,7 @@ export default function AgentDetailPage() {
         <div className="mt-4 border-t border-border pt-3 flex flex-wrap gap-2">
           <AgentRowActions
             instance={instance}
+            harnessAdapterId={templateAdapterMap[instance.templateId]}
             onChanged={() => {
               // Reload the instance after a state-changing action.
               setState({ kind: "loading" });

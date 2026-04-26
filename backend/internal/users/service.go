@@ -80,6 +80,18 @@ func (s *Service) CallerIdentity(ctx context.Context) (userID, orgID uuid.UUID, 
 	return user.ID, user.OrgID, nil
 }
 
+// CallerIdentityWithRole returns the authenticated caller's identity plus
+// the public.users.role string. Used by role-gated handlers (e.g. tools'
+// SetOrgToolCuration, which requires the "admin" role per the
+// tools-governance plan §3 Phase 3 acceptance gate).
+func (s *Service) CallerIdentityWithRole(ctx context.Context) (userID, orgID uuid.UUID, role string, err error) {
+	user, err := s.loadCurrentUser(ctx)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, "", err
+	}
+	return user.ID, user.OrgID, user.Role, nil
+}
+
 func (s *Service) loadCurrentUser(ctx context.Context) (db.User, error) {
 	claims, ok := auth.FromContext(ctx)
 	if !ok {

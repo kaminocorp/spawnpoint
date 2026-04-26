@@ -54,6 +54,9 @@ const (
 	// AgentsServiceDestroyAgentInstanceProcedure is the fully-qualified name of the AgentsService's
 	// DestroyAgentInstance RPC.
 	AgentsServiceDestroyAgentInstanceProcedure = "/corellia.v1.AgentsService/DestroyAgentInstance"
+	// AgentsServiceRestartAgentInstanceProcedure is the fully-qualified name of the AgentsService's
+	// RestartAgentInstance RPC.
+	AgentsServiceRestartAgentInstanceProcedure = "/corellia.v1.AgentsService/RestartAgentInstance"
 	// AgentsServiceListDeploymentRegionsProcedure is the fully-qualified name of the AgentsService's
 	// ListDeploymentRegions RPC.
 	AgentsServiceListDeploymentRegionsProcedure = "/corellia.v1.AgentsService/ListDeploymentRegions"
@@ -94,6 +97,11 @@ type AgentsServiceClient interface {
 	GetAgentInstance(context.Context, *connect.Request[v1.GetAgentInstanceRequest]) (*connect.Response[v1.GetAgentInstanceResponse], error)
 	StopAgentInstance(context.Context, *connect.Request[v1.StopAgentInstanceRequest]) (*connect.Response[v1.StopAgentInstanceResponse], error)
 	DestroyAgentInstance(context.Context, *connect.Request[v1.DestroyAgentInstanceRequest]) (*connect.Response[v1.DestroyAgentInstanceResponse], error)
+	// v1.5 Pillar B Phase 7 — restart every machine in the instance's Fly app.
+	// Drives the fleet inspector's "Restart now" button on grants whose
+	// propagation tier is "restart required" (e.g. equipping a whole new
+	// toolset, where platform_toolsets in config.yaml only re-reads at boot).
+	RestartAgentInstance(context.Context, *connect.Request[v1.RestartAgentInstanceRequest]) (*connect.Response[v1.RestartAgentInstanceResponse], error)
 	// M5 fleet-control (plan §4 Phase 5). Service methods land on
 	// *agents.Service; handlers stay <30 LOC per blueprint §11.9.
 	ListDeploymentRegions(context.Context, *connect.Request[v1.ListDeploymentRegionsRequest]) (*connect.Response[v1.ListDeploymentRegionsResponse], error)
@@ -163,6 +171,12 @@ func NewAgentsServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(agentsServiceMethods.ByName("DestroyAgentInstance")),
 			connect.WithClientOptions(opts...),
 		),
+		restartAgentInstance: connect.NewClient[v1.RestartAgentInstanceRequest, v1.RestartAgentInstanceResponse](
+			httpClient,
+			baseURL+AgentsServiceRestartAgentInstanceProcedure,
+			connect.WithSchema(agentsServiceMethods.ByName("RestartAgentInstance")),
+			connect.WithClientOptions(opts...),
+		),
 		listDeploymentRegions: connect.NewClient[v1.ListDeploymentRegionsRequest, v1.ListDeploymentRegionsResponse](
 			httpClient,
 			baseURL+AgentsServiceListDeploymentRegionsProcedure,
@@ -223,6 +237,7 @@ type agentsServiceClient struct {
 	getAgentInstance            *connect.Client[v1.GetAgentInstanceRequest, v1.GetAgentInstanceResponse]
 	stopAgentInstance           *connect.Client[v1.StopAgentInstanceRequest, v1.StopAgentInstanceResponse]
 	destroyAgentInstance        *connect.Client[v1.DestroyAgentInstanceRequest, v1.DestroyAgentInstanceResponse]
+	restartAgentInstance        *connect.Client[v1.RestartAgentInstanceRequest, v1.RestartAgentInstanceResponse]
 	listDeploymentRegions       *connect.Client[v1.ListDeploymentRegionsRequest, v1.ListDeploymentRegionsResponse]
 	checkDeploymentPlacement    *connect.Client[v1.CheckDeploymentPlacementRequest, v1.CheckDeploymentPlacementResponse]
 	updateAgentDeployConfig     *connect.Client[v1.UpdateAgentDeployConfigRequest, v1.UpdateAgentDeployConfigResponse]
@@ -266,6 +281,11 @@ func (c *agentsServiceClient) StopAgentInstance(ctx context.Context, req *connec
 // DestroyAgentInstance calls corellia.v1.AgentsService.DestroyAgentInstance.
 func (c *agentsServiceClient) DestroyAgentInstance(ctx context.Context, req *connect.Request[v1.DestroyAgentInstanceRequest]) (*connect.Response[v1.DestroyAgentInstanceResponse], error) {
 	return c.destroyAgentInstance.CallUnary(ctx, req)
+}
+
+// RestartAgentInstance calls corellia.v1.AgentsService.RestartAgentInstance.
+func (c *agentsServiceClient) RestartAgentInstance(ctx context.Context, req *connect.Request[v1.RestartAgentInstanceRequest]) (*connect.Response[v1.RestartAgentInstanceResponse], error) {
+	return c.restartAgentInstance.CallUnary(ctx, req)
 }
 
 // ListDeploymentRegions calls corellia.v1.AgentsService.ListDeploymentRegions.
@@ -322,6 +342,11 @@ type AgentsServiceHandler interface {
 	GetAgentInstance(context.Context, *connect.Request[v1.GetAgentInstanceRequest]) (*connect.Response[v1.GetAgentInstanceResponse], error)
 	StopAgentInstance(context.Context, *connect.Request[v1.StopAgentInstanceRequest]) (*connect.Response[v1.StopAgentInstanceResponse], error)
 	DestroyAgentInstance(context.Context, *connect.Request[v1.DestroyAgentInstanceRequest]) (*connect.Response[v1.DestroyAgentInstanceResponse], error)
+	// v1.5 Pillar B Phase 7 — restart every machine in the instance's Fly app.
+	// Drives the fleet inspector's "Restart now" button on grants whose
+	// propagation tier is "restart required" (e.g. equipping a whole new
+	// toolset, where platform_toolsets in config.yaml only re-reads at boot).
+	RestartAgentInstance(context.Context, *connect.Request[v1.RestartAgentInstanceRequest]) (*connect.Response[v1.RestartAgentInstanceResponse], error)
 	// M5 fleet-control (plan §4 Phase 5). Service methods land on
 	// *agents.Service; handlers stay <30 LOC per blueprint §11.9.
 	ListDeploymentRegions(context.Context, *connect.Request[v1.ListDeploymentRegionsRequest]) (*connect.Response[v1.ListDeploymentRegionsResponse], error)
@@ -385,6 +410,12 @@ func NewAgentsServiceHandler(svc AgentsServiceHandler, opts ...connect.HandlerOp
 		AgentsServiceDestroyAgentInstanceProcedure,
 		svc.DestroyAgentInstance,
 		connect.WithSchema(agentsServiceMethods.ByName("DestroyAgentInstance")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentsServiceRestartAgentInstanceHandler := connect.NewUnaryHandler(
+		AgentsServiceRestartAgentInstanceProcedure,
+		svc.RestartAgentInstance,
+		connect.WithSchema(agentsServiceMethods.ByName("RestartAgentInstance")),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentsServiceListDeploymentRegionsHandler := connect.NewUnaryHandler(
@@ -451,6 +482,8 @@ func NewAgentsServiceHandler(svc AgentsServiceHandler, opts ...connect.HandlerOp
 			agentsServiceStopAgentInstanceHandler.ServeHTTP(w, r)
 		case AgentsServiceDestroyAgentInstanceProcedure:
 			agentsServiceDestroyAgentInstanceHandler.ServeHTTP(w, r)
+		case AgentsServiceRestartAgentInstanceProcedure:
+			agentsServiceRestartAgentInstanceHandler.ServeHTTP(w, r)
 		case AgentsServiceListDeploymentRegionsProcedure:
 			agentsServiceListDeploymentRegionsHandler.ServeHTTP(w, r)
 		case AgentsServiceCheckDeploymentPlacementProcedure:
@@ -502,6 +535,10 @@ func (UnimplementedAgentsServiceHandler) StopAgentInstance(context.Context, *con
 
 func (UnimplementedAgentsServiceHandler) DestroyAgentInstance(context.Context, *connect.Request[v1.DestroyAgentInstanceRequest]) (*connect.Response[v1.DestroyAgentInstanceResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.DestroyAgentInstance is not implemented"))
+}
+
+func (UnimplementedAgentsServiceHandler) RestartAgentInstance(context.Context, *connect.Request[v1.RestartAgentInstanceRequest]) (*connect.Response[v1.RestartAgentInstanceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.RestartAgentInstance is not implemented"))
 }
 
 func (UnimplementedAgentsServiceHandler) ListDeploymentRegions(context.Context, *connect.Request[v1.ListDeploymentRegionsRequest]) (*connect.Response[v1.ListDeploymentRegionsResponse], error) {

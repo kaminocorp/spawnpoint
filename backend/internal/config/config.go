@@ -46,6 +46,17 @@ type Config struct {
 	FlyOrgSlug  string `env:"FLY_ORG_SLUG,required"`
 
 	FrontendOrigin string `env:"FRONTEND_ORIGIN,required"`
+
+	// CorelliaAPIURL is the externally-reachable base URL of this control-plane
+	// instance (e.g. "https://corellia-api.fly.dev"). The spawn flow appends
+	// the Connect-go path to construct CORELLIA_TOOL_MANIFEST_URL, which is
+	// injected into each agent's Fly app secrets so the adapter can fetch its
+	// tool manifest at boot.
+	//
+	// Optional (empty default). When unset, manifest-token generation is skipped
+	// and agents spawn without tools governance — safe for local dev and any
+	// deployment that hasn't enabled v1.5 Pillar B yet.
+	CorelliaAPIURL string `env:"CORELLIA_API_URL" envDefault:""`
 }
 
 func Load() Config {

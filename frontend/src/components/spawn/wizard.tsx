@@ -10,28 +10,27 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
-import { EyeIcon, EyeOffIcon } from "lucide-react";
+import { EyeIcon, EyeOffIcon, KeyIcon } from "lucide-react";
 
 import { NebulaAvatar } from "@/components/spawn/nebula-avatar";
-import { RosterCard } from "@/components/spawn/roster-card";
+import { HarnessCarousel } from "@/components/spawn/harness-carousel";
+import { CharacterSheet, type StatRow } from "@/components/spawn/character-sheet";
+import { ReadyToLaunch } from "@/components/spawn/ready-to-launch";
+import {
+  ToolsStep,
+  toolsetMapToGrants,
+  toolsetSummaryRows,
+  type ToolsetStateMap,
+} from "@/components/spawn/steps/tools-step";
+import { listTools, setInstanceToolGrants } from "@/lib/api/tools";
 import {
   DeploymentConfigForm,
   type DeploymentFormValues,
+  type DeploymentLabelOverrides,
 } from "@/components/fleet/deployment-config-form";
-import {
-  PlacementBanner,
-  type PlacementState,
-} from "@/components/fleet/placement-banner";
+import { type PlacementState } from "@/components/fleet/placement-banner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   TerminalContainer,
   type TerminalAccent,
@@ -73,6 +72,7 @@ const STEPS = [
   "harness",
   "identity",
   "model",
+  "tools",
   "deployment",
   "review",
 ] as const;
@@ -83,12 +83,13 @@ const STEP_META: Record<
   { ordinal: number; label: string; accent: TerminalAccent }
 > = {
   // Accent assignments per plan §4 Phase 4: MODEL → violet, DEPLOYMENT
-  // → blue. The other three follow the §5.4 feature-color sequence.
+  // → blue, TOOLS → amber (the v1.5 Pillar B feature color).
   harness: { ordinal: 1, label: "HARNESS", accent: "catalog" },
   identity: { ordinal: 2, label: "IDENTITY", accent: "secrets" },
   model: { ordinal: 3, label: "MODEL", accent: "adapter" },
-  deployment: { ordinal: 4, label: "DEPLOYMENT", accent: "deploy" },
-  review: { ordinal: 5, label: "REVIEW", accent: "running" },
+  tools: { ordinal: 4, label: "TOOLS", accent: "tools" },
+  deployment: { ordinal: 5, label: "DEPLOYMENT", accent: "deploy" },
+  review: { ordinal: 6, label: "REVIEW", accent: "running" },
 };
 
 type ProviderValue = "anthropic" | "openai" | "openrouter";
@@ -110,6 +111,12 @@ type WizardFields = {
   apiKey: string;
   /** Phase 6: full DeployConfig values collected by Step 4. Sent on the wire. */
   deployment: DeploymentFormValues;
+  /**
+   * v1.5 Pillar B Phase 4: per-toolset equip state, scope JSON, and the
+   * raw credential value the operator pasted (forwarded once, never
+   * persisted client-side). Keyed by toolset_key.
+   */
+  toolsets: ToolsetStateMap;
 };
 
 const INITIAL_FIELDS: WizardFields = {
@@ -118,6 +125,7 @@ const INITIAL_FIELDS: WizardFields = {
   modelName: "",
   apiKey: "",
   deployment: DEFAULT_DEPLOYMENT_VALUES,
+  toolsets: {},
 };
 
 type WizardState = {
@@ -278,7 +286,7 @@ export function Wizard({
       const api = createApiClient();
       const proto = PROVIDERS.find((p) => p.value === state.fields.provider);
       if (!proto) throw new Error(`unknown provider: ${state.fields.provider}`);
-      await api.agents.spawnAgent({
+      const spawnRes = await api.agents.spawnAgent({
         templateId: template.id,
         name: state.fields.name,
         provider: proto.proto,
@@ -286,6 +294,35 @@ export function Wizard({
         modelApiKey: state.fields.apiKey,
         deployConfig: deployConfigFromFields(state.fields.deployment),
       });
+      const instance = spawnRes.instance;
+      if (!instance) throw new Error("spawnAgent returned no instance");
+
+      // v1.5 Pillar B Phase 4: equip the granted toolsets on the freshly
+      // spawned instance. Plan §3 Phase 4 deliverable 1: if the grants
+      // write fails, the instance is destroyed (single-shot rollback) and
+      // the operator is bounced back with an error.
+      const equippedCount = Object.values(state.fields.toolsets).filter(
+        (t) => t.equipped,
+      ).length;
+      if (equippedCount > 0) {
+        const toolIdByKey = await fetchToolIdsByKey(api, template.harnessAdapterId);
+        const grants = toolsetMapToGrants(state.fields.toolsets, toolIdByKey);
+        try {
+          await setInstanceToolGrants(api.tools, {
+            instanceId: instance.id,
+            grants,
+          });
+        } catch (grantErr) {
+          // Rollback: destroy the instance so a half-configured agent
+          // doesn't leak. Best-effort — surface the original grant
+          // error to the operator regardless.
+          await api.agents
+            .destroyAgentInstance({ id: instance.id })
+            .catch(() => undefined);
+          throw grantErr;
+        }
+      }
+
       // Transition out of "deploying" before navigating so the
       // synthetic-log interval's cleanup runs deterministically. The
       // log surface stays mounted (still non-idle) so no flash of the
@@ -348,25 +385,25 @@ export function Wizard({
 
 /**
  * Wizard shell for `initialMode="gallery"` — shown at `/spawn` (no
- * templateId). Step 1 is active and renders the full harness roster; Steps
- * 2–5 are visible but inert/pending so the operator sees the shape of the
- * flow before selecting a harness.
+ * templateId). Step 1 is active and renders `<HarnessCarousel>`; Steps 2–5
+ * are visible but `inert`/PENDING shells so the operator sees the shape of
+ * the flow before selecting a harness.
  *
- * Selecting a harness navigates to `/spawn/[templateId]` via the existing
- * `<RosterCard kind="active">` Link, which remounts the Wizard in
- * `confirmed` mode with Step 1 already confirmed and Step 2 active.
- *
- * Phase 2 will replace the grid with the horizontal scroll-snap carousel
- * and swap the Link-navigation with `router.replace` + a `selectHarness`
- * callback on the active slide. `GalleryWizardShell` is the extension
- * point for that work.
+ * `<HarnessCarousel>`'s `onSelect` callback issues `router.replace` to
+ * `/spawn/[templateId]`, which remounts the Wizard in `confirmed` mode with
+ * Step 1 already confirmed and Step 2 active. `router.replace` is
+ * intentional: it keeps the back-button history clean (no gallery-on-back
+ * trap from /spawn/[id]).
  */
 function GalleryWizardShell({ templates }: { templates: AgentTemplate[] }) {
+  const [activeKey, setActiveKey] = useState<string>(HARNESSES[0].key);
+  const router = useRouter();
+
   return (
     <div className="space-y-6">
       <header className="flex items-end justify-between border-b border-border pb-4">
         <div>
-          <div className="font-display text-[11px] uppercase tracking-widest text-muted-foreground/60">
+          <div className="font-display text-xs uppercase tracking-widest text-muted-foreground/60">
             [ SELECT YOUR HARNESS ]
           </div>
           <h1 className="mt-1 font-display text-2xl font-bold uppercase tracking-widest text-foreground">
@@ -377,10 +414,16 @@ function GalleryWizardShell({ templates }: { templates: AgentTemplate[] }) {
 
       <div className="space-y-4">
         <TerminalContainer title="STEP 1 // HARNESS" accent="catalog" meta="ACTIVE">
-          <GalleryHarnessStep templates={templates} />
+          <HarnessCarousel
+            harnesses={HARNESSES}
+            templates={templates}
+            activeKey={activeKey}
+            onActiveChange={setActiveKey}
+            onSelect={(templateId) => router.replace(`/spawn/${templateId}`)}
+          />
         </TerminalContainer>
 
-        {(["identity", "model", "deployment", "review"] as const).map((step) => {
+        {(["identity", "model", "tools", "deployment", "review"] as const).map((step) => {
           const meta = STEP_META[step];
           return (
             <div
@@ -397,34 +440,6 @@ function GalleryWizardShell({ templates }: { templates: AgentTemplate[] }) {
           );
         })}
       </div>
-    </div>
-  );
-}
-
-/** Roster grid inside Step 1 of the gallery wizard. Reuses `<RosterCard>`
- * verbatim — same active/locked logic as the old `spawn/page.tsx`. Phase 2
- * replaces this with `<HarnessCarousel>`. */
-function GalleryHarnessStep({ templates }: { templates: AgentTemplate[] }) {
-  return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {HARNESSES.map((harness) => {
-        if (harness.status === "available") {
-          const template = templates.find(
-            (t) => t.name.toLowerCase() === harness.key,
-          );
-          if (template) {
-            return (
-              <RosterCard
-                key={harness.key}
-                kind="active"
-                harness={harness}
-                template={template}
-              />
-            );
-          }
-        }
-        return <RosterCard key={harness.key} kind="locked" harness={harness} />;
-      })}
     </div>
   );
 }
@@ -508,11 +523,37 @@ function StepBody(props: StepBodyProps) {
       return <IdentityStep {...props} />;
     case "model":
       return <ModelStep {...props} />;
+    case "tools":
+      return <ToolsStepBody {...props} />;
     case "deployment":
       return <DeploymentStep {...props} />;
     case "review":
       return <ReviewStep {...props} />;
   }
+}
+
+/* ─── STEP 4 // TOOLS (v1.5 Pillar B Phase 4) ─────────────────────── */
+
+function ToolsStepBody({
+  state,
+  dispatch,
+  template,
+  isCurrent,
+}: StepBodyProps) {
+  if (!isCurrent) {
+    return <ConfirmedSummary rows={toolsetSummaryRows(state.fields.toolsets)} />;
+  }
+  return (
+    <ToolsStep
+      harnessAdapterId={template.harnessAdapterId}
+      value={state.fields.toolsets}
+      isCurrent={isCurrent}
+      onConfirm={(next) => {
+        dispatch({ type: "setField", patch: { toolsets: next } });
+        dispatch({ type: "confirm", step: "tools" });
+      }}
+    />
+  );
 }
 
 /* ─── STEP 1 // HARNESS ───────────────────────────────────────────── */
@@ -524,6 +565,33 @@ function HarnessStep({
   isConfirmed,
   dispatch,
 }: StepBodyProps) {
+  // Confirmed-not-current — compact horizontal row card per
+  // redesign-spawn.md §3 note 2. The full 180px nebula moves to the
+  // review portrait in Step 5; here a 56px avatar + spec rows is enough
+  // to anchor "this is the harness you picked" without re-mounting the
+  // canvas.
+  if (isConfirmed && !isCurrent) {
+    return (
+      <div className="flex items-center gap-4">
+        <div className="flex shrink-0 items-center justify-center bg-black/40 p-1.5">
+          {harness ? (
+            <NebulaAvatar harness={harness.key} size={56} />
+          ) : (
+            <div className="size-14 border border-border" />
+          )}
+        </div>
+        <div className="flex-1">
+          <div className="font-mono text-sm text-foreground">
+            {harness?.name ?? template.name}
+          </div>
+          <div className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70">
+            adapter · hand-written · deploy · fly.io
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -570,18 +638,20 @@ function HarnessStep({
   );
 }
 
-/* ─── STEP 2 // IDENTITY ──────────────────────────────────────────── */
+/* ─── STEP 2 // IDENTITY (callsign card) ──────────────────────────── */
 
 const identitySchema = z.object({
   name: z.string().trim().min(1, "Required").max(80, "Up to 80 characters"),
 });
 type IdentityValues = z.infer<typeof identitySchema>;
 
-function IdentityStep({ state, dispatch, isCurrent }: StepBodyProps) {
+const CALLSIGN_PLACEHOLDERS = ["obi-1", "bb-9", "kessel-runner"] as const;
+
+function IdentityStep({ state, dispatch, harness, isCurrent }: StepBodyProps) {
   if (!isCurrent) {
     return (
       <ConfirmedSummary
-        rows={[{ label: "NAME", value: state.fields.name || "—" }]}
+        rows={[{ label: "CALLSIGN", value: state.fields.name || "—" }]}
       />
     );
   }
@@ -589,6 +659,7 @@ function IdentityStep({ state, dispatch, isCurrent }: StepBodyProps) {
   return (
     <IdentityForm
       defaultValue={state.fields.name}
+      harness={harness}
       onSubmit={(v) => {
         dispatch({ type: "setField", patch: { name: v.name } });
         dispatch({ type: "confirm", step: "identity" });
@@ -599,27 +670,52 @@ function IdentityStep({ state, dispatch, isCurrent }: StepBodyProps) {
 
 function IdentityForm({
   defaultValue,
+  harness,
   onSubmit,
 }: {
   defaultValue: string;
+  harness: HarnessEntry | undefined;
   onSubmit: (v: IdentityValues) => void;
 }) {
   const form = useForm<IdentityValues>({
     resolver: zodResolver(identitySchema),
     defaultValues: { name: defaultValue },
   });
+  const liveName = useWatch({ control: form.control, name: "name" }) ?? "";
+  const placeholder = useRotatingPlaceholder(CALLSIGN_PLACEHOLDERS);
+  const errMsg = form.formState.errors.name?.message;
+  const display = (liveName.trim() || "—").toUpperCase();
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-4">
-      <Field id="name" label="Agent name" error={form.formState.errors.name?.message}>
-        <Input
-          id="name"
-          autoFocus
-          placeholder="e.g. research-bot"
-          aria-invalid={!!form.formState.errors.name}
-          {...form.register("name")}
-        />
-      </Field>
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+        <div className="flex shrink-0 items-center justify-center bg-black/40 p-1.5">
+          {harness ? (
+            <NebulaAvatar harness={harness.key} size={64} />
+          ) : (
+            <div className="size-16 border border-border" />
+          )}
+        </div>
+        <div className="flex-1 space-y-2">
+          <div className="font-display text-[11px] uppercase tracking-widest text-muted-foreground/70">
+            [ ASSIGN CALLSIGN ]
+          </div>
+          <input
+            id="name"
+            autoFocus
+            placeholder={placeholder}
+            aria-invalid={!!errMsg}
+            aria-label="Agent callsign"
+            className="w-full border-0 border-b border-border/60 bg-transparent px-0 py-2 font-display text-2xl uppercase tracking-widest text-foreground placeholder:text-muted-foreground/40 focus:border-[hsl(var(--feature-secrets))] focus:outline-none"
+            {...form.register("name")}
+          />
+          <div className="flex items-center justify-between font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70">
+            <span>OPERATOR LABEL</span>
+            <span className="text-foreground/80">{display}</span>
+          </div>
+          {errMsg && <p className="text-sm text-destructive">{errMsg}</p>}
+        </div>
+      </div>
       <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
         <Button size="sm" type="submit">
           › CONFIRM
@@ -629,7 +725,20 @@ function IdentityForm({
   );
 }
 
-/* ─── STEP 3 // MODEL ─────────────────────────────────────────────── */
+/**
+ * Cycle through `values` every ~2.4s for the input's placeholder. Pure
+ * cosmetic: the values are never inserted as the actual field value.
+ */
+function useRotatingPlaceholder(values: ReadonlyArray<string>): string {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setIdx((i) => (i + 1) % values.length), 2400);
+    return () => clearInterval(id);
+  }, [values.length]);
+  return values[idx] ?? "";
+}
+
+/* ─── STEP 3 // MODEL (faction × class) ───────────────────────────── */
 
 const modelSchema = z.object({
   provider: z.enum(["anthropic", "openai", "openrouter"], {
@@ -644,14 +753,35 @@ const modelSchema = z.object({
 });
 type ModelValues = z.infer<typeof modelSchema>;
 
+const PROVIDER_FACTIONS: Record<
+  ProviderValue,
+  { glyph: string; tagline: string; modelExample: string }
+> = {
+  anthropic: {
+    glyph: "Α",
+    tagline: "Careful and considered.",
+    modelExample: "claude-opus-4-7",
+  },
+  openai: {
+    glyph: "Ω",
+    tagline: "Generalist with reach.",
+    modelExample: "gpt-5",
+  },
+  openrouter: {
+    glyph: "✦",
+    tagline: "Any model, any provider.",
+    modelExample: "meta-llama/llama-4-405b-instruct",
+  },
+};
+
 function ModelStep({ state, dispatch, isCurrent }: StepBodyProps) {
   if (!isCurrent) {
     return (
       <ConfirmedSummary
         rows={[
-          { label: "PROVIDER", value: providerLabel(state.fields.provider) },
-          { label: "MODEL", value: state.fields.modelName || "—" },
-          { label: "API KEY", value: maskApiKey(state.fields.apiKey) },
+          { label: "FACTION", value: providerLabel(state.fields.provider) },
+          { label: "CLASS", value: state.fields.modelName || "—" },
+          { label: "SIGIL", value: maskApiKey(state.fields.apiKey) },
         ]}
       />
     );
@@ -692,33 +822,43 @@ function ModelForm({
   });
   const provider = useWatch({ control: form.control, name: "provider" });
   const [showKey, setShowKey] = useState(false);
+  const faction = PROVIDER_FACTIONS[provider];
+  const modelErr = form.formState.errors.modelName?.message;
+  const apiKeyErr = form.formState.errors.apiKey?.message;
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-4">
-      <ProviderField
+    <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-6">
+      <FactionPicker
         value={provider}
         onChange={(v) => form.setValue("provider", v, { shouldValidate: true })}
         error={form.formState.errors.provider?.message}
       />
 
-      <Field
-        id="modelName"
-        label="Model"
-        hint="The provider's model identifier (e.g. claude-opus-4-7)."
-        error={form.formState.errors.modelName?.message}
-      >
-        <Input
+      <div className="space-y-2">
+        <div className="font-display text-[11px] uppercase tracking-widest text-muted-foreground/70">
+          [ SELECT CLASS ]
+        </div>
+        <input
           id="modelName"
-          placeholder="claude-opus-4-7"
-          aria-invalid={!!form.formState.errors.modelName}
+          placeholder={faction.modelExample}
+          aria-invalid={!!modelErr}
+          aria-label="Model identifier"
+          className="w-full border-0 border-b border-border/60 bg-transparent px-0 py-2 font-display text-xl uppercase tracking-wider text-foreground placeholder:text-muted-foreground/40 focus:border-[hsl(var(--feature-adapter))] focus:outline-none"
           {...form.register("modelName")}
         />
-      </Field>
+        {modelErr ? (
+          <p className="text-sm text-destructive">{modelErr}</p>
+        ) : (
+          <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70">
+            example · {faction.modelExample}
+          </p>
+        )}
+      </div>
 
-      <ApiKeyField
+      <SigilField
         showKey={showKey}
         onToggleShow={() => setShowKey((s) => !s)}
-        error={form.formState.errors.apiKey?.message}
+        error={apiKeyErr}
         register={form.register("apiKey")}
       />
 
@@ -731,7 +871,127 @@ function ModelForm({
   );
 }
 
-/* ─── STEP 4 // DEPLOYMENT ────────────────────────────────────────── */
+function FactionPicker({
+  value,
+  onChange,
+  error,
+}: {
+  value: ProviderValue;
+  onChange: (v: ProviderValue) => void;
+  error?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="font-display text-[11px] uppercase tracking-widest text-muted-foreground/70">
+        [ CHOOSE FACTION ]
+      </div>
+      <div
+        role="radiogroup"
+        aria-label="Provider"
+        className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+      >
+        {PROVIDERS.map((p) => {
+          const active = p.value === value;
+          const f = PROVIDER_FACTIONS[p.value];
+          return (
+            <button
+              key={p.value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => onChange(p.value)}
+              className={
+                "flex flex-col items-start gap-1.5 border bg-card px-3 py-3 text-left transition " +
+                (active
+                  ? "border-[hsl(var(--feature-adapter))] bg-[hsl(var(--feature-adapter))]/10 opacity-100"
+                  : "border-border opacity-40 hover:opacity-100 hover:border-[hsl(var(--feature-adapter))]/60")
+              }
+            >
+              <div className="flex w-full items-center justify-between">
+                <span className="font-display text-sm font-bold uppercase tracking-widest text-foreground">
+                  {p.label}
+                </span>
+                <span
+                  className={
+                    "font-display text-base " +
+                    (active
+                      ? "text-[hsl(var(--feature-adapter))]"
+                      : "text-muted-foreground")
+                  }
+                >
+                  {f.glyph}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">{f.tagline}</p>
+            </button>
+          );
+        })}
+      </div>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+function SigilField({
+  showKey,
+  onToggleShow,
+  error,
+  register,
+}: {
+  showKey: boolean;
+  onToggleShow: () => void;
+  error?: string;
+  register: UseFormRegisterReturn;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 font-display text-[11px] uppercase tracking-widest text-muted-foreground/70">
+        <KeyIcon className="size-3.5 text-[hsl(var(--feature-secrets))]" />
+        [ PROVIDE YOUR SIGIL ]
+      </div>
+      <div className="relative">
+        <Input
+          id="apiKey"
+          type={showKey ? "text" : "password"}
+          autoComplete="off"
+          placeholder="sk-…"
+          aria-invalid={!!error}
+          aria-label="API key"
+          className="pr-10 font-mono"
+          {...register}
+        />
+        <button
+          type="button"
+          onClick={onToggleShow}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+          aria-label={showKey ? "Hide API key" : "Show API key"}
+        >
+          {showKey ? (
+            <EyeOffIcon className="size-4" />
+          ) : (
+            <EyeIcon className="size-4" />
+          )}
+        </button>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Forwarded once to the agent&apos;s secret store. Never written to
+        Corellia&apos;s database.
+      </p>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+/* ─── STEP 4 // DEPLOYMENT (loadout panel) ────────────────────────── */
+
+const LOADOUT_LABEL_OVERRIDES: DeploymentLabelOverrides = {
+  region: "[ THEATRE ]",
+  size: "[ ARMOR ]",
+  volumeSizeGb: "[ SUPPLY ]",
+  desiredReplicas: "[ SQUAD ]",
+  restartPolicy: "[ DOCTRINE ]",
+  lifecycleMode: "[ MODE ]",
+};
 
 function DeploymentStep({ state, dispatch, isCurrent }: StepBodyProps) {
   if (!isCurrent) {
@@ -740,13 +1000,17 @@ function DeploymentStep({ state, dispatch, isCurrent }: StepBodyProps) {
 
   return (
     <div className="space-y-4">
+      <div className="font-display text-[11px] uppercase tracking-widest text-[hsl(var(--feature-deploy))]">
+        [ LOADOUT ]
+      </div>
       <p className="text-sm leading-relaxed text-muted-foreground">
-        Where and how this agent runs. Region + size + volume become
-        immutable lightly: most can be edited live from the fleet page;
-        region change destroys and respawns the agent.
+        Equip the agent. Theatre and armor lock at deploy; squad, doctrine, and
+        mode adjust live from the fleet page. Theatre change destroys and
+        respawns the agent.
       </p>
       <DeploymentConfigForm
         defaults={state.fields.deployment}
+        labelOverrides={LOADOUT_LABEL_OVERRIDES}
         onSubmit={(v) => {
           dispatch({ type: "setField", patch: { deployment: v } });
           dispatch({ type: "confirm", step: "deployment" });
@@ -863,34 +1127,49 @@ function ReviewStep({
     placement.kind === "blocked" ||
     placement.kind === "error";
 
+  const identityRows: ReadonlyArray<StatRow> = [
+    { label: "HARNESS", value: harness?.name ?? template.name },
+    { label: "CALLSIGN", value: state.fields.name || "—" },
+  ];
+  const intelligenceRows: ReadonlyArray<StatRow> = [
+    { label: "FACTION", value: providerLabel(state.fields.provider) },
+    { label: "CLASS", value: state.fields.modelName || "—" },
+    { label: "SIGIL", value: maskApiKey(state.fields.apiKey) },
+  ];
+  const loadoutRows: ReadonlyArray<StatRow> = [
+    ...toolsetSummaryRows(state.fields.toolsets).map((r) => ({
+      label: r.label,
+      value: r.value,
+    })),
+    ...deploymentSummaryRows(cfg).map((r) => ({
+      label: r.label,
+      value: r.value,
+    })),
+  ];
+
+  const summary =
+    cfg.desiredReplicas === 1
+      ? `Deploying spins up one Fly machine in ${cfg.region} and lands you on the fleet view.`
+      : `Deploying spins up ${cfg.desiredReplicas} Fly machines in ${cfg.region} and lands you on the fleet view.`;
+
   return (
-    <div className="space-y-4">
-      <p className="text-sm leading-relaxed text-muted-foreground">
-        Review the configuration. Deploying spins up{" "}
-        {cfg.desiredReplicas === 1 ? "one Fly machine" : `${cfg.desiredReplicas} Fly machines`}{" "}
-        in <code className="text-foreground">{cfg.region}</code> and lands you
-        on the fleet view.
-      </p>
-
-      <dl className="space-y-1 font-mono text-xs">
-        <SpecRow label="HARNESS" value={harness?.name ?? template.name} />
-        <SpecRow label="NAME" value={state.fields.name} />
-        <SpecRow label="PROVIDER" value={providerLabel(state.fields.provider)} />
-        <SpecRow label="MODEL" value={state.fields.modelName} />
-        <SpecRow label="API KEY" value={maskApiKey(state.fields.apiKey)} />
-        {deploymentSummaryRows(cfg).map((r) => (
-          <SpecRow key={r.label} label={r.label} value={r.value} />
-        ))}
-      </dl>
-
-      {isCurrent && <PlacementBanner state={placement} />}
+    <div className="space-y-5">
+      <CharacterSheet
+        harness={harness}
+        templateName={template.name}
+        agentName={state.fields.name}
+        identityRows={identityRows}
+        intelligenceRows={intelligenceRows}
+        loadoutRows={loadoutRows}
+      />
 
       {isCurrent && (
-        <div className="flex items-center justify-end gap-2 border-t border-[hsl(var(--status-running))]/30 pt-3">
-          <Button size="sm" onClick={onDeploy} disabled={deployBlocked}>
-            › DEPLOY AGENT
-          </Button>
-        </div>
+        <ReadyToLaunch
+          placement={placement}
+          onDeploy={onDeploy}
+          blocked={deployBlocked}
+          summary={summary}
+        />
       )}
     </div>
   );
@@ -975,108 +1254,6 @@ function DeployLog({
   );
 }
 
-/* ─── SHARED FIELD CHROME ─────────────────────────────────────────── */
-
-function Field({
-  id,
-  label,
-  hint,
-  error,
-  children,
-}: {
-  id: string;
-  label: string;
-  hint?: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      {children}
-      {hint && !error && (
-        <p className="text-sm text-muted-foreground">{hint}</p>
-      )}
-      {error && <p className="text-sm text-destructive">{error}</p>}
-    </div>
-  );
-}
-
-function ProviderField({
-  value,
-  onChange,
-  error,
-}: {
-  value: ProviderValue;
-  onChange: (v: ProviderValue) => void;
-  error?: string;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor="provider">Provider</Label>
-      <Select value={value} onValueChange={(v) => onChange(v as ProviderValue)}>
-        <SelectTrigger id="provider" className="w-full" aria-invalid={!!error}>
-          <SelectValue placeholder="Pick a provider" />
-        </SelectTrigger>
-        <SelectContent>
-          {PROVIDERS.map((p) => (
-            <SelectItem key={p.value} value={p.value}>
-              {p.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-    </div>
-  );
-}
-
-function ApiKeyField({
-  showKey,
-  onToggleShow,
-  error,
-  register,
-}: {
-  showKey: boolean;
-  onToggleShow: () => void;
-  error?: string;
-  register: UseFormRegisterReturn;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor="apiKey">API key</Label>
-      <div className="relative">
-        <Input
-          id="apiKey"
-          type={showKey ? "text" : "password"}
-          autoComplete="off"
-          placeholder="sk-…"
-          aria-invalid={!!error}
-          className="pr-10"
-          {...register}
-        />
-        <button
-          type="button"
-          onClick={onToggleShow}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
-          aria-label={showKey ? "Hide API key" : "Show API key"}
-        >
-          {showKey ? (
-            <EyeOffIcon className="size-4" />
-          ) : (
-            <EyeIcon className="size-4" />
-          )}
-        </button>
-      </div>
-      <p className="text-sm text-muted-foreground">
-        Forwarded once to the agent&apos;s secret store. Never written to
-        Corellia&apos;s database.
-      </p>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-    </div>
-  );
-}
-
 /* ─── SHARED PRESENTATION ─────────────────────────────────────────── */
 
 function ConfirmedSummary({
@@ -1127,6 +1304,22 @@ function SpecRow({
 
 function providerLabel(v: ProviderValue): string {
   return PROVIDERS.find((p) => p.value === v)?.label ?? v;
+}
+
+/**
+ * Fetch the catalog and project to `{ toolset_key: tool_id }` so the wizard's
+ * `ToolsetStateMap` (keyed by toolset_key) can be translated into the
+ * GrantInput[] shape that `setInstanceToolGrants` expects (keyed by tool_id).
+ * v1.5 has one harness adapter, so this is a single round-trip.
+ */
+async function fetchToolIdsByKey(
+  api: ReturnType<typeof createApiClient>,
+  harnessAdapterId: string,
+): Promise<Record<string, string>> {
+  const tools = await listTools(api.tools, { harnessAdapterId });
+  const out: Record<string, string> = {};
+  for (const t of tools) out[t.toolsetKey] = t.id;
+  return out;
 }
 
 function maskApiKey(key: string): string {

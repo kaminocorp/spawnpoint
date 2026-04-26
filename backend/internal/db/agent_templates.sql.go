@@ -37,21 +37,23 @@ func (q *Queries) GetAgentTemplateByID(ctx context.Context, id uuid.UUID) (Agent
 }
 
 const listAgentTemplates = `-- name: ListAgentTemplates :many
-SELECT id, name, description, default_config
+SELECT id, name, description, harness_adapter_id, default_config
 FROM agent_templates
 ORDER BY created_at ASC
 `
 
 type ListAgentTemplatesRow struct {
-	ID            uuid.UUID `json:"id"`
-	Name          string    `json:"name"`
-	Description   string    `json:"description"`
-	DefaultConfig []byte    `json:"default_config"`
+	ID               uuid.UUID `json:"id"`
+	Name             string    `json:"name"`
+	Description      string    `json:"description"`
+	HarnessAdapterID uuid.UUID `json:"harness_adapter_id"`
+	DefaultConfig    []byte    `json:"default_config"`
 }
 
 // Narrowed projection (no SELECT *) — keeps created_by_user_id and timestamps
 // off the row type so the catalog service can't accidentally surface them.
-// M4 widens this or adds a sibling query when the deploy modal needs default_config.
+// v1.5 Pillar B Phase 4 added harness_adapter_id so the spawn wizard's TOOLS
+// step can scope ListTools without a second round-trip.
 func (q *Queries) ListAgentTemplates(ctx context.Context) ([]ListAgentTemplatesRow, error) {
 	rows, err := q.db.Query(ctx, listAgentTemplates)
 	if err != nil {
@@ -65,6 +67,7 @@ func (q *Queries) ListAgentTemplates(ctx context.Context) ([]ListAgentTemplatesR
 			&i.ID,
 			&i.Name,
 			&i.Description,
+			&i.HarnessAdapterID,
 			&i.DefaultConfig,
 		); err != nil {
 			return nil, err

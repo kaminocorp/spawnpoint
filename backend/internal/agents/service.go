@@ -86,6 +86,17 @@ const (
 	// CORELLIA_MODEL_API_KEY string-literal in the spec.Env map below.
 	envKeyChatEnabled       = "CORELLIA_CHAT_ENABLED"
 	envKeySidecarAuthToken  = "CORELLIA_SIDECAR_AUTH_TOKEN"
+
+	// v1.5 Pillar B Phase 2: per-instance manifest token + URL.
+	// Both are set as Fly app secrets at spawn time when CORELLIA_API_URL
+	// is configured. The adapter's entrypoint.sh reads them to fetch the
+	// toolset manifest at boot.
+	envKeyInstanceToken   = "CORELLIA_INSTANCE_TOKEN"
+	envKeyToolManifestURL = "CORELLIA_TOOL_MANIFEST_URL"
+
+	// manifestPath is the Connect-go-compatible path for GetToolManifest,
+	// appended to manifestBaseURL to form the full CORELLIA_TOOL_MANIFEST_URL.
+	manifestPath = "/corellia.v1.ToolService/GetToolManifest"
 	chatEnabledEnvValueTrue = "true" // entrypoint.sh's literal-string match (default-deny per risk 4)
 
 	// chatSidecarTokenBytes is the entropy of the per-instance bearer
@@ -154,12 +165,32 @@ type ChatHTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
+// toolManifestIssuer is the tools-governance surface the spawn flow needs.
+// Declared here (not importing *tools.Service) to keep the dependency narrow.
+// When nil (e.g. in tests that don't wire it), spawn skips manifest-token
+// generation and agents boot without tools governance.
+type toolManifestIssuer interface {
+	IssueManifestToken(ctx context.Context, instanceID uuid.UUID) (string, error)
+}
+
+// toolsAuditAppender is the tools-governance audit hook the Restart path
+// uses to record operator-driven restarts (v1.5 Pillar B Phase 7). Same
+// pattern as toolManifestIssuer — narrow interface, no *tools.Service
+// import. nil = no-op (deployments without tools governance still get
+// the Restart RPC; they just don't write audit rows).
+type toolsAuditAppender interface {
+	AppendInstanceRestartAudit(ctx context.Context, actorUserID, orgID, instanceID uuid.UUID)
+}
+
 type Service struct {
-	queries  agentQueries
-	adapters adapterReader
-	resolver deploy.Resolver
-	txr      Transactor
-	chatHTTP ChatHTTPClient
+	queries         agentQueries
+	adapters        adapterReader
+	resolver        deploy.Resolver
+	txr             Transactor
+	chatHTTP        ChatHTTPClient
+	manifestIssuer  toolManifestIssuer
+	manifestBaseURL string
+	auditAppender   toolsAuditAppender
 }
 
 // ServiceOption is the functional-option shape NewService accepts after
@@ -175,6 +206,25 @@ type ServiceOption func(*Service)
 // option and pick up the default below.
 func WithChatHTTPClient(c ChatHTTPClient) ServiceOption {
 	return func(s *Service) { s.chatHTTP = c }
+}
+
+// WithManifestIssuer wires the tools-governance token issuer into the spawn
+// flow. Agents spawned with this option receive CORELLIA_INSTANCE_TOKEN and
+// CORELLIA_TOOL_MANIFEST_URL as Fly app secrets. baseURL is the externally-
+// reachable base URL of the control plane (CORELLIA_API_URL).
+func WithManifestIssuer(issuer toolManifestIssuer, baseURL string) ServiceOption {
+	return func(s *Service) {
+		s.manifestIssuer = issuer
+		s.manifestBaseURL = baseURL
+	}
+}
+
+// WithToolsAuditAppender wires the tools-governance audit hook for the Phase 7
+// Restart path. Same opt-in shape as WithManifestIssuer: cmd/api wires it when
+// the tools service is enabled; tests omit the option and the service skips
+// the audit-row write.
+func WithToolsAuditAppender(a toolsAuditAppender) ServiceOption {
+	return func(s *Service) { s.auditAppender = a }
 }
 
 // chatHTTPTimeout caps a single /chat round-trip. Plan §6 risk 7's
@@ -403,6 +453,25 @@ func (s *Service) Spawn(ctx context.Context, in SpawnInput) (*corelliav1.AgentIn
 		env[envKeyChatEnabled] = chatEnabledEnvValueTrue
 		env[envKeySidecarAuthToken] = chatToken
 	}
+
+	// v1.5 Pillar B Phase 2: issue a per-instance manifest token so the
+	// adapter can fetch its tool configuration at boot. Non-fatal: if token
+	// generation fails (or if tools governance is not wired — manifestIssuer
+	// is nil), the agent spawns without tools governance and the operator is
+	// alerted via the error log. The instance row is already committed and
+	// will be cleaned up by the boot-time stale-pending sweep if Fly spawn
+	// then fails, so no orphan is created.
+	if s.manifestIssuer != nil && s.manifestBaseURL != "" {
+		manifestToken, manifestErr := s.manifestIssuer.IssueManifestToken(ctx, instance.ID)
+		if manifestErr != nil {
+			slog.Error("agents: issue manifest token — spawning without tools governance",
+				"instance_id", instance.ID, "err", manifestErr)
+		} else {
+			env[envKeyInstanceToken] = manifestToken
+			env[envKeyToolManifestURL] = s.manifestBaseURL + manifestPath
+		}
+	}
+
 	result, err := deployer.Spawn(ctx, deploy.SpawnSpec{
 		Name:     instance.ID.String(),
 		ImageRef: adapter.AdapterImageRef,
@@ -765,9 +834,10 @@ func isValidProvider(p string) bool {
 
 func toProtoTemplate(r db.ListAgentTemplatesRow) *corelliav1.AgentTemplate {
 	return &corelliav1.AgentTemplate{
-		Id:          r.ID.String(),
-		Name:        r.Name,
-		Description: r.Description,
+		Id:               r.ID.String(),
+		Name:             r.Name,
+		Description:      r.Description,
+		HarnessAdapterId: r.HarnessAdapterID.String(),
 	}
 }
 
