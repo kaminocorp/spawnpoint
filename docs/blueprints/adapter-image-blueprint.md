@@ -95,13 +95,17 @@ Upstream Hermes satisfies *none* of these on its own:
 
 - Native env names: `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`,
   `HERMES_INFERENCE_PROVIDER` (not the `CORELLIA_*` shape).
-- CLI-shaped: no `/health`, no `/chat` HTTP endpoints in Hermes 0.x.
+- CLI-shaped upstream: no `/health`, no `/chat` HTTP endpoints in Hermes 0.x
+  itself. The adapter's M-chat sidecar (`sidecar/sidecar.py`) fills this gap
+  for chat-enabled instances (changelog 0.11.x).
 - No `corellia.yaml` upstream.
 - No declared resource floor.
 
 The adapter fills these gaps. Configuration is fully bridged in v1 (the
-entrypoint script). Runtime and Metadata are partially bridged (deferred to
-v1.5 — see [§12 Known limitations](#12-known-limitations-on-the-v1-hermes-adapter)).
+entrypoint script). Runtime is bridged for chat-enabled instances via the
+M-chat sidecar (POST /chat, GET /health — deferred for chat-disabled instances
+until a non-chat runtime contract is defined). Metadata (`corellia.yaml`) is
+deferred to v1.5 — see [§12 Known limitations](#12-known-limitations-on-the-v1-hermes-adapter).
 Packaging is bridged (we publish to GHCR with a captured digest).
 
 ---
@@ -579,13 +583,12 @@ What the smoke does:
   killed fallback) for an operator eyeball-check.
 - `fly apps destroy` on EXIT regardless of success or failure.
 
-What it deliberately does *not* probe:
+What it probes (post-M-chat Phase 7):
 
-- **No `/health` poll.** Hermes 0.x is CLI-shaped — no HTTP listener.
-  v1.5 closes this gap (likely via a sidecar HTTP wrapper) at which point
-  the smoke gets a `/health` curl probe.
-- **No `--port` binding.** No HTTP listener to bind to; binding would
-  only confuse Fly's proxy-attached health checks.
+- **Machine state poll** — `fly machines list --json` for `state == started`.
+- **`GET /health`** — unauthenticated; asserts `{"ok":true}` (up to 60s
+  retries for Hermes boot after the sidecar is up).
+- **`POST /chat`** with per-smoke bearer token — asserts `{"content":...}`.
 
 The smoke is the first end-to-end exercise of *the adapter image as it
 will actually run in production*: same digest, same registry pull path,

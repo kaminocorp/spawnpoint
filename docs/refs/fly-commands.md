@@ -213,7 +213,7 @@ they appear:
 | `-m, --metadata NAME=VALUE` | Metadata pairs. **Repeatable.** | Could be useful for tagging spawned agents with `corellia_user_id`, `corellia_template_id`. v1.5+. |
 | `-n, --name NAME` | Machine name. Auto-generated if omitted. | Auto-gen is fine for v1; Fly assigns a `<adjective>-<noun>-<number>` style name. |
 | `--org SLUG` | Org owning the *app*. | Used when implicitly creating an app; otherwise the app's existing org applies. |
-| `-p, --port SPEC` | External port mapping (`port[:machinePort][/protocol[:handler...]]`). **Repeatable.** | M4: Hermes is CLI-shaped, so no port mapping today. v1.5+ if a sidecar exposes HTTP. |
+| `-p, --port SPEC` | External port mapping (`port[:machinePort][/protocol[:handler...]]`). **Repeatable.** | M4: not used (Hermes was CLI-shaped, no listener). M-chat: `-p 443:8642/tcp:http:tls` for the chat sidecar; Fly's edge terminates TLS on `:443` and forwards plain HTTP to the sidecar's internal `:8642`. Chat-disabled spawns omit this flag — no port exposure, matching the M4 posture. |
 | `-r, --region CODE` | Target region (see `fly platform regions`). | Phase 2 used `iad`. M4: pass user's preferred region; default to closest to their org. |
 | `--restart {no,always,on-failure}` | Restart policy. Default `on-failure` for `fly deploy` / scheduled; `always` otherwise. | Phase 2 rehearsal used `no`; M4 spawn uses `always`. |
 | `--rm` | **Auto-remove machine on exit. Sets `--restart=never` if not otherwise specified.** | Real flag — Phase 2's earlier "doesn't exist" claim was wrong. Cleans up the *machine*, not the *app*. For full ephemeral run: combine with explicit `fly apps create` + `fly apps destroy`. |

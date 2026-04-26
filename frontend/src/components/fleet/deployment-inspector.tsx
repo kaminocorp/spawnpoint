@@ -314,12 +314,20 @@ function EditPane({
   onCancel: () => void;
   onSubmit: (values: DeploymentFormValues) => void;
 }) {
+  // `chatEnabled` is locked in the inspector: toggling it on/off
+  // requires adding/removing the Fly services block, which the
+  // live-update path (`mergeMachineConfig`) doesn't handle. Showing
+  // an enabled checkbox here would silently corrupt running
+  // machines (DB column flips; Fly machine config doesn't),
+  // violating blueprint §11.4. Operators see the current value but
+  // are pointed at destroy + respawn to change it.
   return (
     <TerminalContainer title="EDIT CONFIGURATION" accent="deploy">
       <DeploymentConfigForm
         defaults={defaults}
         onSubmit={onSubmit}
         submitLabel="› PREVIEW"
+        lockedFields={["chatEnabled"]}
       />
       <div className="mt-2 flex items-center justify-end">
         <Button size="xs" variant="ghost" onClick={onCancel}>

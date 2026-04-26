@@ -100,10 +100,15 @@ func (s *Service) ChatWithAgent(
 	// value never lives in our DB). An empty token here means the
 	// secret was set without showSecrets surfacing — equivalent to
 	// "drift between audit row and store"; treat as auth failure.
+	//
+	// `err` here originates in fly-go's flaps client, which wraps
+	// HTTP API errors *without* including secret values. Logging
+	// `err.Error()` is operator-side only and safe by audit; the FE
+	// path returns the generic `ErrChatUnreachable` regardless.
 	token, err := target.GetAppSecret(ctx, ref, envKeySidecarAuthToken)
 	if err != nil {
 		slog.Error("agents: chat get secret",
-			"instance_id", instanceID, "err", err)
+			"instance_id", instanceID, "err", err.Error())
 		return "", ErrChatUnreachable
 	}
 	if token == "" {

@@ -94,18 +94,29 @@ export type DeploymentConfigFormProps = {
   onSubmit: (values: DeploymentFormValues) => void;
   /** Submit button label. Defaults to `› CONFIRM`. */
   submitLabel?: string;
+  /**
+   * Field keys that should render read-only because the live-update
+   * path can't apply them. Today only `chatEnabled` is supported here:
+   * toggling chat post-spawn requires an add/remove of the Fly
+   * services block, which `mergeMachineConfig` doesn't handle, so the
+   * inspector locks it and points the operator at destroy + respawn.
+   */
+  lockedFields?: ReadonlyArray<keyof DeploymentFormValues>;
 };
 
 export function DeploymentConfigForm({
   defaults,
   onSubmit,
   submitLabel = "› CONFIRM",
+  lockedFields = [],
 }: DeploymentConfigFormProps) {
   const merged = { ...DEFAULT_DEPLOYMENT_VALUES, ...defaults };
   const form = useForm<DeploymentFormValues>({
     resolver: zodResolver(deploymentConfigSchema),
     defaultValues: merged,
   });
+
+  const isLocked = (k: keyof DeploymentFormValues) => lockedFields.includes(k);
 
   return (
     <form
@@ -119,7 +130,7 @@ export function DeploymentConfigForm({
       <ReplicasField form={form} />
       <RestartField form={form} />
       <LifecycleField form={form} />
-      <ChatEnabledField form={form} />
+      <ChatEnabledField form={form} locked={isLocked("chatEnabled")} />
 
       <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
         <Button size="sm" type="submit">
@@ -538,28 +549,62 @@ function LifecycleField({
 
 /* ─── CHAT ENABLED ────────────────────────────────────────────────── */
 
-function ChatEnabledField({ form }: { form: UseFormReturn<DeploymentFormValues> }) {
+function ChatEnabledField({
+  form,
+  locked,
+}: {
+  form: UseFormReturn<DeploymentFormValues>;
+  locked?: boolean;
+}) {
   const checked = useWatch({ control: form.control, name: "chatEnabled" });
+  const isOn = checked ?? true;
 
   return (
     <div className="space-y-1.5">
       <Label>Chat</Label>
-      <label className="flex cursor-pointer items-center gap-3">
+      <label
+        className={
+          locked
+            ? "flex cursor-not-allowed items-center gap-3 opacity-70"
+            : "flex cursor-pointer items-center gap-3"
+        }
+      >
         <input
           type="checkbox"
-          className="h-4 w-4 rounded border border-input bg-background accent-primary"
-          checked={checked ?? true}
-          onChange={(e) =>
-            form.setValue("chatEnabled", e.target.checked, { shouldValidate: true })
-          }
+          className="h-4 w-4 rounded border border-input bg-background accent-primary disabled:opacity-50"
+          checked={isOn}
+          disabled={locked}
+          onChange={(e) => {
+            if (locked) return;
+            form.setValue("chatEnabled", e.target.checked, {
+              shouldValidate: true,
+            });
+          }}
         />
-        <span className="font-mono text-xs text-foreground">Enable chat</span>
+        <span className="font-mono text-xs text-foreground">
+          Enable chat
+          {locked && (
+            <span className="ml-2 text-muted-foreground">
+              ({isOn ? "currently on" : "currently off"})
+            </span>
+          )}
+        </span>
       </label>
       <p className="text-sm text-muted-foreground">
-        Enables the Corellia chat panel for this agent. When on, a sidecar
-        process exposes <code className="text-foreground">/chat</code> on the
-        agent&apos;s machine. Disabling saves resources and removes inbound
-        HTTPS exposure.
+        {locked ? (
+          <>
+            Chat enablement maps to a Fly services-block change that the
+            live-update path doesn&apos;t apply. To toggle chat, destroy and
+            respawn this agent with the new setting.
+          </>
+        ) : (
+          <>
+            Enables the Corellia chat panel for this agent. When on, a sidecar
+            process exposes <code className="text-foreground">/chat</code> on
+            the agent&apos;s machine. Disabling saves resources and removes
+            inbound HTTPS exposure.
+          </>
+        )}
       </p>
     </div>
   );

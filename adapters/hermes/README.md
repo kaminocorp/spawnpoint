@@ -27,6 +27,13 @@ to the value seeded in
 for the upstream digest is the database; the Dockerfile *quotes* it.
 Per `docs/blueprint.md` §11.2, mutable tags are never used.
 
+**Adapter image history:**
+
+| Migration | adapter_image_ref | Change |
+|---|---|---|
+| `20260426120000_adapter_image_ref_backfill.sql` | `@sha256:d152b3cb…` | M3 Phase 2: original adapter (env-var translation only) |
+| `20260427130000_bump_hermes_adapter_for_chat.sql` | `@sha256:e31cc422…` | M-chat Phase 7: adds chat sidecar (`sidecar/sidecar.py` + two-process entrypoint) |
+
 When the upstream digest is bumped: a new migration changes
 `upstream_image_digest` and `adapter_image_ref` in lockstep, the
 Dockerfile's `FROM` line is updated to match in the same PR, the
@@ -150,10 +157,10 @@ Phase 2 image build and is still useful as the cheapest possible
 
 ## Smoke test
 
-`smoke.sh` boots the registry-pushed adapter image on a real Fly
-machine end-to-end, polls for `state == started`, dumps the tail of
-logs, and destroys the app on EXIT (trap-guarded — runs even if
-`set -e` aborts mid-script).
+`smoke.sh` boots the registry-pushed adapter image on a real Fly machine
+end-to-end with chat enabled, waits for `state == started`, probes
+`GET /health`, sends a `POST /chat` message with the per-smoke bearer
+token, and destroys the app on EXIT (trap-guarded).
 
 ```sh
 export FLY_ORG_SLUG=<your-org-slug>            # e.g. crimson-sun-technologies
@@ -164,70 +171,49 @@ export CORELLIA_SMOKE_API_KEY=sk-or-v1-<key>   # OpenRouter free-tier is fine
 Optional overrides:
 
 - `CORELLIA_HERMES_ADAPTER` — a different `<image>@sha256:<digest>` ref
-  (defaults to the GHCR-published Phase 2 digest).
+  (defaults to the GHCR-published M-chat digest from the Phase 7 migration).
 - `REGION` — a different Fly region (defaults to `iad`).
 
-Notes on what the smoke does *not* probe (and why):
+What the smoke probes:
 
-- **No `/health` poll.** The adapter does not start any HTTP listener
-  today, so the smoke has nothing to probe (see "Known limitations"
-  §1 below for the corrected framing — Hermes v0.11.0 *can* host HTTP,
-  the adapter just doesn't ask it to). The smoke asserts
-  `fly machines list --json` reports `state == started` and prints the
-  recent log tail for an operator eyeball-check.
-- **No `--port` binding** in the `fly machines run` invocation. Nothing
-  inside the container listens externally yet, so port-binding would
-  only confuse Fly's proxy-attached health checks. Both this and the
-  `/health` gap above close together when the chat sidecar lands
-  (`docs/plans/hermes-chat-sidecar.md`).
+- **Machine state poll** — `fly machines list --json` for `state == started`.
+- **`/health` HTTP probe** — `GET https://<app>.fly.dev/health` (up to 60s
+  retries for Hermes boot). Asserts `{"ok":true}`.
+- **`/chat` bearer probe** — `POST https://<app>.fly.dev/chat` with
+  `Authorization: Bearer <per-smoke-token>`. Asserts response contains
+  `"content"` key.
 - **`fly logs --no-tail`** hangs on empty log streams; the script
   bounds it to 15s using `gtimeout` (from `brew install coreutils`)
   with a backgrounded-and-killed fallback when `gtimeout` is absent.
 
 ## Known limitations
 
-1. **No Corellia-shaped HTTP runtime contract — but the gap is smaller
-   than the M3 inspection found.** Supersedes the original "Hermes 0.x
-   is CLI-shaped" framing from M3 (changelog 0.5.0 §525, §549) and the
-   matching restatement in this section's prior version; corrected in
-   changelog 0.9.5. Re-inspection of the same pinned digest
-   (`sha256:d4ee57f2…` = `nousresearch/hermes-agent:v2026.4.23` =
-   "Hermes Agent v0.11.0", which remains the latest stable release as
-   of this entry) shows the upstream image actually ships:
+1. **~~No Corellia-shaped HTTP runtime contract~~** — **Closed by M-chat
+   (0.11.x).** The re-inspection in changelog 0.9.5 confirmed that
+   `AIAgent` was importable and `fastapi` + `uvicorn` were already in the
+   upstream image. M-chat Phases 1–2 built on that foundation:
 
-   - **`AIAgent` Python class** (`run_agent.py`) — a clean
-     instantiable interface with a `.chat(prompt)` method, used by
-     Hermes's own oneshot mode. A FastAPI sidecar can `from
-     run_agent import AIAgent` and skip subprocess overhead entirely.
-   - **`hermes -z "prompt"` and `hermes chat -q "prompt"`** —
-     non-interactive single-turn modes. Each invocation is cold-start
-     (`load_config` + provider client init), but they're real and
-     work today.
-   - **A FastAPI dashboard** (`hermes_cli/web_server.py`, launched
-     via `python -m hermes_cli.main web`) — proves `fastapi` +
-     `uvicorn` are present in the image (the `[all]` extra the
-     upstream Dockerfile installs pulls them in) and that running
-     HTTP listeners alongside `hermes` is a documented pattern. The
-     dashboard itself binds `127.0.0.1:9119` and is *not* what we
-     want for Corellia's `/chat` — but the runtime is there.
-   - **SQLite-backed sessions** under `$HERMES_HOME/sessions/`
-     (`hermes_state.SessionDB`) — multi-turn threading with
-     `--session-id` and `HERMES_TUI_RESUME` env-var resume.
-   - **A long-running multi-session pattern** (`gateway/run.py`,
-     `gateway/session.py`) that already wires `AIAgent` into a daemon
-     loop dispatching messages from Telegram/Slack/Discord. Same
-     conceptual shape as our planned chat sidecar, just with
-     messenger adapters instead of HTTP.
+   - **`adapters/hermes/sidecar/sidecar.py`** — FastAPI app baked into
+     the adapter image at `/corellia/sidecar/`. Exposes:
+     - `POST /chat { session_id, message } → { content }` — bearer-authenticated,
+       imports `AIAgent` directly, LRU session cache (100 sessions max).
+     - `GET /health → { ok: true, hermes: "ready" }` — unauthenticated
+       (Fly edge health probes run without credentials).
+     - `POST /tools/invoke` — returns `501 Not Implemented` per anti-scope-creep §5.
+   - **`entrypoint.sh` two-process supervisor** — when
+     `CORELLIA_CHAT_ENABLED=true`, uvicorn starts in background on `:8642`
+     and SIGTERM is fanned to both the sidecar and Hermes on shutdown. The
+     original `exec` path is preserved for chat-disabled instances
+     (byte-equivalent to every pre-M-chat agent).
+   - **Fly `services` block** — chat-enabled machines expose external `:443`
+     → internal `:8642` via `Protocol: "tcp"`, handlers `["http", "tls"]`.
+     Chat-disabled machines have no `services` block; no port exposure.
 
-   What's actually missing is a Corellia-shaped `POST /chat` (and the
-   matching `GET /health`) bound to the Fly machine's external port
-   so Corellia's BE can reach it. The adapter doesn't start the
-   bundled dashboard either, so today the container has no listener
-   at all. Closing this gap is a sidecar inside the adapter image,
-   importing `AIAgent` directly. Plan: `docs/plans/hermes-chat-sidecar.md`.
-
-   M4's `Health()` polling and the smoke test still fall back to
-   "Fly machine state == started" until the sidecar lands.
+   `FlyDeployTarget.Health()` now uses an HTTP probe (`GET /health`) for
+   chat-enabled instances, falling back to machine-state poll for chat-disabled
+   ones (changelog 0.11.5). The sidecar's `{ok: false, hermes: "starting"}`
+   response gives Corellia a Hermes-aware readiness signal, not just a
+   "container started" signal.
 
 2. **Model name not wired.** `CORELLIA_MODEL_NAME` is currently
    observability-only at the adapter (no native env-var consumer in

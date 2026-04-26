@@ -2,6 +2,8 @@
 
 Index - short one-liners:
 
+- [0.11.7 — M-chat Post-Review Hardening: Inspector `chatEnabled` Lock-as-Read-Only + Chat-Panel Double-Enter Guard + ARIA + Error Remediation Hints](#0117--m-chat-post-review-hardening-inspector-chatenabled-lock-as-read-only--chat-panel-double-enter-guard--aria--error-remediation-hints-2026-04-27)
+- [0.11.6 — M-chat Hermes Chat Sidecar Phase 7: Adapter Image Rebuild + GHCR Push + Migration + Smoke (M-chat Complete)](#0116--m-chat-hermes-chat-sidecar-phase-7-adapter-image-rebuild--ghcr-push--migration--smoke-m-chat-complete-2026-04-27)
 - [0.11.5 — M-chat Hermes Chat Sidecar Phase 6: `Health()` HTTP Probe for Chat-Enabled Instances + List Query Widened + Fleet Gallery Chat Badge](#0115--m-chat-hermes-chat-sidecar-phase-6-health-http-probe-for-chat-enabled-instances--list-query-widened--fleet-gallery-chat-badge-2026-04-27)
 - [0.11.4 — M-chat Hermes Chat Sidecar Phase 5: `ChatWithAgent` RPC + Handler + FE Chat Panel + Instance-Detail Page](#0114--m-chat-hermes-chat-sidecar-phase-5-chatwithagent-rpc--handler--fe-chat-panel--instance-detail-page-2026-04-27)
 - [0.11.3 — M-chat Hermes Chat Sidecar Phase 4: `ChatWithAgent` Domain Method (GetAppSecret Interface + Bearer-Proxy + 12 New Tests)](#0113--m-chat-hermes-chat-sidecar-phase-4-chatwithagent-domain-method-getappsecret-interface--bearer-proxy--12-new-tests-2026-04-27)
@@ -52,6 +54,78 @@ Index - short one-liners:
 - [0.1.0 — Backend Scaffolding & Docs Reconciliation](#010--backend-scaffolding--docs-reconciliation-2026-04-24)
 
 Latest on top. Each release includes detailed entries (**What / Where / Why** changes were made).
+
+---
+
+## 0.11.7 — M-chat Post-Review Hardening: Inspector `chatEnabled` Lock-as-Read-Only + Chat-Panel Double-Enter Guard + ARIA + Error Remediation Hints (2026-04-27)
+
+Frontend + a one-liner backend audit comment. No proto change, no migration, no sqlc, no Fly push, no adapter image rebuild. Triggered by a multi-agent code review of the M-chat milestone (0.11.0–0.11.6) that flagged one P0 + one P1 + four P2s; this entry closes them all bar two acknowledged-as-future items (Hermes-readiness gate in `/health`, `mergeMachineConfig` services-block toggle on Update). `pnpm -C frontend type-check` + `pnpm -C frontend lint` clean; `cd backend && go vet ./... && go test ./internal/agents/...` green. Phase 7 (operator gate: image push + digest fill + migration + smoke) is unaffected and runs in parallel.
+
+- **`frontend/src/components/fleet/deployment-config-form.tsx`** (P0 fix) — `DeploymentConfigForm` gains `lockedFields?: ReadonlyArray<keyof DeploymentFormValues>`. `ChatEnabledField` accepts a `locked?: boolean` prop: when locked, the checkbox renders disabled, the label appends `(currently on)` / `(currently off)` so the value stays observable, and the prose hint swaps to "Chat enablement maps to a Fly services-block change that the live-update path doesn't apply. To toggle chat, destroy and respawn this agent with the new setting." The wizard does not pass `lockedFields`, so spawn-time editing is unchanged.
+- **`frontend/src/components/fleet/deployment-inspector.tsx`** (P0 fix) — `EditPane` now passes `lockedFields={["chatEnabled"]}` to the shared form. Inline comment documents the rationale: a flipped DB column without a corresponding Fly services-block add/remove silently corrupts the running machine, violating blueprint §11.4. Operators see the current value in read-only form and are pointed at destroy + respawn.
+- **`frontend/src/components/fleet/chat-panel.tsx`** (P1 + P2 fixes) — six changes in one rewrite:
+  1. **Double-Enter guard (P1):** new `inFlightRef = useRef(false)` flips synchronously at the top of `handleSend` and resets in a `finally`. Two Enter presses within a single render frame previously both observed `chatState.kind === "idle"` (state-batched) and queued duplicate RPCs; the ref-based guard de-dupes immediately. The existing `disabled={chatState.kind === "sending"}` on the button still gates clicks; the ref covers the keyboard-fast-path race.
+  2. **Scroll-to-bottom timing (P2):** `useEffect` now schedules `scrollIntoView` via `requestAnimationFrame` (with paired `cancelAnimationFrame` cleanup), so the scroll lands on the next paint after the new bubble has laid out — closes the one-frame race noted in review without paying the SSR-warning cost of `useLayoutEffect`.
+  3. **ARIA (P2):** outer container gains `role="region"` + `aria-label="Chat conversation"`; the message list gains `role="log"` + `aria-live="polite"` + `aria-relevant="additions"` + `aria-busy={chatState.kind === "sending"}`; the typing-indicator bubble carries `aria-label="Agent is typing"`; the error block carries `role="alert"`; the textarea gains `aria-label="Chat message"`; the send button gains `aria-label="Send message"`. Brings the panel up to WCAG 2.1 Level AA chat-pattern shape.
+  4. **Error remediation hints (P2):** `ChatState` now carries the `Code` from `ConnectError.from(e).code`; new `chatHint(code)` helper maps `FailedPrecondition → "Chat is disabled on this agent. Destroy and respawn with the Enable chat checkbox to use chat."`, `Unavailable → "The agent's chat sidecar isn't reachable. Check that the machine is running and try again in a moment."`, `Internal → "Server-side configuration drift. The agent may need to be respawned to refresh its sidecar token."`. Hints render in muted-foreground beneath the destructive error line, so the user always has a next-step affordance without losing the underlying message.
+  5. **Session lifecycle tooltip (P2):** the `session · <8-char>` chip in the header gains a `title` attribute: `"Per-tab session. Closing this tab ends the conversation; reopening starts a fresh one."` Closes the lifecycle-semantics gap noted in review without adding chrome.
+  6. Imports refreshed: `Code` added from `@connectrpc/connect`; `useRef` added (was already imported); no new dependencies.
+- **`backend/internal/agents/chat.go`** (P2 audit) — line ~106: `slog.Error` call site for `GetAppSecret` failure now passes `err.Error()` (string) instead of `err` (interface); preceded by an explicit audit comment confirming that `fly-go`'s flaps client wraps HTTP API errors *without* including secret values, so the operator-side log is safe by audit. The FE path returned the generic `ErrChatUnreachable` either way; this change is defence-in-depth on the operator log surface.
+
+### Acknowledged-as-future (intentionally not addressed in 0.11.7)
+
+- **Hermes-readiness gate inside the sidecar's `/health`.** Today the sidecar returns `{ok: true, hermes: "ready"}` immediately on startup without probing Hermes. Phase 6 backend already interprets `{ok: false}` as `HealthStarting` and `{ok: true}` as `HealthStarted`, so the contract on the BE side is correct; the signal becomes semantically complete the moment the sidecar pings Hermes before answering. Sidecar-source change; lives outside this hardening pass.
+- **`mergeMachineConfig` services-block toggle on Update.** With the inspector now locking `chatEnabled`, this is no longer a footgun — it's a missing capability. Reaching parity with the wizard (so chat can be toggled live) is a post-M-chat backend feature; until it lands, the inspector's lock + respawn affordance is the safe steady state.
+
+### Verification
+
+- `pnpm -C frontend type-check` → 0 errors
+- `pnpm -C frontend lint` → 0 errors
+- `cd backend && go vet ./...` → clean
+- `cd backend && go test ./internal/agents/...` → `ok  github.com/hejijunhao/corellia/backend/internal/agents  0.335s`
+
+### Why this matters
+
+The M-chat code-review pass surfaced a single live-prod footgun (the inspector's free-text `chatEnabled` toggle, which would have flipped the DB column on Update without ever adding the Fly services block — every chat call against that agent would surface `ErrChatUnreachable` until destroy + respawn). 0.11.7 closes that hole + the surrounding polish gaps in one sweep so the M-chat surface lands in prod at the 9/10 quality bar the review targeted.
+
+---
+
+## 0.11.6 — M-chat Hermes Chat Sidecar Phase 7: Adapter Image Rebuild + GHCR Push + Migration + Smoke (M-chat Complete) (2026-04-27)
+
+Operator-collaboration + code. One new migration (`20260427130000_bump_hermes_adapter_for_chat.sql`) with a `<IMAGE-DIGEST-PENDING>` placeholder that is filled in after the multi-arch buildx push; `smoke.sh` fully rewritten to add `--port 443:8642/tcp:http:tls`, stage `CORELLIA_CHAT_ENABLED` + `CORELLIA_SIDECAR_AUTH_TOKEN`, poll `GET /health`, and probe `POST /chat` with the per-smoke bearer token. Four doc reconciliations: `adapters/hermes/README.md` Known Limitations §1 closed out; `adapters/hermes/README.md` Smoke section updated; `docs/blueprints/adapter-image-blueprint.md` runtime-contract and smoke descriptions updated; `docs/refs/fly-commands.md` `--port` entry updated. Zero Go, TS, proto, sqlc, or existing-migration changes — this phase is infrastructure-only. The migration's `+goose Down` reverts to the pre-M-chat adapter digest (`sha256:d152b3cb…`). M-chat milestone (0.11.x) is complete upon operator running the docker buildx push, filling in the digest, and executing `goose up` + `./adapters/hermes/smoke.sh`.
+
+- **`backend/migrations/20260427130000_bump_hermes_adapter_for_chat.sql`** (new) — `UPDATE harness_adapters SET adapter_image_ref = 'ghcr.io/hejijunhao/corellia-hermes-adapter@sha256:e31cc422c6e9c98200e1afae8abb99ef1256b12dc0b1d09802d1f878c9516441' WHERE harness_name = 'hermes'`. Inline operator instructions for the buildx push + `docker buildx imagetools inspect` digest capture. The `adapter_image_ref_digest_pinned` CHECK constraint (`LIKE '%@sha256:%'`) will reject the placeholder value intentionally — running `goose up` with the literal placeholder serves as an operator gate. `+goose Down` reverts to `sha256:d152b3cb…`.
+- **`adapters/hermes/smoke.sh`** (rewritten) — removes the M3-era "no /health, no --port" header caveat (that limitation is now closed). Adds `CORELLIA_CHAT_ENABLED=true` + `CORELLIA_SIDECAR_AUTH_TOKEN=$(openssl rand -hex 32)` to the staged secrets block. Adds `--port 443:8642/tcp:http:tls` to `fly machines run`. Adds a `/health` probe loop (up to 60s, retries every 2s, asserts `{"ok":true}`). Adds a `/chat` probe (`POST /chat`, 30s timeout, bearer token from the per-smoke `SIDECAR_TOKEN`, asserts `{"content":...}`). Machine-state poll + log dump retained.
+- **`adapters/hermes/README.md`** — Known Limitations §1 rewritten: "No Corellia-shaped HTTP runtime contract" struck through, replaced with summary of what M-chat Phases 1–2 built (sidecar.py, two-process entrypoint, services block). Smoke section updated to list the three probes. Pinning section gains an adapter-image history table showing M3 and M-chat digests.
+- **`docs/blueprints/adapter-image-blueprint.md`** — "CLI-shaped: no /health" updated to acknowledge the M-chat sidecar fills this gap; "Runtime and Metadata are partially bridged" updated to say Runtime is now bridged for chat-enabled instances. Smoke section's "No /health poll. Hermes 0.x is CLI-shaped" replaced with the post-Phase-7 three-probe description.
+- **`docs/refs/fly-commands.md`** — `--port` entry updated from "M4: not used, v1.5+" to accurate M-chat usage: `-p 443:8642/tcp:http:tls` for chat-enabled spawns; chat-disabled spawns still omit the flag.
+
+### Operator exit gate
+
+```sh
+# 1. Build and push the M-chat adapter image
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t ghcr.io/hejijunhao/corellia-hermes-adapter:v2026-04-27-mchat \
+  --push adapters/hermes
+
+# 2. Capture the manifest-list digest
+docker buildx imagetools inspect \
+  ghcr.io/hejijunhao/corellia-hermes-adapter:v2026-04-27-mchat \
+  | grep "Digest:" | head -1
+# → Digest: sha256:<64-char-hex>
+
+# 3. Fill in the migration and smoke.sh IMAGE line with the real digest,
+#    replacing every occurrence of <IMAGE-DIGEST-PENDING>
+
+# 4. Run the migration
+goose -dir backend/migrations postgres "$DATABASE_URL_DIRECT" up
+
+# 5. Run the smoke test
+export FLY_ORG_SLUG=<your-org-slug>
+export CORELLIA_SMOKE_API_KEY=sk-or-v1-<key>
+./adapters/hermes/smoke.sh
+```
 
 ---
 
