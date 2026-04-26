@@ -87,7 +87,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (state.kind === "loading") {
     return (
-      <div className="flex min-h-screen w-full">
+      <div className="halftone-bg flex min-h-screen w-full">
         <div className="hidden w-64 border-r p-4 md:block">
           <Skeleton className="mb-6 h-7 w-32" />
           <div className="space-y-2">
@@ -106,7 +106,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (state.kind === "not-provisioned") {
     return (
-      <main className="flex min-h-screen items-center justify-center p-6">
+      <main className="halftone-bg flex min-h-screen items-center justify-center p-6">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Account not provisioned</CardTitle>
@@ -127,7 +127,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (state.kind === "error") {
     return (
-      <main className="flex min-h-screen items-center justify-center p-6">
+      <main className="halftone-bg flex min-h-screen items-center justify-center p-6">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Something went wrong</CardTitle>
@@ -166,7 +166,7 @@ function ReadyChrome({
             userName={user.name ?? ""}
             email={user.email}
           />
-          <div className="flex-1 p-6">{children}</div>
+          <div className="halftone-bg flex-1 p-6">{children}</div>
         </SidebarInset>
       </SidebarProvider>
     </UserProvider>

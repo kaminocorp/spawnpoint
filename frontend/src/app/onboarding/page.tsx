@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Code, ConnectError } from "@connectrpc/connect";
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PearlText } from "@/components/ui/pearl-text";
 import { createApiClient } from "@/lib/api/client";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 
@@ -129,7 +131,17 @@ export default function OnboardingPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
+    <main className="halftone-bg relative flex min-h-screen items-center justify-center p-6">
+      {/* Vignette inherited from sign-in's arrival flow — onboarding is the
+          continuation of "you just arrived." */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10"
+        style={{
+          backgroundImage:
+            "radial-gradient(ellipse at center, transparent 40%, var(--background) 80%)",
+        }}
+      />
       <div className="w-full max-w-md">
         {state.kind === "loading" && (
           <p className="text-center text-sm text-muted-foreground">Loading…</p>
@@ -167,13 +179,26 @@ export default function OnboardingPage() {
         )}
 
         {state.kind === "ready" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-xl">Welcome to Corellia.</CardTitle>
-              <CardDescription>
-                Just two things before we get started.
-              </CardDescription>
-            </CardHeader>
+          <>
+            <div className="mb-6 flex justify-center">
+              <Image
+                src="/logo.png"
+                alt="Corellia"
+                width={64}
+                height={64}
+                className="opacity-90"
+                priority
+              />
+            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xl">
+                  <PearlText>Welcome to Corellia.</PearlText>
+                </CardTitle>
+                <CardDescription>
+                  Just two things before we get started.
+                </CardDescription>
+              </CardHeader>
             <form onSubmit={form.handleSubmit(onSubmit)}>
               <CardContent className="space-y-4">
                 <div className="space-y-1.5">
@@ -220,12 +245,17 @@ export default function OnboardingPage() {
                 >
                   Sign out
                 </Button>
-                <Button type="submit" disabled={state.submitting}>
+                <Button
+                  type="submit"
+                  variant="pearl"
+                  disabled={state.submitting}
+                >
                   {state.submitting ? "Saving…" : "Continue"}
                 </Button>
               </CardFooter>
             </form>
-          </Card>
+            </Card>
+          </>
         )}
       </div>
     </main>

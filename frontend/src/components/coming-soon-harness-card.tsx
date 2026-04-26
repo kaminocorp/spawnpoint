@@ -20,7 +20,7 @@ export function ComingSoonHarnessCard({ name, description, vendor }: Props) {
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-md bg-muted text-muted-foreground">
+            <div className="halftone-bg flex size-9 items-center justify-center rounded-md text-muted-foreground">
               <SparklesIcon className="size-4" />
             </div>
             <CardTitle>{name}</CardTitle>

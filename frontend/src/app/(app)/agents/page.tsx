@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import type { AgentTemplate } from "@/gen/corellia/v1/agents_pb";
 import { COMING_SOON_HARNESSES } from "@/lib/agents/coming-soon";
 import { createApiClient } from "@/lib/api/client";
@@ -51,42 +50,40 @@ export default function AgentsPage() {
   }, []);
 
   return (
-    <TooltipProvider>
-      <div className="space-y-6">
-        <div>
-          <h1 className="font-heading text-2xl font-semibold">Agents</h1>
-          <p className="text-sm text-muted-foreground">
-            Pick a harness, configure it, and deploy.
-          </p>
-        </div>
-
-        {state.kind === "loading" && <LoadingGrid />}
-
-        {state.kind === "ready" && (
-          <>
-            <CatalogGrid>
-              {state.templates.map((t) => (
-                <AgentTemplateCard key={t.id} template={t} />
-              ))}
-            </CatalogGrid>
-            <ComingSoonSection />
-          </>
-        )}
-
-        {state.kind === "empty" && <ComingSoonSection />}
-
-        {state.kind === "error" && (
-          <div className="mx-auto max-w-md">
-            <Card>
-              <CardHeader>
-                <CardTitle>Couldn&apos;t load harnesses.</CardTitle>
-                <CardDescription>{state.message}</CardDescription>
-              </CardHeader>
-            </Card>
-          </div>
-        )}
+    <div className="space-y-6">
+      <div>
+        <h1 className="font-heading text-2xl font-semibold">Agents</h1>
+        <p className="text-sm text-muted-foreground">
+          Pick a harness, configure it, and deploy.
+        </p>
       </div>
-    </TooltipProvider>
+
+      {state.kind === "loading" && <LoadingGrid />}
+
+      {state.kind === "ready" && (
+        <>
+          <CatalogGrid>
+            {state.templates.map((t) => (
+              <AgentTemplateCard key={t.id} template={t} />
+            ))}
+          </CatalogGrid>
+          <ComingSoonSection />
+        </>
+      )}
+
+      {state.kind === "empty" && <ComingSoonSection />}
+
+      {state.kind === "error" && (
+        <div className="mx-auto max-w-md">
+          <Card>
+            <CardHeader>
+              <CardTitle>Couldn&apos;t load harnesses.</CardTitle>
+              <CardDescription>{state.message}</CardDescription>
+            </CardHeader>
+          </Card>
+        </div>
+      )}
+    </div>
   );
 }
 

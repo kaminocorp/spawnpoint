@@ -1,13 +1,14 @@
 # Roadmap — Post-0.2.6 → Demoable v1
 
-**Status:** draft, awaiting approval
+**Status:** in flight — M1, M2, M3, M3.5 shipped; deploy (M3.9) and spawn (M4) ahead.
+**Last updated:** 2026-04-26
 **Owner:** TBD
 **Supersedes:** —
 **Related:**
-- `docs/changelog.md` §0.2.5, §0.2.6 (current state — auth + provisioning landed; ES256/JWKS validated)
+- `docs/changelog.md` §0.5.1 (latest), §0.5.0 (M3), §0.4.0 (M2), §0.3.0 (M1), §0.2.6, §0.2.5
 - `docs/blueprint.md` §1 (MVP scope), §9 (data model), §10 (RPG-character-creation flow), §11 (architecture rules)
 - `docs/vision.md` §"Garage" model, §admin model
-- `docs/stack.md` §12 (hour-zero scaffolding order — we're between hour 4 and hour 5)
+- `docs/stack.md` §10 (deploy targets), §12 (hour-zero scaffolding order)
 
 This is a **high-level roadmap, not an implementation plan**. Each milestone below earns its own detailed plan doc in `docs/plans/` before execution. The point of this file is to lock the *order* and the *why*, so the per-milestone plans aren't relitigating sequencing every time.
 
@@ -26,19 +27,21 @@ The 0.2.5 → 0.2.6 collision (two parallel plans both touching `internal/auth/`
 
 ---
 
-## 2. Where we are (snapshot, 2026-04-25)
+## 2. Where we are (snapshot, 2026-04-26)
 
-- **Working today.** Sign in via Supabase JS, BE validates ES256 + JWKS, `auth.users` insert auto-provisions `public.organizations` + `public.users`, `GetCurrentUser` round-trips, dashboard renders email or the four-state amber "not provisioned" panel. `UpdateCurrentUserName` + `UpdateOrganizationName` RPCs already wired but no FE caller.
-- **Not built yet.** Everything blueprint §9 calls product code: `HarnessAdapter`, `AgentTemplate`, `AgentInstance`, `Secret`, `DeployTarget`. No Dockerfile, no `fly.toml`, nothing deployed.
-- **Implicitly available, no FE caller.** `UpdateCurrentUserName`, `UpdateOrganizationName`, `OrganizationsService.GetOrganization`. These ship "for free" in the next milestone.
+- **Working today.** Sign in via Supabase JS, BE validates ES256 + JWKS, auto-provisioning fires on `auth.users` insert, `GetCurrentUser` round-trips. Onboarding wizard (M1, v0.3.0) captures name + workspace name on first login, then lands on a dashboard shell with `Dashboard / Agents / Fleet / Settings` chrome. `/agents` (M2, v0.4.0) renders the Hermes catalog card backed by real `harness_adapters` + `agent_templates` rows pinned to the upstream Hermes digest. `internal/deploy/` (M3, v0.5.0) shipped — `DeployTarget` interface + `FlyDeployTarget` (real, calls Fly's HTTP API via `fly-go`/`flaps`) + `LocalDeployTarget` / `AWSDeployTarget` `NotImplemented` stubs; the Hermes adapter image is published at `ghcr.io/hejijunhao/corellia-hermes-adapter@sha256:d152…` and pinned into `harness_adapters.adapter_image_ref` behind a digest-pinning CHECK constraint. `deploy.Resolver` indirection (M3.5, v0.5.1) wraps the kind-keyed registry so the v1.5 `DBResolver` swap is a one-line change.
+- **Not built yet.** `AgentInstance`, `Secret`, `deploy_targets` tables (all M4). No spawn handler, no `/fleet` data, no FE deploy modal. **The control plane itself is still local-only** — no `Dockerfile`, no `fly.toml`, no Vercel project; the deployed E2E demo §5 prescribes is gated on M3.9 landing first.
+- **Implicitly available, no FE caller.** `UpdateCurrentUserName`, `UpdateOrganizationName`, `OrganizationsService.GetOrganization` (since 0.2.5); `agents.UpdateImageRef` (since 0.5.0); `deploy.Resolver.For` (since 0.5.1 — M4's spawn handler is the first reader).
 
 ---
 
 ## 3. Milestones
 
-Four milestones to a demoable v1. Each one is a standalone PR-sized chunk, each one earns its own `docs/plans/<milestone>.md` before work starts.
+Five milestones to a demoable v1 (M3.9 promoted from §4 once M3.5's structural pre-payment closed; the deploy is no longer "opportunistic between M2 and M3" because that window has passed and M4's demo path strictly requires a deployed FE+BE). Each one is a standalone PR-sized chunk, each one earns its own `docs/plans/<milestone>.md` before work starts.
 
 ### M1 — Onboarding wizard + dashboard shell
+
+**Status:** ✅ Shipped in v0.3.0 (M1) + v0.3.1 (M1 hardening — provider memoisation, title template, `middleware` → `proxy`).
 
 **Goal:** a freshly-provisioned user lands on a real onboarded experience: prompted for name + workspace name on first login, then dropped on a dashboard with a navigation chrome that previews the rest of the product.
 
@@ -55,6 +58,8 @@ Four milestones to a demoable v1. Each one is a standalone PR-sized chunk, each 
 ---
 
 ### M2 — Catalog: `HarnessAdapter` + `AgentTemplate` + `/agents` page
+
+**Status:** ✅ Shipped in v0.4.0.
 
 **Goal:** the `/agents` route stops being a placeholder and renders one real card — "Hermes" — backed by a real `agent_templates` row pinned to a real `harness_adapters` row at a real Docker image digest.
 
@@ -80,6 +85,8 @@ Four milestones to a demoable v1. Each one is a standalone PR-sized chunk, each 
 
 ### M3 — Hermes adapter image + Fly account wiring
 
+**Status:** ✅ Shipped in v0.5.0 (Phases 1–7 + Phase 8 post-review hardening) + v0.5.1 (M3.5 — `deploy.Resolver` indirection, structural pre-payment for v1.5 user-configurable targets).
+
 **Goal:** the Hermes adapter image actually exists in a registry, the Fly account is configured for programmatic spawn, and the BE has a `DeployTarget` interface with `FlyDeployTarget` as one real impl + at least one `NotImplemented` stub (per §11.4).
 
 **Why third, before M4.** The schema and UI for spawn (M4) are useless if the adapter image doesn't exist or the Fly API token isn't wired. This milestone is the unglamorous infrastructure step that M4 depends on. Splitting it out keeps M4's plan focused on application code rather than registry-pushing and Fly-account-setup.
@@ -95,11 +102,38 @@ Four milestones to a demoable v1. Each one is a standalone PR-sized chunk, each 
 
 **Out of scope.** No spawn flow from the UI yet. No `AgentInstance` writes. No fleet view.
 
-**Plan doc:** `docs/plans/hermes-adapter-and-fly-wiring.md`.
+**Plan doc:** `docs/archive/hermes-adapter-and-fly-wiring.md` (archived post-completion).
+
+---
+
+### M3.9 — Deploy the control plane itself (FE → Vercel, BE → Fly)
+
+**Status:** Pending — this milestone, in flight as of 2026-04-26.
+
+**Goal:** the running `corellia-api` Fly app and the `corellia-frontend` Vercel project replace `localhost:8080` and `localhost:3000` as the source of truth. Sign-in, `GetCurrentUser`, the onboarding wizard, and the `/agents` catalog all work end-to-end against deployed URLs. M4's demo (§5) becomes runnable cold from a fresh browser session.
+
+**Why now (was §4 "opportunistic"; promoted).** When the roadmap was drafted post-0.2.6, the deploy was slotted "between M2 and M3" because at that point the BE was the lightest thing to ship. That window has closed — M2, M3, and M3.5 all landed without it, and the demo §5 sequence ("Open the deployed FE in a browser") strictly requires it before M4 can be exercised cold. **Reordering M3.9 ahead of M4 also de-risks M4**: the spawn flow's failure modes (CORS rejection, JWKS reachability across origins, Supabase cookie domain, environment drift between local and deployed config) all surface on a deployed substrate, not in `localhost`. Hitting them in an empty M3.9 is cheaper than hitting them tangled with spawn-state-machine bugs in M4.
+
+**Surfaces touched.**
+- `backend/Dockerfile` — multi-stage Go 1.26 build producing a static `cmd/api` binary in a distroless or scratch final stage. Standard pattern; `cmd/smoke-deploy` deliberately not included in the deployed image.
+- `backend/fly.toml` — app `corellia` under org `crimson-sun-technologies`, internal port 8080, `[[http_service]]` on `:443` with `force_https = true`, `[[http_service.checks]]` against `/healthz` (already exposed outside the auth group at `httpsrv/server.go:32`), `auto_stop_machines = "stop"` + `auto_start_machines = true` to match blueprint §8's idle-cost stance for *agent* apps (different surface, same operator instinct).
+- Fly secrets set via `fly secrets set` — `DATABASE_URL`, `SUPABASE_URL`, `FLY_API_TOKEN`, `FLY_ORG_SLUG`, `FRONTEND_ORIGIN`. Never committed to `fly.toml`.
+- Vercel project rooted at `frontend/`, env vars `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_API_URL` (the latter pointing at the deployed BE).
+- `FRONTEND_ORIGIN` (BE) and `NEXT_PUBLIC_API_URL` (FE) cross-reference each other — the deploy-order chicken-and-egg is the only subtle bit.
+
+**Deploy-order subtlety.** First `fly deploy` with a placeholder `FRONTEND_ORIGIN` to get a stable BE URL → set `NEXT_PUBLIC_API_URL` in Vercel to that URL → first Vercel deploy → set `FRONTEND_ORIGIN` in Fly to the Vercel URL → `fly deploy` again so CORS picks up the deployed origin. Two BE deploys, one FE deploy. Document in the plan doc so future deploys (or a fresh teammate setting up a preview environment) don't rediscover the order.
+
+**Demo improvement.** Visible to the developer first, then end users via the URL. Sign in works against the deployed FE, dashboard renders against the deployed BE, the `/agents` catalog renders the Hermes card. **The deploy itself is the demo improvement** — no new product features, but every prior milestone's UI is now reachable from a phone, an iPad, or a teammate's laptop. The Vercel preview URL per PR also unblocks design review on the unmerged FE branches.
+
+**Out of scope.** No CI/CD pipeline beyond Vercel's auto-deploy on push to `main`; Fly stays on manual `fly deploy`. No GitHub Actions for backend deploy yet — that's a v1.5 follow-up if/when manual deploys become friction. No staging environment; one production app per side. No custom domains in v1 — the auto-generated `corellia.fly.dev` and `<vercel-slug>.vercel.app` URLs are sufficient until a brand decision is made.
+
+**Plan doc:** `docs/plans/deploy-control-plane.md` (to draft alongside the artefact PR).
 
 ---
 
 ### M4 — Spawn flow + fleet view (the demo moment)
+
+**Status:** Pending — depends on M3.9.
 
 **Goal:** blueprint §10 end-to-end. Admin clicks "Deploy" on a Hermes card → wizard collects name + provider + API key + model → backend creates `AgentInstance` row → `FlyDeployTarget.spawn()` creates the Fly app + secrets + machine → on `/health` passing, status flips to `running` → admin redirects to `/fleet` and sees the new agent.
 
@@ -125,8 +159,7 @@ Four milestones to a demoable v1. Each one is a standalone PR-sized chunk, each 
 
 Explicitly *not* in the M1–M4 sequence:
 
-- **Deploying the control plane itself to Fly + Vercel.** Per `stack.md` §12 hour-5 milestone, this is technically the next box to tick after auth E2E. Slotted opportunistically — likely between M2 and M3, when there's a non-trivial backend worth deploying *and* a frontend worth previewing. Not blocking the M-sequence.
-- **Onboarding-wizard backend changes.** None needed. M1 is FE-only.
+- **Onboarding-wizard backend changes.** None needed. M1 is FE-only. (Shipped in v0.3.0.)
 - **Invitation flow / multi-user orgs.** Pattern C per 0.2.5; deferred per blueprint §13's "Multi-tenant organization isolation" line. Separate plan in `docs/plans/invitation-flow.md` when its first caller arrives.
 - **Programmatic adapter generation.** v2 per blueprint §14. Not on this roadmap.
 - **Audit log, observability dashboard, model gateway, skills registry, IAM.** All v1.5 / v2 per blueprint §14. Not on this roadmap.

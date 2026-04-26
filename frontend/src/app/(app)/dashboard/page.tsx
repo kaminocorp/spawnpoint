@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { PearlText } from "@/components/ui/pearl-text";
 import { useUser } from "@/lib/api/user-context";
 
 export default function DashboardPage() {
@@ -21,8 +22,10 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-heading text-2xl font-semibold">
-          {firstName ? `Welcome back, ${firstName}.` : "Welcome back."}
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">
+          <PearlText>
+            {firstName ? `Welcome back, ${firstName}.` : "Welcome back."}
+          </PearlText>
         </h1>
         <p className="text-sm text-muted-foreground">
           Corellia is the control plane for the agents you spawn.

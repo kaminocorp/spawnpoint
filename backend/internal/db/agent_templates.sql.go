@@ -11,6 +11,31 @@ import (
 	"github.com/google/uuid"
 )
 
+const getAgentTemplateByID = `-- name: GetAgentTemplateByID :one
+SELECT id, name, description, harness_adapter_id, default_config, created_by_user_id, created_at, updated_at FROM agent_templates WHERE id = $1
+`
+
+// M4 spawn flow's first step (decision 27 step 2): resolve the chosen
+// template + its harness_adapter so we know which adapter image to spawn.
+// Full row including harness_adapter_id and default_config — Spawn needs
+// the FK to load harness_adapters.adapter_image_ref next, and config
+// overrides will eventually merge against default_config.
+func (q *Queries) GetAgentTemplateByID(ctx context.Context, id uuid.UUID) (AgentTemplate, error) {
+	row := q.db.QueryRow(ctx, getAgentTemplateByID, id)
+	var i AgentTemplate
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.HarnessAdapterID,
+		&i.DefaultConfig,
+		&i.CreatedByUserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listAgentTemplates = `-- name: ListAgentTemplates :many
 SELECT id, name, description, default_config
 FROM agent_templates

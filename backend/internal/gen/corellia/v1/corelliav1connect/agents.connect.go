@@ -36,11 +36,40 @@ const (
 	// AgentsServiceListAgentTemplatesProcedure is the fully-qualified name of the AgentsService's
 	// ListAgentTemplates RPC.
 	AgentsServiceListAgentTemplatesProcedure = "/corellia.v1.AgentsService/ListAgentTemplates"
+	// AgentsServiceSpawnAgentProcedure is the fully-qualified name of the AgentsService's SpawnAgent
+	// RPC.
+	AgentsServiceSpawnAgentProcedure = "/corellia.v1.AgentsService/SpawnAgent"
+	// AgentsServiceSpawnNAgentsProcedure is the fully-qualified name of the AgentsService's
+	// SpawnNAgents RPC.
+	AgentsServiceSpawnNAgentsProcedure = "/corellia.v1.AgentsService/SpawnNAgents"
+	// AgentsServiceListAgentInstancesProcedure is the fully-qualified name of the AgentsService's
+	// ListAgentInstances RPC.
+	AgentsServiceListAgentInstancesProcedure = "/corellia.v1.AgentsService/ListAgentInstances"
+	// AgentsServiceGetAgentInstanceProcedure is the fully-qualified name of the AgentsService's
+	// GetAgentInstance RPC.
+	AgentsServiceGetAgentInstanceProcedure = "/corellia.v1.AgentsService/GetAgentInstance"
+	// AgentsServiceStopAgentInstanceProcedure is the fully-qualified name of the AgentsService's
+	// StopAgentInstance RPC.
+	AgentsServiceStopAgentInstanceProcedure = "/corellia.v1.AgentsService/StopAgentInstance"
+	// AgentsServiceDestroyAgentInstanceProcedure is the fully-qualified name of the AgentsService's
+	// DestroyAgentInstance RPC.
+	AgentsServiceDestroyAgentInstanceProcedure = "/corellia.v1.AgentsService/DestroyAgentInstance"
 )
 
 // AgentsServiceClient is a client for the corellia.v1.AgentsService service.
 type AgentsServiceClient interface {
+	// M2 — catalog read, returns the static template list.
 	ListAgentTemplates(context.Context, *connect.Request[v1.ListAgentTemplatesRequest]) (*connect.Response[v1.ListAgentTemplatesResponse], error)
+	// M4 — spawn-flow + fleet methods. Same service per spawn-flow plan
+	// decision 12 (templates and instances are both "Agent" in the
+	// user-facing sense per blueprint §2). All M4 methods are auth-gated;
+	// the org guard is enforced at the service layer (decision 9).
+	SpawnAgent(context.Context, *connect.Request[v1.SpawnAgentRequest]) (*connect.Response[v1.SpawnAgentResponse], error)
+	SpawnNAgents(context.Context, *connect.Request[v1.SpawnNAgentsRequest]) (*connect.Response[v1.SpawnNAgentsResponse], error)
+	ListAgentInstances(context.Context, *connect.Request[v1.ListAgentInstancesRequest]) (*connect.Response[v1.ListAgentInstancesResponse], error)
+	GetAgentInstance(context.Context, *connect.Request[v1.GetAgentInstanceRequest]) (*connect.Response[v1.GetAgentInstanceResponse], error)
+	StopAgentInstance(context.Context, *connect.Request[v1.StopAgentInstanceRequest]) (*connect.Response[v1.StopAgentInstanceResponse], error)
+	DestroyAgentInstance(context.Context, *connect.Request[v1.DestroyAgentInstanceRequest]) (*connect.Response[v1.DestroyAgentInstanceResponse], error)
 }
 
 // NewAgentsServiceClient constructs a client for the corellia.v1.AgentsService service. By default,
@@ -60,12 +89,54 @@ func NewAgentsServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(agentsServiceMethods.ByName("ListAgentTemplates")),
 			connect.WithClientOptions(opts...),
 		),
+		spawnAgent: connect.NewClient[v1.SpawnAgentRequest, v1.SpawnAgentResponse](
+			httpClient,
+			baseURL+AgentsServiceSpawnAgentProcedure,
+			connect.WithSchema(agentsServiceMethods.ByName("SpawnAgent")),
+			connect.WithClientOptions(opts...),
+		),
+		spawnNAgents: connect.NewClient[v1.SpawnNAgentsRequest, v1.SpawnNAgentsResponse](
+			httpClient,
+			baseURL+AgentsServiceSpawnNAgentsProcedure,
+			connect.WithSchema(agentsServiceMethods.ByName("SpawnNAgents")),
+			connect.WithClientOptions(opts...),
+		),
+		listAgentInstances: connect.NewClient[v1.ListAgentInstancesRequest, v1.ListAgentInstancesResponse](
+			httpClient,
+			baseURL+AgentsServiceListAgentInstancesProcedure,
+			connect.WithSchema(agentsServiceMethods.ByName("ListAgentInstances")),
+			connect.WithClientOptions(opts...),
+		),
+		getAgentInstance: connect.NewClient[v1.GetAgentInstanceRequest, v1.GetAgentInstanceResponse](
+			httpClient,
+			baseURL+AgentsServiceGetAgentInstanceProcedure,
+			connect.WithSchema(agentsServiceMethods.ByName("GetAgentInstance")),
+			connect.WithClientOptions(opts...),
+		),
+		stopAgentInstance: connect.NewClient[v1.StopAgentInstanceRequest, v1.StopAgentInstanceResponse](
+			httpClient,
+			baseURL+AgentsServiceStopAgentInstanceProcedure,
+			connect.WithSchema(agentsServiceMethods.ByName("StopAgentInstance")),
+			connect.WithClientOptions(opts...),
+		),
+		destroyAgentInstance: connect.NewClient[v1.DestroyAgentInstanceRequest, v1.DestroyAgentInstanceResponse](
+			httpClient,
+			baseURL+AgentsServiceDestroyAgentInstanceProcedure,
+			connect.WithSchema(agentsServiceMethods.ByName("DestroyAgentInstance")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // agentsServiceClient implements AgentsServiceClient.
 type agentsServiceClient struct {
-	listAgentTemplates *connect.Client[v1.ListAgentTemplatesRequest, v1.ListAgentTemplatesResponse]
+	listAgentTemplates   *connect.Client[v1.ListAgentTemplatesRequest, v1.ListAgentTemplatesResponse]
+	spawnAgent           *connect.Client[v1.SpawnAgentRequest, v1.SpawnAgentResponse]
+	spawnNAgents         *connect.Client[v1.SpawnNAgentsRequest, v1.SpawnNAgentsResponse]
+	listAgentInstances   *connect.Client[v1.ListAgentInstancesRequest, v1.ListAgentInstancesResponse]
+	getAgentInstance     *connect.Client[v1.GetAgentInstanceRequest, v1.GetAgentInstanceResponse]
+	stopAgentInstance    *connect.Client[v1.StopAgentInstanceRequest, v1.StopAgentInstanceResponse]
+	destroyAgentInstance *connect.Client[v1.DestroyAgentInstanceRequest, v1.DestroyAgentInstanceResponse]
 }
 
 // ListAgentTemplates calls corellia.v1.AgentsService.ListAgentTemplates.
@@ -73,9 +144,50 @@ func (c *agentsServiceClient) ListAgentTemplates(ctx context.Context, req *conne
 	return c.listAgentTemplates.CallUnary(ctx, req)
 }
 
+// SpawnAgent calls corellia.v1.AgentsService.SpawnAgent.
+func (c *agentsServiceClient) SpawnAgent(ctx context.Context, req *connect.Request[v1.SpawnAgentRequest]) (*connect.Response[v1.SpawnAgentResponse], error) {
+	return c.spawnAgent.CallUnary(ctx, req)
+}
+
+// SpawnNAgents calls corellia.v1.AgentsService.SpawnNAgents.
+func (c *agentsServiceClient) SpawnNAgents(ctx context.Context, req *connect.Request[v1.SpawnNAgentsRequest]) (*connect.Response[v1.SpawnNAgentsResponse], error) {
+	return c.spawnNAgents.CallUnary(ctx, req)
+}
+
+// ListAgentInstances calls corellia.v1.AgentsService.ListAgentInstances.
+func (c *agentsServiceClient) ListAgentInstances(ctx context.Context, req *connect.Request[v1.ListAgentInstancesRequest]) (*connect.Response[v1.ListAgentInstancesResponse], error) {
+	return c.listAgentInstances.CallUnary(ctx, req)
+}
+
+// GetAgentInstance calls corellia.v1.AgentsService.GetAgentInstance.
+func (c *agentsServiceClient) GetAgentInstance(ctx context.Context, req *connect.Request[v1.GetAgentInstanceRequest]) (*connect.Response[v1.GetAgentInstanceResponse], error) {
+	return c.getAgentInstance.CallUnary(ctx, req)
+}
+
+// StopAgentInstance calls corellia.v1.AgentsService.StopAgentInstance.
+func (c *agentsServiceClient) StopAgentInstance(ctx context.Context, req *connect.Request[v1.StopAgentInstanceRequest]) (*connect.Response[v1.StopAgentInstanceResponse], error) {
+	return c.stopAgentInstance.CallUnary(ctx, req)
+}
+
+// DestroyAgentInstance calls corellia.v1.AgentsService.DestroyAgentInstance.
+func (c *agentsServiceClient) DestroyAgentInstance(ctx context.Context, req *connect.Request[v1.DestroyAgentInstanceRequest]) (*connect.Response[v1.DestroyAgentInstanceResponse], error) {
+	return c.destroyAgentInstance.CallUnary(ctx, req)
+}
+
 // AgentsServiceHandler is an implementation of the corellia.v1.AgentsService service.
 type AgentsServiceHandler interface {
+	// M2 — catalog read, returns the static template list.
 	ListAgentTemplates(context.Context, *connect.Request[v1.ListAgentTemplatesRequest]) (*connect.Response[v1.ListAgentTemplatesResponse], error)
+	// M4 — spawn-flow + fleet methods. Same service per spawn-flow plan
+	// decision 12 (templates and instances are both "Agent" in the
+	// user-facing sense per blueprint §2). All M4 methods are auth-gated;
+	// the org guard is enforced at the service layer (decision 9).
+	SpawnAgent(context.Context, *connect.Request[v1.SpawnAgentRequest]) (*connect.Response[v1.SpawnAgentResponse], error)
+	SpawnNAgents(context.Context, *connect.Request[v1.SpawnNAgentsRequest]) (*connect.Response[v1.SpawnNAgentsResponse], error)
+	ListAgentInstances(context.Context, *connect.Request[v1.ListAgentInstancesRequest]) (*connect.Response[v1.ListAgentInstancesResponse], error)
+	GetAgentInstance(context.Context, *connect.Request[v1.GetAgentInstanceRequest]) (*connect.Response[v1.GetAgentInstanceResponse], error)
+	StopAgentInstance(context.Context, *connect.Request[v1.StopAgentInstanceRequest]) (*connect.Response[v1.StopAgentInstanceResponse], error)
+	DestroyAgentInstance(context.Context, *connect.Request[v1.DestroyAgentInstanceRequest]) (*connect.Response[v1.DestroyAgentInstanceResponse], error)
 }
 
 // NewAgentsServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -91,10 +203,58 @@ func NewAgentsServiceHandler(svc AgentsServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(agentsServiceMethods.ByName("ListAgentTemplates")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentsServiceSpawnAgentHandler := connect.NewUnaryHandler(
+		AgentsServiceSpawnAgentProcedure,
+		svc.SpawnAgent,
+		connect.WithSchema(agentsServiceMethods.ByName("SpawnAgent")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentsServiceSpawnNAgentsHandler := connect.NewUnaryHandler(
+		AgentsServiceSpawnNAgentsProcedure,
+		svc.SpawnNAgents,
+		connect.WithSchema(agentsServiceMethods.ByName("SpawnNAgents")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentsServiceListAgentInstancesHandler := connect.NewUnaryHandler(
+		AgentsServiceListAgentInstancesProcedure,
+		svc.ListAgentInstances,
+		connect.WithSchema(agentsServiceMethods.ByName("ListAgentInstances")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentsServiceGetAgentInstanceHandler := connect.NewUnaryHandler(
+		AgentsServiceGetAgentInstanceProcedure,
+		svc.GetAgentInstance,
+		connect.WithSchema(agentsServiceMethods.ByName("GetAgentInstance")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentsServiceStopAgentInstanceHandler := connect.NewUnaryHandler(
+		AgentsServiceStopAgentInstanceProcedure,
+		svc.StopAgentInstance,
+		connect.WithSchema(agentsServiceMethods.ByName("StopAgentInstance")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentsServiceDestroyAgentInstanceHandler := connect.NewUnaryHandler(
+		AgentsServiceDestroyAgentInstanceProcedure,
+		svc.DestroyAgentInstance,
+		connect.WithSchema(agentsServiceMethods.ByName("DestroyAgentInstance")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/corellia.v1.AgentsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentsServiceListAgentTemplatesProcedure:
 			agentsServiceListAgentTemplatesHandler.ServeHTTP(w, r)
+		case AgentsServiceSpawnAgentProcedure:
+			agentsServiceSpawnAgentHandler.ServeHTTP(w, r)
+		case AgentsServiceSpawnNAgentsProcedure:
+			agentsServiceSpawnNAgentsHandler.ServeHTTP(w, r)
+		case AgentsServiceListAgentInstancesProcedure:
+			agentsServiceListAgentInstancesHandler.ServeHTTP(w, r)
+		case AgentsServiceGetAgentInstanceProcedure:
+			agentsServiceGetAgentInstanceHandler.ServeHTTP(w, r)
+		case AgentsServiceStopAgentInstanceProcedure:
+			agentsServiceStopAgentInstanceHandler.ServeHTTP(w, r)
+		case AgentsServiceDestroyAgentInstanceProcedure:
+			agentsServiceDestroyAgentInstanceHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -106,4 +266,28 @@ type UnimplementedAgentsServiceHandler struct{}
 
 func (UnimplementedAgentsServiceHandler) ListAgentTemplates(context.Context, *connect.Request[v1.ListAgentTemplatesRequest]) (*connect.Response[v1.ListAgentTemplatesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.ListAgentTemplates is not implemented"))
+}
+
+func (UnimplementedAgentsServiceHandler) SpawnAgent(context.Context, *connect.Request[v1.SpawnAgentRequest]) (*connect.Response[v1.SpawnAgentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.SpawnAgent is not implemented"))
+}
+
+func (UnimplementedAgentsServiceHandler) SpawnNAgents(context.Context, *connect.Request[v1.SpawnNAgentsRequest]) (*connect.Response[v1.SpawnNAgentsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.SpawnNAgents is not implemented"))
+}
+
+func (UnimplementedAgentsServiceHandler) ListAgentInstances(context.Context, *connect.Request[v1.ListAgentInstancesRequest]) (*connect.Response[v1.ListAgentInstancesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.ListAgentInstances is not implemented"))
+}
+
+func (UnimplementedAgentsServiceHandler) GetAgentInstance(context.Context, *connect.Request[v1.GetAgentInstanceRequest]) (*connect.Response[v1.GetAgentInstanceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.GetAgentInstance is not implemented"))
+}
+
+func (UnimplementedAgentsServiceHandler) StopAgentInstance(context.Context, *connect.Request[v1.StopAgentInstanceRequest]) (*connect.Response[v1.StopAgentInstanceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.StopAgentInstance is not implemented"))
+}
+
+func (UnimplementedAgentsServiceHandler) DestroyAgentInstance(context.Context, *connect.Request[v1.DestroyAgentInstanceRequest]) (*connect.Response[v1.DestroyAgentInstanceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.DestroyAgentInstance is not implemented"))
 }

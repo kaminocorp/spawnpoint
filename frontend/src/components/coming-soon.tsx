@@ -19,7 +19,7 @@ export function ComingSoon({ title, description, eta }: Props) {
       <Card className="w-full">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-md bg-muted text-muted-foreground">
+            <div className="halftone-bg flex size-9 items-center justify-center rounded-md text-muted-foreground">
               <ConstructionIcon className="size-4" />
             </div>
             <div className="space-y-0.5">

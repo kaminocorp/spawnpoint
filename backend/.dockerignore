@@ -1,0 +1,14 @@
+.env
+.env.*
+.envrc
+bin/
+tmp/
+*.log
+
+# Tests are not needed at runtime.
+**/*_test.go
+
+# Editor / VCS noise.
+.vscode/
+.idea/
+.DS_Store

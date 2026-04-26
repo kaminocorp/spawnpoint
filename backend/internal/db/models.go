@@ -9,6 +9,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AgentInstance struct {
+	ID                uuid.UUID          `json:"id"`
+	Name              string             `json:"name"`
+	AgentTemplateID   uuid.UUID          `json:"agent_template_id"`
+	OwnerUserID       uuid.UUID          `json:"owner_user_id"`
+	OrgID             uuid.UUID          `json:"org_id"`
+	DeployTargetID    uuid.UUID          `json:"deploy_target_id"`
+	DeployExternalRef *string            `json:"deploy_external_ref"`
+	ModelProvider     string             `json:"model_provider"`
+	ModelName         string             `json:"model_name"`
+	Status            string             `json:"status"`
+	ConfigOverrides   []byte             `json:"config_overrides"`
+	LastStartedAt     pgtype.Timestamptz `json:"last_started_at"`
+	LastStoppedAt     pgtype.Timestamptz `json:"last_stopped_at"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
 type AgentTemplate struct {
 	ID               uuid.UUID          `json:"id"`
 	Name             string             `json:"name"`
@@ -18,6 +36,16 @@ type AgentTemplate struct {
 	CreatedByUserID  pgtype.UUID        `json:"created_by_user_id"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type DeployTarget struct {
+	ID        uuid.UUID          `json:"id"`
+	Name      string             `json:"name"`
+	Kind      string             `json:"kind"`
+	Config    []byte             `json:"config"`
+	Enabled   bool               `json:"enabled"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 type HarnessAdapter struct {
@@ -37,6 +65,15 @@ type Organization struct {
 	Name      string             `json:"name"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Secret struct {
+	ID              uuid.UUID          `json:"id"`
+	AgentInstanceID uuid.UUID          `json:"agent_instance_id"`
+	KeyName         string             `json:"key_name"`
+	StorageRef      string             `json:"storage_ref"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
 type User struct {

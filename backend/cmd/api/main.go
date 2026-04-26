@@ -11,6 +11,7 @@ import (
 
 	_ "github.com/joho/godotenv/autoload"
 
+	"github.com/hejijunhao/corellia/backend/internal/adapters"
 	"github.com/hejijunhao/corellia/backend/internal/agents"
 	"github.com/hejijunhao/corellia/backend/internal/auth"
 	"github.com/hejijunhao/corellia/backend/internal/config"
@@ -45,7 +46,7 @@ func main() {
 	queries := db.New(pool)
 	usersSvc := users.NewService(queries)
 	orgsSvc := organizations.NewService(queries, usersSvc)
-	agentsSvc := agents.NewService(queries)
+	adaptersSvc := adapters.NewService(queries)
 
 	flyTarget, err := deploy.NewFlyDeployTarget(ctx, deploy.FlyCredentials{
 		APIToken: cfg.FlyAPIToken,
@@ -67,12 +68,25 @@ func main() {
 		"fly_org", cfg.FlyOrgSlug)
 	deployResolver := deploy.NewStaticResolver(deployTargets)
 
+	agentsSvc := agents.NewService(queries, adaptersSvc, deployResolver)
+
+	// Boot-time stale-pending sweep (spawn-flow plan decision 32). Reaps
+	// any agent_instances row stuck in 'pending' for >5 min — typically
+	// the residue of a process crash mid-spawn whose poll goroutine was
+	// abandoned. Logged warn-level with the IDs so the operator can
+	// cross-reference the crash event.
+	if reaped, err := agentsSvc.ReapStalePending(ctx); err != nil {
+		slog.Error("agents: stale-pending sweep", "err", err)
+	} else if len(reaped) > 0 {
+		slog.Warn("agents: reaped stale pending instances", "count", len(reaped), "ids", reaped)
+	}
+
 	handler := httpsrv.New(httpsrv.Deps{
 		Config:               cfg,
 		AuthVerifier:         verifier,
 		UsersHandler:         httpsrv.NewUsersHandler(usersSvc),
 		OrganizationsHandler: httpsrv.NewOrganizationsHandler(orgsSvc),
-		AgentsHandler:        httpsrv.NewAgentsHandler(agentsSvc),
+		AgentsHandler:        httpsrv.NewAgentsHandler(agentsSvc, usersSvc),
 		DeployTargets:        deployResolver,
 		AllowedOrigin:        cfg.FrontendOrigin,
 	})

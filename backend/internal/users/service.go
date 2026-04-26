@@ -67,6 +67,19 @@ func (s *Service) CallerOrgID(ctx context.Context) (uuid.UUID, error) {
 	return user.OrgID, nil
 }
 
+// CallerIdentity returns the authenticated caller's (userID, orgID) in one
+// DB lookup. The agents handler uses this to build SpawnInput.OwnerUserID +
+// OrgID per spawn-flow plan §27 — both fields come from the same row, and
+// issuing two separate calls (CallerOrgID + a user-id getter) would double
+// the per-RPC DB cost for no benefit.
+func (s *Service) CallerIdentity(ctx context.Context) (userID, orgID uuid.UUID, err error) {
+	user, err := s.loadCurrentUser(ctx)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, err
+	}
+	return user.ID, user.OrgID, nil
+}
+
 func (s *Service) loadCurrentUser(ctx context.Context) (db.User, error) {
 	claims, ok := auth.FromContext(ctx)
 	if !ok {

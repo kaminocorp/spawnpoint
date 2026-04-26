@@ -2,15 +2,15 @@
 // @generated from file corellia/v1/agents.proto (package corellia.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file corellia/v1/agents.proto.
  */
 export const file_corellia_v1_agents: GenFile = /*@__PURE__*/
-  fileDesc("Chhjb3JlbGxpYS92MS9hZ2VudHMucHJvdG8SC2NvcmVsbGlhLnYxIhsKGUxpc3RBZ2VudFRlbXBsYXRlc1JlcXVlc3QiSwoaTGlzdEFnZW50VGVtcGxhdGVzUmVzcG9uc2USLQoJdGVtcGxhdGVzGAEgAygLMhouY29yZWxsaWEudjEuQWdlbnRUZW1wbGF0ZSI+Cg1BZ2VudFRlbXBsYXRlEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSEwoLZGVzY3JpcHRpb24YAyABKAkydgoNQWdlbnRzU2VydmljZRJlChJMaXN0QWdlbnRUZW1wbGF0ZXMSJi5jb3JlbGxpYS52MS5MaXN0QWdlbnRUZW1wbGF0ZXNSZXF1ZXN0GicuY29yZWxsaWEudjEuTGlzdEFnZW50VGVtcGxhdGVzUmVzcG9uc2VCTFpKZ2l0aHViLmNvbS9oZWppanVuaGFvL2NvcmVsbGlhL2JhY2tlbmQvaW50ZXJuYWwvZ2VuL2NvcmVsbGlhL3YxO2NvcmVsbGlhdjFiBnByb3RvMw");
+  fileDesc("Chhjb3JlbGxpYS92MS9hZ2VudHMucHJvdG8SC2NvcmVsbGlhLnYxIhsKGUxpc3RBZ2VudFRlbXBsYXRlc1JlcXVlc3QiSwoaTGlzdEFnZW50VGVtcGxhdGVzUmVzcG9uc2USLQoJdGVtcGxhdGVzGAEgAygLMhouY29yZWxsaWEudjEuQWdlbnRUZW1wbGF0ZSI+Cg1BZ2VudFRlbXBsYXRlEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSEwoLZGVzY3JpcHRpb24YAyABKAkinAIKDUFnZW50SW5zdGFuY2USCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRITCgt0ZW1wbGF0ZV9pZBgDIAEoCRIVCg10ZW1wbGF0ZV9uYW1lGAQgASgJEiwKCHByb3ZpZGVyGAUgASgOMhouY29yZWxsaWEudjEuTW9kZWxQcm92aWRlchISCgptb2RlbF9uYW1lGAYgASgJEg4KBnN0YXR1cxgHIAEoCRIbChNkZXBsb3lfZXh0ZXJuYWxfcmVmGAggASgJEhAKCGxvZ3NfdXJsGAkgASgJEhIKCmNyZWF0ZWRfYXQYCiABKAkSFwoPbGFzdF9zdGFydGVkX2F0GAsgASgJEhcKD2xhc3Rfc3RvcHBlZF9hdBgMIAEoCSKPAQoRU3Bhd25BZ2VudFJlcXVlc3QSEwoLdGVtcGxhdGVfaWQYASABKAkSDAoEbmFtZRgCIAEoCRIsCghwcm92aWRlchgDIAEoDjIaLmNvcmVsbGlhLnYxLk1vZGVsUHJvdmlkZXISEgoKbW9kZWxfbmFtZRgEIAEoCRIVCg1tb2RlbF9hcGlfa2V5GAUgASgJIkIKElNwYXduQWdlbnRSZXNwb25zZRIsCghpbnN0YW5jZRgBIAEoCzIaLmNvcmVsbGlhLnYxLkFnZW50SW5zdGFuY2UipwEKE1NwYXduTkFnZW50c1JlcXVlc3QSEwoLdGVtcGxhdGVfaWQYASABKAkSEwoLbmFtZV9wcmVmaXgYAiABKAkSDQoFY291bnQYAyABKAUSLAoIcHJvdmlkZXIYBCABKA4yGi5jb3JlbGxpYS52MS5Nb2RlbFByb3ZpZGVyEhIKCm1vZGVsX25hbWUYBSABKAkSFQoNbW9kZWxfYXBpX2tleRgGIAEoCSJFChRTcGF3bk5BZ2VudHNSZXNwb25zZRItCglpbnN0YW5jZXMYASADKAsyGi5jb3JlbGxpYS52MS5BZ2VudEluc3RhbmNlIhsKGUxpc3RBZ2VudEluc3RhbmNlc1JlcXVlc3QiSwoaTGlzdEFnZW50SW5zdGFuY2VzUmVzcG9uc2USLQoJaW5zdGFuY2VzGAEgAygLMhouY29yZWxsaWEudjEuQWdlbnRJbnN0YW5jZSIlChdHZXRBZ2VudEluc3RhbmNlUmVxdWVzdBIKCgJpZBgBIAEoCSJIChhHZXRBZ2VudEluc3RhbmNlUmVzcG9uc2USLAoIaW5zdGFuY2UYASABKAsyGi5jb3JlbGxpYS52MS5BZ2VudEluc3RhbmNlIiYKGFN0b3BBZ2VudEluc3RhbmNlUmVxdWVzdBIKCgJpZBgBIAEoCSJJChlTdG9wQWdlbnRJbnN0YW5jZVJlc3BvbnNlEiwKCGluc3RhbmNlGAEgASgLMhouY29yZWxsaWEudjEuQWdlbnRJbnN0YW5jZSIpChtEZXN0cm95QWdlbnRJbnN0YW5jZVJlcXVlc3QSCgoCaWQYASABKAkiTAocRGVzdHJveUFnZW50SW5zdGFuY2VSZXNwb25zZRIsCghpbnN0YW5jZRgBIAEoCzIaLmNvcmVsbGlhLnYxLkFnZW50SW5zdGFuY2UqWgoNTW9kZWxQcm92aWRlchIeChpNT0RFTF9QUk9WSURFUl9VTlNQRUNJRklFRBAAEg0KCUFOVEhST1BJQxABEgoKBk9QRU5BSRACEg4KCk9QRU5ST1VURVIQAzKzBQoNQWdlbnRzU2VydmljZRJlChJMaXN0QWdlbnRUZW1wbGF0ZXMSJi5jb3JlbGxpYS52MS5MaXN0QWdlbnRUZW1wbGF0ZXNSZXF1ZXN0GicuY29yZWxsaWEudjEuTGlzdEFnZW50VGVtcGxhdGVzUmVzcG9uc2USTQoKU3Bhd25BZ2VudBIeLmNvcmVsbGlhLnYxLlNwYXduQWdlbnRSZXF1ZXN0Gh8uY29yZWxsaWEudjEuU3Bhd25BZ2VudFJlc3BvbnNlElMKDFNwYXduTkFnZW50cxIgLmNvcmVsbGlhLnYxLlNwYXduTkFnZW50c1JlcXVlc3QaIS5jb3JlbGxpYS52MS5TcGF3bk5BZ2VudHNSZXNwb25zZRJlChJMaXN0QWdlbnRJbnN0YW5jZXMSJi5jb3JlbGxpYS52MS5MaXN0QWdlbnRJbnN0YW5jZXNSZXF1ZXN0GicuY29yZWxsaWEudjEuTGlzdEFnZW50SW5zdGFuY2VzUmVzcG9uc2USXwoQR2V0QWdlbnRJbnN0YW5jZRIkLmNvcmVsbGlhLnYxLkdldEFnZW50SW5zdGFuY2VSZXF1ZXN0GiUuY29yZWxsaWEudjEuR2V0QWdlbnRJbnN0YW5jZVJlc3BvbnNlEmIKEVN0b3BBZ2VudEluc3RhbmNlEiUuY29yZWxsaWEudjEuU3RvcEFnZW50SW5zdGFuY2VSZXF1ZXN0GiYuY29yZWxsaWEudjEuU3RvcEFnZW50SW5zdGFuY2VSZXNwb25zZRJrChREZXN0cm95QWdlbnRJbnN0YW5jZRIoLmNvcmVsbGlhLnYxLkRlc3Ryb3lBZ2VudEluc3RhbmNlUmVxdWVzdBopLmNvcmVsbGlhLnYxLkRlc3Ryb3lBZ2VudEluc3RhbmNlUmVzcG9uc2VCTFpKZ2l0aHViLmNvbS9oZWppanVuaGFvL2NvcmVsbGlhL2JhY2tlbmQvaW50ZXJuYWwvZ2VuL2NvcmVsbGlhL3YxO2NvcmVsbGlhdjFiBnByb3RvMw");
 
 /**
  * @generated from message corellia.v1.ListAgentTemplatesRequest
@@ -70,16 +70,455 @@ export const AgentTemplateSchema: GenMessage<AgentTemplate> = /*@__PURE__*/
   messageDesc(file_corellia_v1_agents, 2);
 
 /**
+ * AgentInstance is the wire shape for a deployed agent. Empty-string
+ * sentinels are used for "not yet set" semantics on optional scalars
+ * (deploy_external_ref, logs_url, last_started_at, last_stopped_at) —
+ * the alternative `optional string` would force every FE consumer to
+ * branch on presence; empty-string is a single check.
+ *
+ * @generated from message corellia.v1.AgentInstance
+ */
+export type AgentInstance = Message<"corellia.v1.AgentInstance"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string template_id = 3;
+   */
+  templateId: string;
+
+  /**
+   * Joined from agent_templates at the SQL layer so the FE can label
+   * each row without a second round-trip (spawn-flow plan decision 31).
+   *
+   * @generated from field: string template_name = 4;
+   */
+  templateName: string;
+
+  /**
+   * @generated from field: corellia.v1.ModelProvider provider = 5;
+   */
+  provider: ModelProvider;
+
+  /**
+   * @generated from field: string model_name = 6;
+   */
+  modelName: string;
+
+  /**
+   * pending | running | stopped | failed | destroyed. Pinned at the DB
+   * layer via CHECK; the FE branches on it for badge color.
+   *
+   * @generated from field: string status = 7;
+   */
+  status: string;
+
+  /**
+   * Empty until the deploy target has assigned an external ref.
+   *
+   * @generated from field: string deploy_external_ref = 8;
+   */
+  deployExternalRef: string;
+
+  /**
+   * Empty until the agent has a deployed app whose logs we can link to.
+   * Computed server-side from deploy_external_ref so the Fly-naming
+   * convention never leaks past the service boundary (decision 33).
+   *
+   * @generated from field: string logs_url = 9;
+   */
+  logsUrl: string;
+
+  /**
+   * RFC3339 timestamps as strings. Establishes the v1 wire-shape for
+   * timestamps; google.protobuf.Timestamp is a v2 candidate when the
+   * FE picks up a richer date library.
+   *
+   * @generated from field: string created_at = 10;
+   */
+  createdAt: string;
+
+  /**
+   * @generated from field: string last_started_at = 11;
+   */
+  lastStartedAt: string;
+
+  /**
+   * @generated from field: string last_stopped_at = 12;
+   */
+  lastStoppedAt: string;
+};
+
+/**
+ * Describes the message corellia.v1.AgentInstance.
+ * Use `create(AgentInstanceSchema)` to create a new message.
+ */
+export const AgentInstanceSchema: GenMessage<AgentInstance> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 3);
+
+/**
+ * @generated from message corellia.v1.SpawnAgentRequest
+ */
+export type SpawnAgentRequest = Message<"corellia.v1.SpawnAgentRequest"> & {
+  /**
+   * @generated from field: string template_id = 1;
+   */
+  templateId: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: corellia.v1.ModelProvider provider = 3;
+   */
+  provider: ModelProvider;
+
+  /**
+   * @generated from field: string model_name = 4;
+   */
+  modelName: string;
+
+  /**
+   * SECRET — never log this field. Forwarded once to the deploy
+   * target's secret store and never written to Corellia's database
+   * (spawn-flow plan decision 7).
+   *
+   * @generated from field: string model_api_key = 5;
+   */
+  modelApiKey: string;
+};
+
+/**
+ * Describes the message corellia.v1.SpawnAgentRequest.
+ * Use `create(SpawnAgentRequestSchema)` to create a new message.
+ */
+export const SpawnAgentRequestSchema: GenMessage<SpawnAgentRequest> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 4);
+
+/**
+ * @generated from message corellia.v1.SpawnAgentResponse
+ */
+export type SpawnAgentResponse = Message<"corellia.v1.SpawnAgentResponse"> & {
+  /**
+   * @generated from field: corellia.v1.AgentInstance instance = 1;
+   */
+  instance?: AgentInstance | undefined;
+};
+
+/**
+ * Describes the message corellia.v1.SpawnAgentResponse.
+ * Use `create(SpawnAgentResponseSchema)` to create a new message.
+ */
+export const SpawnAgentResponseSchema: GenMessage<SpawnAgentResponse> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 5);
+
+/**
+ * @generated from message corellia.v1.SpawnNAgentsRequest
+ */
+export type SpawnNAgentsRequest = Message<"corellia.v1.SpawnNAgentsRequest"> & {
+  /**
+   * @generated from field: string template_id = 1;
+   */
+  templateId: string;
+
+  /**
+   * @generated from field: string name_prefix = 2;
+   */
+  namePrefix: string;
+
+  /**
+   * Capped server-side at 10 per spawn-flow plan decision 14.
+   *
+   * @generated from field: int32 count = 3;
+   */
+  count: number;
+
+  /**
+   * @generated from field: corellia.v1.ModelProvider provider = 4;
+   */
+  provider: ModelProvider;
+
+  /**
+   * @generated from field: string model_name = 5;
+   */
+  modelName: string;
+
+  /**
+   * SECRET — same handling as SpawnAgentRequest. Reused across all N
+   * spawns per decision 15 (demo affordance).
+   *
+   * @generated from field: string model_api_key = 6;
+   */
+  modelApiKey: string;
+};
+
+/**
+ * Describes the message corellia.v1.SpawnNAgentsRequest.
+ * Use `create(SpawnNAgentsRequestSchema)` to create a new message.
+ */
+export const SpawnNAgentsRequestSchema: GenMessage<SpawnNAgentsRequest> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 6);
+
+/**
+ * @generated from message corellia.v1.SpawnNAgentsResponse
+ */
+export type SpawnNAgentsResponse = Message<"corellia.v1.SpawnNAgentsResponse"> & {
+  /**
+   * @generated from field: repeated corellia.v1.AgentInstance instances = 1;
+   */
+  instances: AgentInstance[];
+};
+
+/**
+ * Describes the message corellia.v1.SpawnNAgentsResponse.
+ * Use `create(SpawnNAgentsResponseSchema)` to create a new message.
+ */
+export const SpawnNAgentsResponseSchema: GenMessage<SpawnNAgentsResponse> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 7);
+
+/**
+ * @generated from message corellia.v1.ListAgentInstancesRequest
+ */
+export type ListAgentInstancesRequest = Message<"corellia.v1.ListAgentInstancesRequest"> & {
+};
+
+/**
+ * Describes the message corellia.v1.ListAgentInstancesRequest.
+ * Use `create(ListAgentInstancesRequestSchema)` to create a new message.
+ */
+export const ListAgentInstancesRequestSchema: GenMessage<ListAgentInstancesRequest> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 8);
+
+/**
+ * @generated from message corellia.v1.ListAgentInstancesResponse
+ */
+export type ListAgentInstancesResponse = Message<"corellia.v1.ListAgentInstancesResponse"> & {
+  /**
+   * @generated from field: repeated corellia.v1.AgentInstance instances = 1;
+   */
+  instances: AgentInstance[];
+};
+
+/**
+ * Describes the message corellia.v1.ListAgentInstancesResponse.
+ * Use `create(ListAgentInstancesResponseSchema)` to create a new message.
+ */
+export const ListAgentInstancesResponseSchema: GenMessage<ListAgentInstancesResponse> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 9);
+
+/**
+ * @generated from message corellia.v1.GetAgentInstanceRequest
+ */
+export type GetAgentInstanceRequest = Message<"corellia.v1.GetAgentInstanceRequest"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+};
+
+/**
+ * Describes the message corellia.v1.GetAgentInstanceRequest.
+ * Use `create(GetAgentInstanceRequestSchema)` to create a new message.
+ */
+export const GetAgentInstanceRequestSchema: GenMessage<GetAgentInstanceRequest> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 10);
+
+/**
+ * @generated from message corellia.v1.GetAgentInstanceResponse
+ */
+export type GetAgentInstanceResponse = Message<"corellia.v1.GetAgentInstanceResponse"> & {
+  /**
+   * @generated from field: corellia.v1.AgentInstance instance = 1;
+   */
+  instance?: AgentInstance | undefined;
+};
+
+/**
+ * Describes the message corellia.v1.GetAgentInstanceResponse.
+ * Use `create(GetAgentInstanceResponseSchema)` to create a new message.
+ */
+export const GetAgentInstanceResponseSchema: GenMessage<GetAgentInstanceResponse> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 11);
+
+/**
+ * @generated from message corellia.v1.StopAgentInstanceRequest
+ */
+export type StopAgentInstanceRequest = Message<"corellia.v1.StopAgentInstanceRequest"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+};
+
+/**
+ * Describes the message corellia.v1.StopAgentInstanceRequest.
+ * Use `create(StopAgentInstanceRequestSchema)` to create a new message.
+ */
+export const StopAgentInstanceRequestSchema: GenMessage<StopAgentInstanceRequest> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 12);
+
+/**
+ * @generated from message corellia.v1.StopAgentInstanceResponse
+ */
+export type StopAgentInstanceResponse = Message<"corellia.v1.StopAgentInstanceResponse"> & {
+  /**
+   * @generated from field: corellia.v1.AgentInstance instance = 1;
+   */
+  instance?: AgentInstance | undefined;
+};
+
+/**
+ * Describes the message corellia.v1.StopAgentInstanceResponse.
+ * Use `create(StopAgentInstanceResponseSchema)` to create a new message.
+ */
+export const StopAgentInstanceResponseSchema: GenMessage<StopAgentInstanceResponse> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 13);
+
+/**
+ * @generated from message corellia.v1.DestroyAgentInstanceRequest
+ */
+export type DestroyAgentInstanceRequest = Message<"corellia.v1.DestroyAgentInstanceRequest"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+};
+
+/**
+ * Describes the message corellia.v1.DestroyAgentInstanceRequest.
+ * Use `create(DestroyAgentInstanceRequestSchema)` to create a new message.
+ */
+export const DestroyAgentInstanceRequestSchema: GenMessage<DestroyAgentInstanceRequest> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 14);
+
+/**
+ * @generated from message corellia.v1.DestroyAgentInstanceResponse
+ */
+export type DestroyAgentInstanceResponse = Message<"corellia.v1.DestroyAgentInstanceResponse"> & {
+  /**
+   * @generated from field: corellia.v1.AgentInstance instance = 1;
+   */
+  instance?: AgentInstance | undefined;
+};
+
+/**
+ * Describes the message corellia.v1.DestroyAgentInstanceResponse.
+ * Use `create(DestroyAgentInstanceResponseSchema)` to create a new message.
+ */
+export const DestroyAgentInstanceResponseSchema: GenMessage<DestroyAgentInstanceResponse> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 15);
+
+/**
+ * ModelProvider is the (closed) v1 set. Adding values is a non-breaking
+ * proto change; removing one is breaking — so even retired providers
+ * stay enumerated. UNSPECIFIED is the proto3-required zero value and
+ * is rejected at the service layer (decision 26).
+ *
+ * @generated from enum corellia.v1.ModelProvider
+ */
+export enum ModelProvider {
+  /**
+   * @generated from enum value: MODEL_PROVIDER_UNSPECIFIED = 0;
+   */
+  MODEL_PROVIDER_UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: ANTHROPIC = 1;
+   */
+  ANTHROPIC = 1,
+
+  /**
+   * @generated from enum value: OPENAI = 2;
+   */
+  OPENAI = 2,
+
+  /**
+   * @generated from enum value: OPENROUTER = 3;
+   */
+  OPENROUTER = 3,
+}
+
+/**
+ * Describes the enum corellia.v1.ModelProvider.
+ */
+export const ModelProviderSchema: GenEnum<ModelProvider> = /*@__PURE__*/
+  enumDesc(file_corellia_v1_agents, 0);
+
+/**
  * @generated from service corellia.v1.AgentsService
  */
 export const AgentsService: GenService<{
   /**
+   * M2 — catalog read, returns the static template list.
+   *
    * @generated from rpc corellia.v1.AgentsService.ListAgentTemplates
    */
   listAgentTemplates: {
     methodKind: "unary";
     input: typeof ListAgentTemplatesRequestSchema;
     output: typeof ListAgentTemplatesResponseSchema;
+  },
+  /**
+   * M4 — spawn-flow + fleet methods. Same service per spawn-flow plan
+   * decision 12 (templates and instances are both "Agent" in the
+   * user-facing sense per blueprint §2). All M4 methods are auth-gated;
+   * the org guard is enforced at the service layer (decision 9).
+   *
+   * @generated from rpc corellia.v1.AgentsService.SpawnAgent
+   */
+  spawnAgent: {
+    methodKind: "unary";
+    input: typeof SpawnAgentRequestSchema;
+    output: typeof SpawnAgentResponseSchema;
+  },
+  /**
+   * @generated from rpc corellia.v1.AgentsService.SpawnNAgents
+   */
+  spawnNAgents: {
+    methodKind: "unary";
+    input: typeof SpawnNAgentsRequestSchema;
+    output: typeof SpawnNAgentsResponseSchema;
+  },
+  /**
+   * @generated from rpc corellia.v1.AgentsService.ListAgentInstances
+   */
+  listAgentInstances: {
+    methodKind: "unary";
+    input: typeof ListAgentInstancesRequestSchema;
+    output: typeof ListAgentInstancesResponseSchema;
+  },
+  /**
+   * @generated from rpc corellia.v1.AgentsService.GetAgentInstance
+   */
+  getAgentInstance: {
+    methodKind: "unary";
+    input: typeof GetAgentInstanceRequestSchema;
+    output: typeof GetAgentInstanceResponseSchema;
+  },
+  /**
+   * @generated from rpc corellia.v1.AgentsService.StopAgentInstance
+   */
+  stopAgentInstance: {
+    methodKind: "unary";
+    input: typeof StopAgentInstanceRequestSchema;
+    output: typeof StopAgentInstanceResponseSchema;
+  },
+  /**
+   * @generated from rpc corellia.v1.AgentsService.DestroyAgentInstance
+   */
+  destroyAgentInstance: {
+    methodKind: "unary";
+    input: typeof DestroyAgentInstanceRequestSchema;
+    output: typeof DestroyAgentInstanceResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_corellia_v1_agents, 0);

@@ -81,6 +81,22 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* Pearlescent chrome — see docs/refs/design-system.md §5.X (post-Phase-5).
+     Stops are bare OKLch coords (no oklch() wrapper) so callers compose
+     `oklch(var(--pearl-stop-N))` and `oklch(var(--pearl-stop-N) / <alpha>)`
+     uniformly. Tuned dark-first; light mode is not a v1 product target. */
+  --pearl-stop-1: 0.95 0.01 250;   /* near-white */
+  --pearl-stop-2: 0.82 0.02 240;   /* cool silver */
+  --pearl-stop-3: 0.85 0.015 70;   /* warm pearl */
+  --pearl-stop-4: 0.78 0.025 250;  /* steel blue */
+  --pearl-stop-5: 0.92 0.01 290;   /* lavender white */
+  --pearl-drift-duration: 28s;
+  --pearl-fallback-color: oklch(0.92 0.01 290);
+
+  /* Halftone substrate — atmospheric monochrome dot pattern. */
+  --halftone-density: 6px;
+  --halftone-opacity: 0.08;
 }
 
 .dark {
@@ -126,5 +142,124 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Pearlescent chrome × halftone substrate — material primitives
+   See docs/executing/frontend-redesign.md (Phase 1) for the design rationale.
+   --------------------------------------------------------------------------- */
+
+@keyframes pearl-drift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* Single source of truth for the gradient itself; the three pearl utilities
+   below all paint this same image. Centralising it means tuning the stops
+   later edits one place, not three. */
+.pearl,
+.pearl-text,
+.pearl-ring::before {
+  background-image: linear-gradient(
+    135deg,
+    oklch(var(--pearl-stop-1)) 0%,
+    oklch(var(--pearl-stop-2)) 25%,
+    oklch(var(--pearl-stop-3)) 50%,
+    oklch(var(--pearl-stop-4)) 75%,
+    oklch(var(--pearl-stop-5)) 100%
+  );
+  background-size: 200% 200%;
+}
+
+.pearl {
+  animation: pearl-drift var(--pearl-drift-duration) ease-in-out infinite;
+}
+
+.pearl-text {
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  /* Fallback: when background-clip:text fails, the `color` paints the text
+     in the gradient's lavender-white midpoint so degraded rendering still
+     reads on-brand. */
+  color: var(--pearl-fallback-color);
+  animation: pearl-drift var(--pearl-drift-duration) ease-in-out infinite;
+}
+
+/* Focus ring: a transparent outline holds the focus offset; a layered
+   inset/outer pair of shadows paints a 2px pearl-tinted halo plus a soft
+   12px outer glow. The drifting gradient lives on a ::before pseudo-element
+   absolutely positioned just outside the element's box, masked to a 2px
+   ring via padding + border-radius inheritance. */
+.pearl-ring {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  position: relative;
+  box-shadow:
+    0 0 0 1px oklch(var(--pearl-stop-3) / 0.4),
+    0 0 12px 0 oklch(var(--pearl-stop-3) / 0.3);
+}
+
+.pearl-ring::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  padding: 2px;
+  /* mask-composite trick: the linear-gradient mask paints everywhere, the
+     conic mask subtracts the inner area, leaving only the 2px ring. Works
+     in all evergreen browsers (Chromium, WebKit, Gecko) since 2023. */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: pearl-drift var(--pearl-drift-duration) ease-in-out infinite;
+}
+
+/* Atmospheric halftone substrate. Applied via a wrapper class on a
+   layout-level element (Phase 3 wires this on `(app)/layout.tsx`); the
+   pattern paints on a ::before so the host element keeps its own color
+   and content. Density and opacity are tunable per-route via CSS vars. */
+.halftone-bg {
+  position: relative;
+  isolation: isolate;
+}
+
+.halftone-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    circle at center,
+    white 0.5px,
+    transparent 1px
+  );
+  background-size: var(--halftone-density) var(--halftone-density);
+  opacity: var(--halftone-opacity);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Reduced motion: snap every pearl surface to the gradient's static
+   midpoint (the warm-pearl + cool-flank composition reads as premium
+   silver) and freeze the drift. WCAG / OS preference takes precedence
+   over aesthetic intent. */
+@media (prefers-reduced-motion: reduce) {
+  .pearl,
+  .pearl-text,
+  .pearl-ring::before {
+    animation: none;
+    background-position: 50% 50%;
   }
 }

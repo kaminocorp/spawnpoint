@@ -4,7 +4,30 @@ package corellia.v1;
 option go_package = "github.com/hejijunhao/corellia/backend/internal/gen/corellia/v1;corelliav1";
 
 service AgentsService {
+  // M2 — catalog read, returns the static template list.
   rpc ListAgentTemplates(ListAgentTemplatesRequest) returns (ListAgentTemplatesResponse);
+
+  // M4 — spawn-flow + fleet methods. Same service per spawn-flow plan
+  // decision 12 (templates and instances are both "Agent" in the
+  // user-facing sense per blueprint §2). All M4 methods are auth-gated;
+  // the org guard is enforced at the service layer (decision 9).
+  rpc SpawnAgent(SpawnAgentRequest) returns (SpawnAgentResponse);
+  rpc SpawnNAgents(SpawnNAgentsRequest) returns (SpawnNAgentsResponse);
+  rpc ListAgentInstances(ListAgentInstancesRequest) returns (ListAgentInstancesResponse);
+  rpc GetAgentInstance(GetAgentInstanceRequest) returns (GetAgentInstanceResponse);
+  rpc StopAgentInstance(StopAgentInstanceRequest) returns (StopAgentInstanceResponse);
+  rpc DestroyAgentInstance(DestroyAgentInstanceRequest) returns (DestroyAgentInstanceResponse);
+}
+
+// ModelProvider is the (closed) v1 set. Adding values is a non-breaking
+// proto change; removing one is breaking — so even retired providers
+// stay enumerated. UNSPECIFIED is the proto3-required zero value and
+// is rejected at the service layer (decision 26).
+enum ModelProvider {
+  MODEL_PROVIDER_UNSPECIFIED = 0;
+  ANTHROPIC = 1;
+  OPENAI = 2;
+  OPENROUTER = 3;
 }
 
 message ListAgentTemplatesRequest {}
@@ -16,4 +39,90 @@ message AgentTemplate {
   string id = 1;
   string name = 2;
   string description = 3;
+}
+
+// AgentInstance is the wire shape for a deployed agent. Empty-string
+// sentinels are used for "not yet set" semantics on optional scalars
+// (deploy_external_ref, logs_url, last_started_at, last_stopped_at) —
+// the alternative `optional string` would force every FE consumer to
+// branch on presence; empty-string is a single check.
+message AgentInstance {
+  string id = 1;
+  string name = 2;
+  string template_id = 3;
+  // Joined from agent_templates at the SQL layer so the FE can label
+  // each row without a second round-trip (spawn-flow plan decision 31).
+  string template_name = 4;
+  ModelProvider provider = 5;
+  string model_name = 6;
+  // pending | running | stopped | failed | destroyed. Pinned at the DB
+  // layer via CHECK; the FE branches on it for badge color.
+  string status = 7;
+  // Empty until the deploy target has assigned an external ref.
+  string deploy_external_ref = 8;
+  // Empty until the agent has a deployed app whose logs we can link to.
+  // Computed server-side from deploy_external_ref so the Fly-naming
+  // convention never leaks past the service boundary (decision 33).
+  string logs_url = 9;
+  // RFC3339 timestamps as strings. Establishes the v1 wire-shape for
+  // timestamps; google.protobuf.Timestamp is a v2 candidate when the
+  // FE picks up a richer date library.
+  string created_at = 10;
+  string last_started_at = 11;
+  string last_stopped_at = 12;
+}
+
+message SpawnAgentRequest {
+  string template_id = 1;
+  string name = 2;
+  ModelProvider provider = 3;
+  string model_name = 4;
+  // SECRET — never log this field. Forwarded once to the deploy
+  // target's secret store and never written to Corellia's database
+  // (spawn-flow plan decision 7).
+  string model_api_key = 5;
+}
+message SpawnAgentResponse {
+  AgentInstance instance = 1;
+}
+
+message SpawnNAgentsRequest {
+  string template_id = 1;
+  string name_prefix = 2;
+  // Capped server-side at 10 per spawn-flow plan decision 14.
+  int32 count = 3;
+  ModelProvider provider = 4;
+  string model_name = 5;
+  // SECRET — same handling as SpawnAgentRequest. Reused across all N
+  // spawns per decision 15 (demo affordance).
+  string model_api_key = 6;
+}
+message SpawnNAgentsResponse {
+  repeated AgentInstance instances = 1;
+}
+
+message ListAgentInstancesRequest {}
+message ListAgentInstancesResponse {
+  repeated AgentInstance instances = 1;
+}
+
+message GetAgentInstanceRequest {
+  string id = 1;
+}
+message GetAgentInstanceResponse {
+  AgentInstance instance = 1;
+}
+
+message StopAgentInstanceRequest {
+  string id = 1;
+}
+message StopAgentInstanceResponse {
+  AgentInstance instance = 1;
+}
+
+message DestroyAgentInstanceRequest {
+  string id = 1;
+}
+message DestroyAgentInstanceResponse {
+  AgentInstance instance = 1;
 }

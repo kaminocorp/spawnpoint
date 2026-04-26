@@ -12,13 +12,84 @@ import (
 
 type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// Single-row read with org guard at the query layer. Two-arg shape
+	// (id + org_id) is the M4-wide multi-tenancy posture: every read that
+	// could surface a row must be parameterised by the requesting user's
+	// org. Misuse — passing only id — would be a compile error because
+	// sqlc generates a struct-arg with both fields.
+	GetAgentInstanceByID(ctx context.Context, arg GetAgentInstanceByIDParams) (GetAgentInstanceByIDRow, error)
+	// M4 spawn flow's first step (decision 27 step 2): resolve the chosen
+	// template + its harness_adapter so we know which adapter image to spawn.
+	// Full row including harness_adapter_id and default_config — Spawn needs
+	// the FK to load harness_adapters.adapter_image_ref next, and config
+	// overrides will eventually merge against default_config.
+	GetAgentTemplateByID(ctx context.Context, id uuid.UUID) (AgentTemplate, error)
+	// Server-side resolution of the FK target for agent_instances inserts
+	// (decision 5). v1 always passes 'fly'. The name parameter is
+	// code-internal — the user never picks a deploy target in v1.
+	GetDeployTargetByName(ctx context.Context, name string) (DeployTarget, error)
 	GetHarnessAdapterByID(ctx context.Context, id uuid.UUID) (HarnessAdapter, error)
 	GetOrganizationByID(ctx context.Context, id uuid.UUID) (Organization, error)
 	GetUserByAuthID(ctx context.Context, authUserID uuid.UUID) (User, error)
+	// Full insert at the head of decision 27's order of operations (step 5).
+	// Status is omitted — the column DEFAULT 'pending' is the source of truth
+	// for the initial state, and putting it in the call site would invite
+	// typos. last_started_at / last_stopped_at default to NULL until the
+	// polling goroutine flips status to 'running' (and beyond).
+	InsertAgentInstance(ctx context.Context, arg InsertAgentInstanceParams) (AgentInstance, error)
+	// Audit-only DB record. The actual secret value is set on the Fly app
+	// via FlyDeployTarget.Spawn → Fly's app-secrets API; storage_ref is the
+	// opaque handle pointing at it. This insert lives in the same pgx.Tx as
+	// the parent agent_instances insert (decision 27 step 6) so a
+	// half-inserted state — instance row exists, secret rows don't — is
+	// impossible.
+	InsertSecret(ctx context.Context, arg InsertSecretParams) (Secret, error)
+	// Fleet view's primary read. Joins agent_templates so the FE can label
+	// each row with the template name without a second round-trip
+	// (decision 31). org_id filter is the multi-tenancy gate (decision 9 —
+	// never grant the FE the ability to see another org's rows).
+	ListAgentInstancesByOrg(ctx context.Context, orgID uuid.UUID) ([]ListAgentInstancesByOrgRow, error)
 	// Narrowed projection (no SELECT *) — keeps created_by_user_id and timestamps
 	// off the row type so the catalog service can't accidentally surface them.
 	// M4 widens this or adds a sibling query when the deploy modal needs default_config.
 	ListAgentTemplates(ctx context.Context) ([]ListAgentTemplatesRow, error)
+	// v1 has no caller; v1.5 admin views surface the registry. Same shipped-
+	// early rationale as secrets.ListSecretsByInstance — querier widening is
+	// free, and the contract surface is more honest with both reads visible.
+	ListDeployTargets(ctx context.Context) ([]DeployTarget, error)
+	// Audit read. v1 has no caller; v1.5+ surfaces "which secrets are set
+	// on this agent?" in the fleet detail view. Shipped now because the
+	// query is trivial and querier-interface widening costs nothing.
+	ListSecretsByInstance(ctx context.Context, agentInstanceID uuid.UUID) ([]Secret, error)
+	// Boot-time sweep (decision 32). Reaps any pending row older than 5
+	// minutes — the conservative bound that says "if a poll goroutine
+	// existed for this row at process start, its 90s budget plus jitter is
+	// well-elapsed by 5 min." Returning the IDs lets cmd/api log them
+	// explicitly so a contributor seeing the warn line knows *which* rows
+	// got reaped, not just how many.
+	ReapStalePendingInstances(ctx context.Context) ([]uuid.UUID, error)
+	// Called post-Fly-create (decision 27 step 9). Separate query (not folded
+	// into a status update) because the status flip happens later, in the
+	// polling goroutine — these are two different wall-clock events.
+	SetAgentInstanceDeployRef(ctx context.Context, arg SetAgentInstanceDeployRefParams) error
+	// → destroyed transition (decision 24). Sets last_stopped_at because
+	// destroy implies the agent has stopped running. Soft-delete: row stays,
+	// only the status flips. The audit trail ("this org once had 5 agents
+	// but only 2 today") is what survives.
+	SetAgentInstanceDestroyed(ctx context.Context, id uuid.UUID) error
+	// pending → failed transition. Used by the polling goroutine on /health
+	// timeout (decision 16) and by the boot-time stale-pending sweep
+	// (decision 32). No timestamp side-effect — the agent never started.
+	SetAgentInstanceFailed(ctx context.Context, id uuid.UUID) error
+	// pending → running transition. Sets last_started_at to wall-clock now.
+	// Separate from the generic status setter so the timestamp invariant
+	// ("last_started_at is set iff the instance has ever been running") is
+	// enforced at the query layer, not the call site.
+	SetAgentInstanceRunning(ctx context.Context, id uuid.UUID) error
+	// running → stopped transition (decision 23). Sets last_stopped_at.
+	// Mirrors SetAgentInstanceRunning's shape — same single-purpose,
+	// timestamp-invariant-pinning rationale.
+	SetAgentInstanceStopped(ctx context.Context, id uuid.UUID) error
 	UpdateHarnessAdapterImageRef(ctx context.Context, arg UpdateHarnessAdapterImageRefParams) (HarnessAdapter, error)
 	UpdateOrganizationName(ctx context.Context, arg UpdateOrganizationNameParams) (Organization, error)
 	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error)

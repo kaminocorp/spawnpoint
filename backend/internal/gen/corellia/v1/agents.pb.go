@@ -21,6 +21,62 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// ModelProvider is the (closed) v1 set. Adding values is a non-breaking
+// proto change; removing one is breaking — so even retired providers
+// stay enumerated. UNSPECIFIED is the proto3-required zero value and
+// is rejected at the service layer (decision 26).
+type ModelProvider int32
+
+const (
+	ModelProvider_MODEL_PROVIDER_UNSPECIFIED ModelProvider = 0
+	ModelProvider_ANTHROPIC                  ModelProvider = 1
+	ModelProvider_OPENAI                     ModelProvider = 2
+	ModelProvider_OPENROUTER                 ModelProvider = 3
+)
+
+// Enum value maps for ModelProvider.
+var (
+	ModelProvider_name = map[int32]string{
+		0: "MODEL_PROVIDER_UNSPECIFIED",
+		1: "ANTHROPIC",
+		2: "OPENAI",
+		3: "OPENROUTER",
+	}
+	ModelProvider_value = map[string]int32{
+		"MODEL_PROVIDER_UNSPECIFIED": 0,
+		"ANTHROPIC":                  1,
+		"OPENAI":                     2,
+		"OPENROUTER":                 3,
+	}
+)
+
+func (x ModelProvider) Enum() *ModelProvider {
+	p := new(ModelProvider)
+	*p = x
+	return p
+}
+
+func (x ModelProvider) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ModelProvider) Descriptor() protoreflect.EnumDescriptor {
+	return file_corellia_v1_agents_proto_enumTypes[0].Descriptor()
+}
+
+func (ModelProvider) Type() protoreflect.EnumType {
+	return &file_corellia_v1_agents_proto_enumTypes[0]
+}
+
+func (x ModelProvider) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ModelProvider.Descriptor instead.
+func (ModelProvider) EnumDescriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{0}
+}
+
 type ListAgentTemplatesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -161,6 +217,752 @@ func (x *AgentTemplate) GetDescription() string {
 	return ""
 }
 
+// AgentInstance is the wire shape for a deployed agent. Empty-string
+// sentinels are used for "not yet set" semantics on optional scalars
+// (deploy_external_ref, logs_url, last_started_at, last_stopped_at) —
+// the alternative `optional string` would force every FE consumer to
+// branch on presence; empty-string is a single check.
+type AgentInstance struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Id         string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name       string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	TemplateId string                 `protobuf:"bytes,3,opt,name=template_id,json=templateId,proto3" json:"template_id,omitempty"`
+	// Joined from agent_templates at the SQL layer so the FE can label
+	// each row without a second round-trip (spawn-flow plan decision 31).
+	TemplateName string        `protobuf:"bytes,4,opt,name=template_name,json=templateName,proto3" json:"template_name,omitempty"`
+	Provider     ModelProvider `protobuf:"varint,5,opt,name=provider,proto3,enum=corellia.v1.ModelProvider" json:"provider,omitempty"`
+	ModelName    string        `protobuf:"bytes,6,opt,name=model_name,json=modelName,proto3" json:"model_name,omitempty"`
+	// pending | running | stopped | failed | destroyed. Pinned at the DB
+	// layer via CHECK; the FE branches on it for badge color.
+	Status string `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`
+	// Empty until the deploy target has assigned an external ref.
+	DeployExternalRef string `protobuf:"bytes,8,opt,name=deploy_external_ref,json=deployExternalRef,proto3" json:"deploy_external_ref,omitempty"`
+	// Empty until the agent has a deployed app whose logs we can link to.
+	// Computed server-side from deploy_external_ref so the Fly-naming
+	// convention never leaks past the service boundary (decision 33).
+	LogsUrl string `protobuf:"bytes,9,opt,name=logs_url,json=logsUrl,proto3" json:"logs_url,omitempty"`
+	// RFC3339 timestamps as strings. Establishes the v1 wire-shape for
+	// timestamps; google.protobuf.Timestamp is a v2 candidate when the
+	// FE picks up a richer date library.
+	CreatedAt     string `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	LastStartedAt string `protobuf:"bytes,11,opt,name=last_started_at,json=lastStartedAt,proto3" json:"last_started_at,omitempty"`
+	LastStoppedAt string `protobuf:"bytes,12,opt,name=last_stopped_at,json=lastStoppedAt,proto3" json:"last_stopped_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentInstance) Reset() {
+	*x = AgentInstance{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentInstance) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentInstance) ProtoMessage() {}
+
+func (x *AgentInstance) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentInstance.ProtoReflect.Descriptor instead.
+func (*AgentInstance) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *AgentInstance) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *AgentInstance) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AgentInstance) GetTemplateId() string {
+	if x != nil {
+		return x.TemplateId
+	}
+	return ""
+}
+
+func (x *AgentInstance) GetTemplateName() string {
+	if x != nil {
+		return x.TemplateName
+	}
+	return ""
+}
+
+func (x *AgentInstance) GetProvider() ModelProvider {
+	if x != nil {
+		return x.Provider
+	}
+	return ModelProvider_MODEL_PROVIDER_UNSPECIFIED
+}
+
+func (x *AgentInstance) GetModelName() string {
+	if x != nil {
+		return x.ModelName
+	}
+	return ""
+}
+
+func (x *AgentInstance) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *AgentInstance) GetDeployExternalRef() string {
+	if x != nil {
+		return x.DeployExternalRef
+	}
+	return ""
+}
+
+func (x *AgentInstance) GetLogsUrl() string {
+	if x != nil {
+		return x.LogsUrl
+	}
+	return ""
+}
+
+func (x *AgentInstance) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+func (x *AgentInstance) GetLastStartedAt() string {
+	if x != nil {
+		return x.LastStartedAt
+	}
+	return ""
+}
+
+func (x *AgentInstance) GetLastStoppedAt() string {
+	if x != nil {
+		return x.LastStoppedAt
+	}
+	return ""
+}
+
+type SpawnAgentRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	TemplateId string                 `protobuf:"bytes,1,opt,name=template_id,json=templateId,proto3" json:"template_id,omitempty"`
+	Name       string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Provider   ModelProvider          `protobuf:"varint,3,opt,name=provider,proto3,enum=corellia.v1.ModelProvider" json:"provider,omitempty"`
+	ModelName  string                 `protobuf:"bytes,4,opt,name=model_name,json=modelName,proto3" json:"model_name,omitempty"`
+	// SECRET — never log this field. Forwarded once to the deploy
+	// target's secret store and never written to Corellia's database
+	// (spawn-flow plan decision 7).
+	ModelApiKey   string `protobuf:"bytes,5,opt,name=model_api_key,json=modelApiKey,proto3" json:"model_api_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SpawnAgentRequest) Reset() {
+	*x = SpawnAgentRequest{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SpawnAgentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SpawnAgentRequest) ProtoMessage() {}
+
+func (x *SpawnAgentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SpawnAgentRequest.ProtoReflect.Descriptor instead.
+func (*SpawnAgentRequest) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *SpawnAgentRequest) GetTemplateId() string {
+	if x != nil {
+		return x.TemplateId
+	}
+	return ""
+}
+
+func (x *SpawnAgentRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *SpawnAgentRequest) GetProvider() ModelProvider {
+	if x != nil {
+		return x.Provider
+	}
+	return ModelProvider_MODEL_PROVIDER_UNSPECIFIED
+}
+
+func (x *SpawnAgentRequest) GetModelName() string {
+	if x != nil {
+		return x.ModelName
+	}
+	return ""
+}
+
+func (x *SpawnAgentRequest) GetModelApiKey() string {
+	if x != nil {
+		return x.ModelApiKey
+	}
+	return ""
+}
+
+type SpawnAgentResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Instance      *AgentInstance         `protobuf:"bytes,1,opt,name=instance,proto3" json:"instance,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SpawnAgentResponse) Reset() {
+	*x = SpawnAgentResponse{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SpawnAgentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SpawnAgentResponse) ProtoMessage() {}
+
+func (x *SpawnAgentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SpawnAgentResponse.ProtoReflect.Descriptor instead.
+func (*SpawnAgentResponse) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SpawnAgentResponse) GetInstance() *AgentInstance {
+	if x != nil {
+		return x.Instance
+	}
+	return nil
+}
+
+type SpawnNAgentsRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	TemplateId string                 `protobuf:"bytes,1,opt,name=template_id,json=templateId,proto3" json:"template_id,omitempty"`
+	NamePrefix string                 `protobuf:"bytes,2,opt,name=name_prefix,json=namePrefix,proto3" json:"name_prefix,omitempty"`
+	// Capped server-side at 10 per spawn-flow plan decision 14.
+	Count     int32         `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
+	Provider  ModelProvider `protobuf:"varint,4,opt,name=provider,proto3,enum=corellia.v1.ModelProvider" json:"provider,omitempty"`
+	ModelName string        `protobuf:"bytes,5,opt,name=model_name,json=modelName,proto3" json:"model_name,omitempty"`
+	// SECRET — same handling as SpawnAgentRequest. Reused across all N
+	// spawns per decision 15 (demo affordance).
+	ModelApiKey   string `protobuf:"bytes,6,opt,name=model_api_key,json=modelApiKey,proto3" json:"model_api_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SpawnNAgentsRequest) Reset() {
+	*x = SpawnNAgentsRequest{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SpawnNAgentsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SpawnNAgentsRequest) ProtoMessage() {}
+
+func (x *SpawnNAgentsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SpawnNAgentsRequest.ProtoReflect.Descriptor instead.
+func (*SpawnNAgentsRequest) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SpawnNAgentsRequest) GetTemplateId() string {
+	if x != nil {
+		return x.TemplateId
+	}
+	return ""
+}
+
+func (x *SpawnNAgentsRequest) GetNamePrefix() string {
+	if x != nil {
+		return x.NamePrefix
+	}
+	return ""
+}
+
+func (x *SpawnNAgentsRequest) GetCount() int32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *SpawnNAgentsRequest) GetProvider() ModelProvider {
+	if x != nil {
+		return x.Provider
+	}
+	return ModelProvider_MODEL_PROVIDER_UNSPECIFIED
+}
+
+func (x *SpawnNAgentsRequest) GetModelName() string {
+	if x != nil {
+		return x.ModelName
+	}
+	return ""
+}
+
+func (x *SpawnNAgentsRequest) GetModelApiKey() string {
+	if x != nil {
+		return x.ModelApiKey
+	}
+	return ""
+}
+
+type SpawnNAgentsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Instances     []*AgentInstance       `protobuf:"bytes,1,rep,name=instances,proto3" json:"instances,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SpawnNAgentsResponse) Reset() {
+	*x = SpawnNAgentsResponse{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SpawnNAgentsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SpawnNAgentsResponse) ProtoMessage() {}
+
+func (x *SpawnNAgentsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SpawnNAgentsResponse.ProtoReflect.Descriptor instead.
+func (*SpawnNAgentsResponse) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *SpawnNAgentsResponse) GetInstances() []*AgentInstance {
+	if x != nil {
+		return x.Instances
+	}
+	return nil
+}
+
+type ListAgentInstancesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAgentInstancesRequest) Reset() {
+	*x = ListAgentInstancesRequest{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAgentInstancesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAgentInstancesRequest) ProtoMessage() {}
+
+func (x *ListAgentInstancesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAgentInstancesRequest.ProtoReflect.Descriptor instead.
+func (*ListAgentInstancesRequest) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{8}
+}
+
+type ListAgentInstancesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Instances     []*AgentInstance       `protobuf:"bytes,1,rep,name=instances,proto3" json:"instances,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAgentInstancesResponse) Reset() {
+	*x = ListAgentInstancesResponse{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAgentInstancesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAgentInstancesResponse) ProtoMessage() {}
+
+func (x *ListAgentInstancesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAgentInstancesResponse.ProtoReflect.Descriptor instead.
+func (*ListAgentInstancesResponse) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ListAgentInstancesResponse) GetInstances() []*AgentInstance {
+	if x != nil {
+		return x.Instances
+	}
+	return nil
+}
+
+type GetAgentInstanceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAgentInstanceRequest) Reset() {
+	*x = GetAgentInstanceRequest{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAgentInstanceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAgentInstanceRequest) ProtoMessage() {}
+
+func (x *GetAgentInstanceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAgentInstanceRequest.ProtoReflect.Descriptor instead.
+func (*GetAgentInstanceRequest) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *GetAgentInstanceRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type GetAgentInstanceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Instance      *AgentInstance         `protobuf:"bytes,1,opt,name=instance,proto3" json:"instance,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAgentInstanceResponse) Reset() {
+	*x = GetAgentInstanceResponse{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAgentInstanceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAgentInstanceResponse) ProtoMessage() {}
+
+func (x *GetAgentInstanceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAgentInstanceResponse.ProtoReflect.Descriptor instead.
+func (*GetAgentInstanceResponse) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *GetAgentInstanceResponse) GetInstance() *AgentInstance {
+	if x != nil {
+		return x.Instance
+	}
+	return nil
+}
+
+type StopAgentInstanceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StopAgentInstanceRequest) Reset() {
+	*x = StopAgentInstanceRequest{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StopAgentInstanceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StopAgentInstanceRequest) ProtoMessage() {}
+
+func (x *StopAgentInstanceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StopAgentInstanceRequest.ProtoReflect.Descriptor instead.
+func (*StopAgentInstanceRequest) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *StopAgentInstanceRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type StopAgentInstanceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Instance      *AgentInstance         `protobuf:"bytes,1,opt,name=instance,proto3" json:"instance,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StopAgentInstanceResponse) Reset() {
+	*x = StopAgentInstanceResponse{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StopAgentInstanceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StopAgentInstanceResponse) ProtoMessage() {}
+
+func (x *StopAgentInstanceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StopAgentInstanceResponse.ProtoReflect.Descriptor instead.
+func (*StopAgentInstanceResponse) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *StopAgentInstanceResponse) GetInstance() *AgentInstance {
+	if x != nil {
+		return x.Instance
+	}
+	return nil
+}
+
+type DestroyAgentInstanceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DestroyAgentInstanceRequest) Reset() {
+	*x = DestroyAgentInstanceRequest{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DestroyAgentInstanceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DestroyAgentInstanceRequest) ProtoMessage() {}
+
+func (x *DestroyAgentInstanceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DestroyAgentInstanceRequest.ProtoReflect.Descriptor instead.
+func (*DestroyAgentInstanceRequest) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *DestroyAgentInstanceRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type DestroyAgentInstanceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Instance      *AgentInstance         `protobuf:"bytes,1,opt,name=instance,proto3" json:"instance,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DestroyAgentInstanceResponse) Reset() {
+	*x = DestroyAgentInstanceResponse{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DestroyAgentInstanceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DestroyAgentInstanceResponse) ProtoMessage() {}
+
+func (x *DestroyAgentInstanceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DestroyAgentInstanceResponse.ProtoReflect.Descriptor instead.
+func (*DestroyAgentInstanceResponse) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *DestroyAgentInstanceResponse) GetInstance() *AgentInstance {
+	if x != nil {
+		return x.Instance
+	}
+	return nil
+}
+
 var File_corellia_v1_agents_proto protoreflect.FileDescriptor
 
 const file_corellia_v1_agents_proto_rawDesc = "" +
@@ -172,9 +974,77 @@ const file_corellia_v1_agents_proto_rawDesc = "" +
 	"\rAgentTemplate\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription2v\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\"\xa2\x03\n" +
+	"\rAgentInstance\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1f\n" +
+	"\vtemplate_id\x18\x03 \x01(\tR\n" +
+	"templateId\x12#\n" +
+	"\rtemplate_name\x18\x04 \x01(\tR\ftemplateName\x126\n" +
+	"\bprovider\x18\x05 \x01(\x0e2\x1a.corellia.v1.ModelProviderR\bprovider\x12\x1d\n" +
+	"\n" +
+	"model_name\x18\x06 \x01(\tR\tmodelName\x12\x16\n" +
+	"\x06status\x18\a \x01(\tR\x06status\x12.\n" +
+	"\x13deploy_external_ref\x18\b \x01(\tR\x11deployExternalRef\x12\x19\n" +
+	"\blogs_url\x18\t \x01(\tR\alogsUrl\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\n" +
+	" \x01(\tR\tcreatedAt\x12&\n" +
+	"\x0flast_started_at\x18\v \x01(\tR\rlastStartedAt\x12&\n" +
+	"\x0flast_stopped_at\x18\f \x01(\tR\rlastStoppedAt\"\xc3\x01\n" +
+	"\x11SpawnAgentRequest\x12\x1f\n" +
+	"\vtemplate_id\x18\x01 \x01(\tR\n" +
+	"templateId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x126\n" +
+	"\bprovider\x18\x03 \x01(\x0e2\x1a.corellia.v1.ModelProviderR\bprovider\x12\x1d\n" +
+	"\n" +
+	"model_name\x18\x04 \x01(\tR\tmodelName\x12\"\n" +
+	"\rmodel_api_key\x18\x05 \x01(\tR\vmodelApiKey\"L\n" +
+	"\x12SpawnAgentResponse\x126\n" +
+	"\binstance\x18\x01 \x01(\v2\x1a.corellia.v1.AgentInstanceR\binstance\"\xe8\x01\n" +
+	"\x13SpawnNAgentsRequest\x12\x1f\n" +
+	"\vtemplate_id\x18\x01 \x01(\tR\n" +
+	"templateId\x12\x1f\n" +
+	"\vname_prefix\x18\x02 \x01(\tR\n" +
+	"namePrefix\x12\x14\n" +
+	"\x05count\x18\x03 \x01(\x05R\x05count\x126\n" +
+	"\bprovider\x18\x04 \x01(\x0e2\x1a.corellia.v1.ModelProviderR\bprovider\x12\x1d\n" +
+	"\n" +
+	"model_name\x18\x05 \x01(\tR\tmodelName\x12\"\n" +
+	"\rmodel_api_key\x18\x06 \x01(\tR\vmodelApiKey\"P\n" +
+	"\x14SpawnNAgentsResponse\x128\n" +
+	"\tinstances\x18\x01 \x03(\v2\x1a.corellia.v1.AgentInstanceR\tinstances\"\x1b\n" +
+	"\x19ListAgentInstancesRequest\"V\n" +
+	"\x1aListAgentInstancesResponse\x128\n" +
+	"\tinstances\x18\x01 \x03(\v2\x1a.corellia.v1.AgentInstanceR\tinstances\")\n" +
+	"\x17GetAgentInstanceRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"R\n" +
+	"\x18GetAgentInstanceResponse\x126\n" +
+	"\binstance\x18\x01 \x01(\v2\x1a.corellia.v1.AgentInstanceR\binstance\"*\n" +
+	"\x18StopAgentInstanceRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"S\n" +
+	"\x19StopAgentInstanceResponse\x126\n" +
+	"\binstance\x18\x01 \x01(\v2\x1a.corellia.v1.AgentInstanceR\binstance\"-\n" +
+	"\x1bDestroyAgentInstanceRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"V\n" +
+	"\x1cDestroyAgentInstanceResponse\x126\n" +
+	"\binstance\x18\x01 \x01(\v2\x1a.corellia.v1.AgentInstanceR\binstance*Z\n" +
+	"\rModelProvider\x12\x1e\n" +
+	"\x1aMODEL_PROVIDER_UNSPECIFIED\x10\x00\x12\r\n" +
+	"\tANTHROPIC\x10\x01\x12\n" +
+	"\n" +
+	"\x06OPENAI\x10\x02\x12\x0e\n" +
+	"\n" +
+	"OPENROUTER\x10\x032\xb3\x05\n" +
 	"\rAgentsService\x12e\n" +
-	"\x12ListAgentTemplates\x12&.corellia.v1.ListAgentTemplatesRequest\x1a'.corellia.v1.ListAgentTemplatesResponseBLZJgithub.com/hejijunhao/corellia/backend/internal/gen/corellia/v1;corelliav1b\x06proto3"
+	"\x12ListAgentTemplates\x12&.corellia.v1.ListAgentTemplatesRequest\x1a'.corellia.v1.ListAgentTemplatesResponse\x12M\n" +
+	"\n" +
+	"SpawnAgent\x12\x1e.corellia.v1.SpawnAgentRequest\x1a\x1f.corellia.v1.SpawnAgentResponse\x12S\n" +
+	"\fSpawnNAgents\x12 .corellia.v1.SpawnNAgentsRequest\x1a!.corellia.v1.SpawnNAgentsResponse\x12e\n" +
+	"\x12ListAgentInstances\x12&.corellia.v1.ListAgentInstancesRequest\x1a'.corellia.v1.ListAgentInstancesResponse\x12_\n" +
+	"\x10GetAgentInstance\x12$.corellia.v1.GetAgentInstanceRequest\x1a%.corellia.v1.GetAgentInstanceResponse\x12b\n" +
+	"\x11StopAgentInstance\x12%.corellia.v1.StopAgentInstanceRequest\x1a&.corellia.v1.StopAgentInstanceResponse\x12k\n" +
+	"\x14DestroyAgentInstance\x12(.corellia.v1.DestroyAgentInstanceRequest\x1a).corellia.v1.DestroyAgentInstanceResponseBLZJgithub.com/hejijunhao/corellia/backend/internal/gen/corellia/v1;corelliav1b\x06proto3"
 
 var (
 	file_corellia_v1_agents_proto_rawDescOnce sync.Once
@@ -188,21 +1058,57 @@ func file_corellia_v1_agents_proto_rawDescGZIP() []byte {
 	return file_corellia_v1_agents_proto_rawDescData
 }
 
-var file_corellia_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_corellia_v1_agents_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_corellia_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_corellia_v1_agents_proto_goTypes = []any{
-	(*ListAgentTemplatesRequest)(nil),  // 0: corellia.v1.ListAgentTemplatesRequest
-	(*ListAgentTemplatesResponse)(nil), // 1: corellia.v1.ListAgentTemplatesResponse
-	(*AgentTemplate)(nil),              // 2: corellia.v1.AgentTemplate
+	(ModelProvider)(0),                   // 0: corellia.v1.ModelProvider
+	(*ListAgentTemplatesRequest)(nil),    // 1: corellia.v1.ListAgentTemplatesRequest
+	(*ListAgentTemplatesResponse)(nil),   // 2: corellia.v1.ListAgentTemplatesResponse
+	(*AgentTemplate)(nil),                // 3: corellia.v1.AgentTemplate
+	(*AgentInstance)(nil),                // 4: corellia.v1.AgentInstance
+	(*SpawnAgentRequest)(nil),            // 5: corellia.v1.SpawnAgentRequest
+	(*SpawnAgentResponse)(nil),           // 6: corellia.v1.SpawnAgentResponse
+	(*SpawnNAgentsRequest)(nil),          // 7: corellia.v1.SpawnNAgentsRequest
+	(*SpawnNAgentsResponse)(nil),         // 8: corellia.v1.SpawnNAgentsResponse
+	(*ListAgentInstancesRequest)(nil),    // 9: corellia.v1.ListAgentInstancesRequest
+	(*ListAgentInstancesResponse)(nil),   // 10: corellia.v1.ListAgentInstancesResponse
+	(*GetAgentInstanceRequest)(nil),      // 11: corellia.v1.GetAgentInstanceRequest
+	(*GetAgentInstanceResponse)(nil),     // 12: corellia.v1.GetAgentInstanceResponse
+	(*StopAgentInstanceRequest)(nil),     // 13: corellia.v1.StopAgentInstanceRequest
+	(*StopAgentInstanceResponse)(nil),    // 14: corellia.v1.StopAgentInstanceResponse
+	(*DestroyAgentInstanceRequest)(nil),  // 15: corellia.v1.DestroyAgentInstanceRequest
+	(*DestroyAgentInstanceResponse)(nil), // 16: corellia.v1.DestroyAgentInstanceResponse
 }
 var file_corellia_v1_agents_proto_depIdxs = []int32{
-	2, // 0: corellia.v1.ListAgentTemplatesResponse.templates:type_name -> corellia.v1.AgentTemplate
-	0, // 1: corellia.v1.AgentsService.ListAgentTemplates:input_type -> corellia.v1.ListAgentTemplatesRequest
-	1, // 2: corellia.v1.AgentsService.ListAgentTemplates:output_type -> corellia.v1.ListAgentTemplatesResponse
-	2, // [2:3] is the sub-list for method output_type
-	1, // [1:2] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	3,  // 0: corellia.v1.ListAgentTemplatesResponse.templates:type_name -> corellia.v1.AgentTemplate
+	0,  // 1: corellia.v1.AgentInstance.provider:type_name -> corellia.v1.ModelProvider
+	0,  // 2: corellia.v1.SpawnAgentRequest.provider:type_name -> corellia.v1.ModelProvider
+	4,  // 3: corellia.v1.SpawnAgentResponse.instance:type_name -> corellia.v1.AgentInstance
+	0,  // 4: corellia.v1.SpawnNAgentsRequest.provider:type_name -> corellia.v1.ModelProvider
+	4,  // 5: corellia.v1.SpawnNAgentsResponse.instances:type_name -> corellia.v1.AgentInstance
+	4,  // 6: corellia.v1.ListAgentInstancesResponse.instances:type_name -> corellia.v1.AgentInstance
+	4,  // 7: corellia.v1.GetAgentInstanceResponse.instance:type_name -> corellia.v1.AgentInstance
+	4,  // 8: corellia.v1.StopAgentInstanceResponse.instance:type_name -> corellia.v1.AgentInstance
+	4,  // 9: corellia.v1.DestroyAgentInstanceResponse.instance:type_name -> corellia.v1.AgentInstance
+	1,  // 10: corellia.v1.AgentsService.ListAgentTemplates:input_type -> corellia.v1.ListAgentTemplatesRequest
+	5,  // 11: corellia.v1.AgentsService.SpawnAgent:input_type -> corellia.v1.SpawnAgentRequest
+	7,  // 12: corellia.v1.AgentsService.SpawnNAgents:input_type -> corellia.v1.SpawnNAgentsRequest
+	9,  // 13: corellia.v1.AgentsService.ListAgentInstances:input_type -> corellia.v1.ListAgentInstancesRequest
+	11, // 14: corellia.v1.AgentsService.GetAgentInstance:input_type -> corellia.v1.GetAgentInstanceRequest
+	13, // 15: corellia.v1.AgentsService.StopAgentInstance:input_type -> corellia.v1.StopAgentInstanceRequest
+	15, // 16: corellia.v1.AgentsService.DestroyAgentInstance:input_type -> corellia.v1.DestroyAgentInstanceRequest
+	2,  // 17: corellia.v1.AgentsService.ListAgentTemplates:output_type -> corellia.v1.ListAgentTemplatesResponse
+	6,  // 18: corellia.v1.AgentsService.SpawnAgent:output_type -> corellia.v1.SpawnAgentResponse
+	8,  // 19: corellia.v1.AgentsService.SpawnNAgents:output_type -> corellia.v1.SpawnNAgentsResponse
+	10, // 20: corellia.v1.AgentsService.ListAgentInstances:output_type -> corellia.v1.ListAgentInstancesResponse
+	12, // 21: corellia.v1.AgentsService.GetAgentInstance:output_type -> corellia.v1.GetAgentInstanceResponse
+	14, // 22: corellia.v1.AgentsService.StopAgentInstance:output_type -> corellia.v1.StopAgentInstanceResponse
+	16, // 23: corellia.v1.AgentsService.DestroyAgentInstance:output_type -> corellia.v1.DestroyAgentInstanceResponse
+	17, // [17:24] is the sub-list for method output_type
+	10, // [10:17] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_corellia_v1_agents_proto_init() }
@@ -215,13 +1121,14 @@ func file_corellia_v1_agents_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_corellia_v1_agents_proto_rawDesc), len(file_corellia_v1_agents_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   3,
+			NumEnums:      1,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_corellia_v1_agents_proto_goTypes,
 		DependencyIndexes: file_corellia_v1_agents_proto_depIdxs,
+		EnumInfos:         file_corellia_v1_agents_proto_enumTypes,
 		MessageInfos:      file_corellia_v1_agents_proto_msgTypes,
 	}.Build()
 	File_corellia_v1_agents_proto = out.File
