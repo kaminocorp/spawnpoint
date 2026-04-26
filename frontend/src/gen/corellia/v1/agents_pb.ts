@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file corellia/v1/agents.proto.
  */
 export const file_corellia_v1_agents: GenFile = /*@__PURE__*/
-  fileDesc("Chhjb3JlbGxpYS92MS9hZ2VudHMucHJvdG8SC2NvcmVsbGlhLnYxIhsKGUxpc3RBZ2VudFRlbXBsYXRlc1JlcXVlc3QiSwoaTGlzdEFnZW50VGVtcGxhdGVzUmVzcG9uc2USLQoJdGVtcGxhdGVzGAEgAygLMhouY29yZWxsaWEudjEuQWdlbnRUZW1wbGF0ZSI+Cg1BZ2VudFRlbXBsYXRlEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSEwoLZGVzY3JpcHRpb24YAyABKAkinAIKDUFnZW50SW5zdGFuY2USCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRITCgt0ZW1wbGF0ZV9pZBgDIAEoCRIVCg10ZW1wbGF0ZV9uYW1lGAQgASgJEiwKCHByb3ZpZGVyGAUgASgOMhouY29yZWxsaWEudjEuTW9kZWxQcm92aWRlchISCgptb2RlbF9uYW1lGAYgASgJEg4KBnN0YXR1cxgHIAEoCRIbChNkZXBsb3lfZXh0ZXJuYWxfcmVmGAggASgJEhAKCGxvZ3NfdXJsGAkgASgJEhIKCmNyZWF0ZWRfYXQYCiABKAkSFwoPbGFzdF9zdGFydGVkX2F0GAsgASgJEhcKD2xhc3Rfc3RvcHBlZF9hdBgMIAEoCSKPAQoRU3Bhd25BZ2VudFJlcXVlc3QSEwoLdGVtcGxhdGVfaWQYASABKAkSDAoEbmFtZRgCIAEoCRIsCghwcm92aWRlchgDIAEoDjIaLmNvcmVsbGlhLnYxLk1vZGVsUHJvdmlkZXISEgoKbW9kZWxfbmFtZRgEIAEoCRIVCg1tb2RlbF9hcGlfa2V5GAUgASgJIkIKElNwYXduQWdlbnRSZXNwb25zZRIsCghpbnN0YW5jZRgBIAEoCzIaLmNvcmVsbGlhLnYxLkFnZW50SW5zdGFuY2UipwEKE1NwYXduTkFnZW50c1JlcXVlc3QSEwoLdGVtcGxhdGVfaWQYASABKAkSEwoLbmFtZV9wcmVmaXgYAiABKAkSDQoFY291bnQYAyABKAUSLAoIcHJvdmlkZXIYBCABKA4yGi5jb3JlbGxpYS52MS5Nb2RlbFByb3ZpZGVyEhIKCm1vZGVsX25hbWUYBSABKAkSFQoNbW9kZWxfYXBpX2tleRgGIAEoCSJFChRTcGF3bk5BZ2VudHNSZXNwb25zZRItCglpbnN0YW5jZXMYASADKAsyGi5jb3JlbGxpYS52MS5BZ2VudEluc3RhbmNlIhsKGUxpc3RBZ2VudEluc3RhbmNlc1JlcXVlc3QiSwoaTGlzdEFnZW50SW5zdGFuY2VzUmVzcG9uc2USLQoJaW5zdGFuY2VzGAEgAygLMhouY29yZWxsaWEudjEuQWdlbnRJbnN0YW5jZSIlChdHZXRBZ2VudEluc3RhbmNlUmVxdWVzdBIKCgJpZBgBIAEoCSJIChhHZXRBZ2VudEluc3RhbmNlUmVzcG9uc2USLAoIaW5zdGFuY2UYASABKAsyGi5jb3JlbGxpYS52MS5BZ2VudEluc3RhbmNlIiYKGFN0b3BBZ2VudEluc3RhbmNlUmVxdWVzdBIKCgJpZBgBIAEoCSJJChlTdG9wQWdlbnRJbnN0YW5jZVJlc3BvbnNlEiwKCGluc3RhbmNlGAEgASgLMhouY29yZWxsaWEudjEuQWdlbnRJbnN0YW5jZSIpChtEZXN0cm95QWdlbnRJbnN0YW5jZVJlcXVlc3QSCgoCaWQYASABKAkiTAocRGVzdHJveUFnZW50SW5zdGFuY2VSZXNwb25zZRIsCghpbnN0YW5jZRgBIAEoCzIaLmNvcmVsbGlhLnYxLkFnZW50SW5zdGFuY2UqWgoNTW9kZWxQcm92aWRlchIeChpNT0RFTF9QUk9WSURFUl9VTlNQRUNJRklFRBAAEg0KCUFOVEhST1BJQxABEgoKBk9QRU5BSRACEg4KCk9QRU5ST1VURVIQAzKzBQoNQWdlbnRzU2VydmljZRJlChJMaXN0QWdlbnRUZW1wbGF0ZXMSJi5jb3JlbGxpYS52MS5MaXN0QWdlbnRUZW1wbGF0ZXNSZXF1ZXN0GicuY29yZWxsaWEudjEuTGlzdEFnZW50VGVtcGxhdGVzUmVzcG9uc2USTQoKU3Bhd25BZ2VudBIeLmNvcmVsbGlhLnYxLlNwYXduQWdlbnRSZXF1ZXN0Gh8uY29yZWxsaWEudjEuU3Bhd25BZ2VudFJlc3BvbnNlElMKDFNwYXduTkFnZW50cxIgLmNvcmVsbGlhLnYxLlNwYXduTkFnZW50c1JlcXVlc3QaIS5jb3JlbGxpYS52MS5TcGF3bk5BZ2VudHNSZXNwb25zZRJlChJMaXN0QWdlbnRJbnN0YW5jZXMSJi5jb3JlbGxpYS52MS5MaXN0QWdlbnRJbnN0YW5jZXNSZXF1ZXN0GicuY29yZWxsaWEudjEuTGlzdEFnZW50SW5zdGFuY2VzUmVzcG9uc2USXwoQR2V0QWdlbnRJbnN0YW5jZRIkLmNvcmVsbGlhLnYxLkdldEFnZW50SW5zdGFuY2VSZXF1ZXN0GiUuY29yZWxsaWEudjEuR2V0QWdlbnRJbnN0YW5jZVJlc3BvbnNlEmIKEVN0b3BBZ2VudEluc3RhbmNlEiUuY29yZWxsaWEudjEuU3RvcEFnZW50SW5zdGFuY2VSZXF1ZXN0GiYuY29yZWxsaWEudjEuU3RvcEFnZW50SW5zdGFuY2VSZXNwb25zZRJrChREZXN0cm95QWdlbnRJbnN0YW5jZRIoLmNvcmVsbGlhLnYxLkRlc3Ryb3lBZ2VudEluc3RhbmNlUmVxdWVzdBopLmNvcmVsbGlhLnYxLkRlc3Ryb3lBZ2VudEluc3RhbmNlUmVzcG9uc2VCTFpKZ2l0aHViLmNvbS9oZWppanVuaGFvL2NvcmVsbGlhL2JhY2tlbmQvaW50ZXJuYWwvZ2VuL2NvcmVsbGlhL3YxO2NvcmVsbGlhdjFiBnByb3RvMw");
+  fileDesc("Chhjb3JlbGxpYS92MS9hZ2VudHMucHJvdG8SC2NvcmVsbGlhLnYxIhsKGUxpc3RBZ2VudFRlbXBsYXRlc1JlcXVlc3QiSwoaTGlzdEFnZW50VGVtcGxhdGVzUmVzcG9uc2USLQoJdGVtcGxhdGVzGAEgAygLMhouY29yZWxsaWEudjEuQWdlbnRUZW1wbGF0ZSI+Cg1BZ2VudFRlbXBsYXRlEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSEwoLZGVzY3JpcHRpb24YAyABKAki0AEKDERlcGxveUNvbmZpZxIOCgZyZWdpb24YASABKAkSEAoIY3B1X2tpbmQYAiABKAkSDAoEY3B1cxgDIAEoBRIRCgltZW1vcnlfbWIYBCABKAUSFgoOcmVzdGFydF9wb2xpY3kYBSABKAkSGwoTcmVzdGFydF9tYXhfcmV0cmllcxgGIAEoBRIWCg5saWZlY3ljbGVfbW9kZRgHIAEoCRIYChBkZXNpcmVkX3JlcGxpY2FzGAggASgFEhYKDnZvbHVtZV9zaXplX2diGAkgASgFIlQKBlJlZ2lvbhIMCgRjb2RlGAEgASgJEgwKBG5hbWUYAiABKAkSEgoKZGVwcmVjYXRlZBgDIAEoCBIaChJyZXF1aXJlc19wYWlkX3BsYW4YBCABKAgiTwoPUGxhY2VtZW50UmVzdWx0EhEKCWF2YWlsYWJsZRgBIAEoCBIOCgZyZWFzb24YAiABKAkSGQoRYWx0ZXJuYXRlX3JlZ2lvbnMYAyADKAkinAEKDE1hY2hpbmVTdGF0ZRIKCgJpZBgBIAEoCRIOCgZyZWdpb24YAiABKAkSDQoFc3RhdGUYAyABKAkSEAoIY3B1X2tpbmQYBCABKAkSDAoEY3B1cxgFIAEoBRIRCgltZW1vcnlfbWIYBiABKAUSEgoKY3JlYXRlZF9hdBgHIAEoCRIaChJhdHRhY2hlZF92b2x1bWVfaWQYCCABKAkiUwoJVm9sdW1lUmVmEhEKCXZvbHVtZV9pZBgBIAEoCRIOCgZyZWdpb24YAiABKAkSDwoHc2l6ZV9nYhgDIAEoBRISCgptYWNoaW5lX2lkGAQgASgJIkoKCkRyaWZ0RW50cnkSLAoIY2F0ZWdvcnkYASABKA4yGi5jb3JlbGxpYS52MS5EcmlmdENhdGVnb3J5Eg4KBmRldGFpbBgCIAEoCSI4CgxEcmlmdFN1bW1hcnkSKAoHZW50cmllcxgBIAMoCzIXLmNvcmVsbGlhLnYxLkRyaWZ0RW50cnkigAEKDFVwZGF0ZVJlc3VsdBIsCgt1cGRhdGVfa2luZBgBIAEoDjIXLmNvcmVsbGlhLnYxLlVwZGF0ZUtpbmQSIgoaZXN0aW1hdGVkX2Rvd250aW1lX3NlY29uZHMYAiABKAUSHgoWd2lwZXNfcGVyc2lzdGVudF9zdGF0ZRgDIAEoCCJmCgpCdWxrUmVzdWx0EhMKC2luc3RhbmNlX2lkGAEgASgJEiwKC3VwZGF0ZV9raW5kGAIgASgOMhcuY29yZWxsaWEudjEuVXBkYXRlS2luZBIVCg1lcnJvcl9tZXNzYWdlGAMgASgJIrkECg1BZ2VudEluc3RhbmNlEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSEwoLdGVtcGxhdGVfaWQYAyABKAkSFQoNdGVtcGxhdGVfbmFtZRgEIAEoCRIsCghwcm92aWRlchgFIAEoDjIaLmNvcmVsbGlhLnYxLk1vZGVsUHJvdmlkZXISEgoKbW9kZWxfbmFtZRgGIAEoCRIOCgZzdGF0dXMYByABKAkSGwoTZGVwbG95X2V4dGVybmFsX3JlZhgIIAEoCRIQCghsb2dzX3VybBgJIAEoCRISCgpjcmVhdGVkX2F0GAogASgJEhcKD2xhc3Rfc3RhcnRlZF9hdBgLIAEoCRIXCg9sYXN0X3N0b3BwZWRfYXQYDCABKAkSDgoGcmVnaW9uGA0gASgJEhAKCGNwdV9raW5kGA4gASgJEgwKBGNwdXMYDyABKAUSEQoJbWVtb3J5X21iGBAgASgFEhYKDnJlc3RhcnRfcG9saWN5GBEgASgJEhsKE3Jlc3RhcnRfbWF4X3JldHJpZXMYEiABKAUSFgoObGlmZWN5Y2xlX21vZGUYEyABKAkSGAoQZGVzaXJlZF9yZXBsaWNhcxgUIAEoBRIWCg52b2x1bWVfc2l6ZV9nYhgVIAEoBRIwCg1kcmlmdF9zdW1tYXJ5GBYgASgLMhkuY29yZWxsaWEudjEuRHJpZnRTdW1tYXJ5EicKB3ZvbHVtZXMYFyADKAsyFi5jb3JlbGxpYS52MS5Wb2x1bWVSZWYi2AEKEVNwYXduQWdlbnRSZXF1ZXN0EhMKC3RlbXBsYXRlX2lkGAEgASgJEgwKBG5hbWUYAiABKAkSLAoIcHJvdmlkZXIYAyABKA4yGi5jb3JlbGxpYS52MS5Nb2RlbFByb3ZpZGVyEhIKCm1vZGVsX25hbWUYBCABKAkSFQoNbW9kZWxfYXBpX2tleRgFIAEoCRI1Cg1kZXBsb3lfY29uZmlnGAYgASgLMhkuY29yZWxsaWEudjEuRGVwbG95Q29uZmlnSACIAQFCEAoOX2RlcGxveV9jb25maWciQgoSU3Bhd25BZ2VudFJlc3BvbnNlEiwKCGluc3RhbmNlGAEgASgLMhouY29yZWxsaWEudjEuQWdlbnRJbnN0YW5jZSLwAQoTU3Bhd25OQWdlbnRzUmVxdWVzdBITCgt0ZW1wbGF0ZV9pZBgBIAEoCRITCgtuYW1lX3ByZWZpeBgCIAEoCRINCgVjb3VudBgDIAEoBRIsCghwcm92aWRlchgEIAEoDjIaLmNvcmVsbGlhLnYxLk1vZGVsUHJvdmlkZXISEgoKbW9kZWxfbmFtZRgFIAEoCRIVCg1tb2RlbF9hcGlfa2V5GAYgASgJEjUKDWRlcGxveV9jb25maWcYByABKAsyGS5jb3JlbGxpYS52MS5EZXBsb3lDb25maWdIAIgBAUIQCg5fZGVwbG95X2NvbmZpZyJFChRTcGF3bk5BZ2VudHNSZXNwb25zZRItCglpbnN0YW5jZXMYASADKAsyGi5jb3JlbGxpYS52MS5BZ2VudEluc3RhbmNlIhsKGUxpc3RBZ2VudEluc3RhbmNlc1JlcXVlc3QiSwoaTGlzdEFnZW50SW5zdGFuY2VzUmVzcG9uc2USLQoJaW5zdGFuY2VzGAEgAygLMhouY29yZWxsaWEudjEuQWdlbnRJbnN0YW5jZSIlChdHZXRBZ2VudEluc3RhbmNlUmVxdWVzdBIKCgJpZBgBIAEoCSJIChhHZXRBZ2VudEluc3RhbmNlUmVzcG9uc2USLAoIaW5zdGFuY2UYASABKAsyGi5jb3JlbGxpYS52MS5BZ2VudEluc3RhbmNlIiYKGFN0b3BBZ2VudEluc3RhbmNlUmVxdWVzdBIKCgJpZBgBIAEoCSJJChlTdG9wQWdlbnRJbnN0YW5jZVJlc3BvbnNlEiwKCGluc3RhbmNlGAEgASgLMhouY29yZWxsaWEudjEuQWdlbnRJbnN0YW5jZSIpChtEZXN0cm95QWdlbnRJbnN0YW5jZVJlcXVlc3QSCgoCaWQYASABKAkiTAocRGVzdHJveUFnZW50SW5zdGFuY2VSZXNwb25zZRIsCghpbnN0YW5jZRgBIAEoCzIaLmNvcmVsbGlhLnYxLkFnZW50SW5zdGFuY2UiHgocTGlzdERlcGxveW1lbnRSZWdpb25zUmVxdWVzdCJFCh1MaXN0RGVwbG95bWVudFJlZ2lvbnNSZXNwb25zZRIkCgdyZWdpb25zGAEgAygLMhMuY29yZWxsaWEudjEuUmVnaW9uIlMKH0NoZWNrRGVwbG95bWVudFBsYWNlbWVudFJlcXVlc3QSMAoNZGVwbG95X2NvbmZpZxgBIAEoCzIZLmNvcmVsbGlhLnYxLkRlcGxveUNvbmZpZyJaCiBDaGVja0RlcGxveW1lbnRQbGFjZW1lbnRSZXNwb25zZRI2ChBwbGFjZW1lbnRfcmVzdWx0GAEgASgLMhwuY29yZWxsaWEudjEuUGxhY2VtZW50UmVzdWx0IngKHlVwZGF0ZUFnZW50RGVwbG95Q29uZmlnUmVxdWVzdBITCgtpbnN0YW5jZV9pZBgBIAEoCRIwCg1kZXBsb3lfY29uZmlnGAIgASgLMhkuY29yZWxsaWEudjEuRGVwbG95Q29uZmlnEg8KB2RyeV9ydW4YAyABKAgiUwofVXBkYXRlQWdlbnREZXBsb3lDb25maWdSZXNwb25zZRIwCg11cGRhdGVfcmVzdWx0GAEgASgLMhkuY29yZWxsaWEudjEuVXBkYXRlUmVzdWx0IjAKGVN0YXJ0QWdlbnRJbnN0YW5jZVJlcXVlc3QSEwoLaW5zdGFuY2VfaWQYASABKAkiSgoaU3RhcnRBZ2VudEluc3RhbmNlUmVzcG9uc2USLAoIaW5zdGFuY2UYASABKAsyGi5jb3JlbGxpYS52MS5BZ2VudEluc3RhbmNlIksKGlJlc2l6ZUFnZW50UmVwbGljYXNSZXF1ZXN0EhMKC2luc3RhbmNlX2lkGAEgASgJEhgKEGRlc2lyZWRfcmVwbGljYXMYAiABKAUiSwobUmVzaXplQWdlbnRSZXBsaWNhc1Jlc3BvbnNlEiwKCGluc3RhbmNlGAEgASgLMhouY29yZWxsaWEudjEuQWdlbnRJbnN0YW5jZSJHChhSZXNpemVBZ2VudFZvbHVtZVJlcXVlc3QSEwoLaW5zdGFuY2VfaWQYASABKAkSFgoOdm9sdW1lX3NpemVfZ2IYAiABKAUiYAoZUmVzaXplQWdlbnRWb2x1bWVSZXNwb25zZRIsCghpbnN0YW5jZRgBIAEoCzIaLmNvcmVsbGlhLnYxLkFnZW50SW5zdGFuY2USFQoNbmVlZHNfcmVzdGFydBgCIAEoCCK7AQoPQnVsa0NvbmZpZ0RlbHRhEg4KBnJlZ2lvbhgBIAEoCRIQCghjcHVfa2luZBgCIAEoCRIMCgRjcHVzGAMgASgFEhEKCW1lbW9yeV9tYhgEIAEoBRIWCg5yZXN0YXJ0X3BvbGljeRgFIAEoCRIbChNyZXN0YXJ0X21heF9yZXRyaWVzGAYgASgFEhYKDmxpZmVjeWNsZV9tb2RlGAcgASgJEhgKEGRlc2lyZWRfcmVwbGljYXMYCCABKAUihgEKIkJ1bGtVcGRhdGVBZ2VudERlcGxveUNvbmZpZ1JlcXVlc3QSFAoMaW5zdGFuY2VfaWRzGAEgAygJEjkKE2RlcGxveV9jb25maWdfZGVsdGEYAiABKAsyHC5jb3JlbGxpYS52MS5CdWxrQ29uZmlnRGVsdGESDwoHZHJ5X3J1bhgDIAEoCCJPCiNCdWxrVXBkYXRlQWdlbnREZXBsb3lDb25maWdSZXNwb25zZRIoCgdyZXN1bHRzGAEgAygLMhcuY29yZWxsaWEudjEuQnVsa1Jlc3VsdCpaCg1Nb2RlbFByb3ZpZGVyEh4KGk1PREVMX1BST1ZJREVSX1VOU1BFQ0lGSUVEEAASDQoJQU5USFJPUElDEAESCgoGT1BFTkFJEAISDgoKT1BFTlJPVVRFUhADKpQBCgpVcGRhdGVLaW5kEhsKF1VQREFURV9LSU5EX1VOU1BFQ0lGSUVEEAASHAoYVVBEQVRFX0tJTkRfTElWRV9BUFBMSUVEEAESKQolVVBEQVRFX0tJTkRfTElWRV9BUFBMSUVEX1dJVEhfUkVTVEFSVBACEiAKHFVQREFURV9LSU5EX1JFUVVJUkVTX1JFU1BBV04QAyrnAQoNRHJpZnRDYXRlZ29yeRIeChpEUklGVF9DQVRFR09SWV9VTlNQRUNJRklFRBAAEiEKHURSSUZUX0NBVEVHT1JZX0NPVU5UX01JU01BVENIEAESIAocRFJJRlRfQ0FURUdPUllfU0laRV9NSVNNQVRDSBACEiIKHkRSSUZUX0NBVEVHT1JZX1ZPTFVNRV9NSVNNQVRDSBADEicKI0RSSUZUX0NBVEVHT1JZX1ZPTFVNRV9TSVpFX01JU01BVENIEAQSJAogRFJJRlRfQ0FURUdPUllfVk9MVU1FX1VOQVRUQUNIRUQQBTLKCwoNQWdlbnRzU2VydmljZRJlChJMaXN0QWdlbnRUZW1wbGF0ZXMSJi5jb3JlbGxpYS52MS5MaXN0QWdlbnRUZW1wbGF0ZXNSZXF1ZXN0GicuY29yZWxsaWEudjEuTGlzdEFnZW50VGVtcGxhdGVzUmVzcG9uc2USTQoKU3Bhd25BZ2VudBIeLmNvcmVsbGlhLnYxLlNwYXduQWdlbnRSZXF1ZXN0Gh8uY29yZWxsaWEudjEuU3Bhd25BZ2VudFJlc3BvbnNlElMKDFNwYXduTkFnZW50cxIgLmNvcmVsbGlhLnYxLlNwYXduTkFnZW50c1JlcXVlc3QaIS5jb3JlbGxpYS52MS5TcGF3bk5BZ2VudHNSZXNwb25zZRJlChJMaXN0QWdlbnRJbnN0YW5jZXMSJi5jb3JlbGxpYS52MS5MaXN0QWdlbnRJbnN0YW5jZXNSZXF1ZXN0GicuY29yZWxsaWEudjEuTGlzdEFnZW50SW5zdGFuY2VzUmVzcG9uc2USXwoQR2V0QWdlbnRJbnN0YW5jZRIkLmNvcmVsbGlhLnYxLkdldEFnZW50SW5zdGFuY2VSZXF1ZXN0GiUuY29yZWxsaWEudjEuR2V0QWdlbnRJbnN0YW5jZVJlc3BvbnNlEmIKEVN0b3BBZ2VudEluc3RhbmNlEiUuY29yZWxsaWEudjEuU3RvcEFnZW50SW5zdGFuY2VSZXF1ZXN0GiYuY29yZWxsaWEudjEuU3RvcEFnZW50SW5zdGFuY2VSZXNwb25zZRJrChREZXN0cm95QWdlbnRJbnN0YW5jZRIoLmNvcmVsbGlhLnYxLkRlc3Ryb3lBZ2VudEluc3RhbmNlUmVxdWVzdBopLmNvcmVsbGlhLnYxLkRlc3Ryb3lBZ2VudEluc3RhbmNlUmVzcG9uc2USbgoVTGlzdERlcGxveW1lbnRSZWdpb25zEikuY29yZWxsaWEudjEuTGlzdERlcGxveW1lbnRSZWdpb25zUmVxdWVzdBoqLmNvcmVsbGlhLnYxLkxpc3REZXBsb3ltZW50UmVnaW9uc1Jlc3BvbnNlEncKGENoZWNrRGVwbG95bWVudFBsYWNlbWVudBIsLmNvcmVsbGlhLnYxLkNoZWNrRGVwbG95bWVudFBsYWNlbWVudFJlcXVlc3QaLS5jb3JlbGxpYS52MS5DaGVja0RlcGxveW1lbnRQbGFjZW1lbnRSZXNwb25zZRJ0ChdVcGRhdGVBZ2VudERlcGxveUNvbmZpZxIrLmNvcmVsbGlhLnYxLlVwZGF0ZUFnZW50RGVwbG95Q29uZmlnUmVxdWVzdBosLmNvcmVsbGlhLnYxLlVwZGF0ZUFnZW50RGVwbG95Q29uZmlnUmVzcG9uc2USZQoSU3RhcnRBZ2VudEluc3RhbmNlEiYuY29yZWxsaWEudjEuU3RhcnRBZ2VudEluc3RhbmNlUmVxdWVzdBonLmNvcmVsbGlhLnYxLlN0YXJ0QWdlbnRJbnN0YW5jZVJlc3BvbnNlEmgKE1Jlc2l6ZUFnZW50UmVwbGljYXMSJy5jb3JlbGxpYS52MS5SZXNpemVBZ2VudFJlcGxpY2FzUmVxdWVzdBooLmNvcmVsbGlhLnYxLlJlc2l6ZUFnZW50UmVwbGljYXNSZXNwb25zZRJiChFSZXNpemVBZ2VudFZvbHVtZRIlLmNvcmVsbGlhLnYxLlJlc2l6ZUFnZW50Vm9sdW1lUmVxdWVzdBomLmNvcmVsbGlhLnYxLlJlc2l6ZUFnZW50Vm9sdW1lUmVzcG9uc2USgAEKG0J1bGtVcGRhdGVBZ2VudERlcGxveUNvbmZpZxIvLmNvcmVsbGlhLnYxLkJ1bGtVcGRhdGVBZ2VudERlcGxveUNvbmZpZ1JlcXVlc3QaMC5jb3JlbGxpYS52MS5CdWxrVXBkYXRlQWdlbnREZXBsb3lDb25maWdSZXNwb25zZUJMWkpnaXRodWIuY29tL2hlamlqdW5oYW8vY29yZWxsaWEvYmFja2VuZC9pbnRlcm5hbC9nZW4vY29yZWxsaWEvdjE7Y29yZWxsaWF2MWIGcHJvdG8z");
 
 /**
  * @generated from message corellia.v1.ListAgentTemplatesRequest
@@ -70,11 +70,353 @@ export const AgentTemplateSchema: GenMessage<AgentTemplate> = /*@__PURE__*/
   messageDesc(file_corellia_v1_agents, 2);
 
 /**
+ * DeployConfig is the wire shape of the nine fleet-control fields.
+ * Mirrors deploy.DeployConfig (Go) and the nine columns added in
+ * migration 20260426160000_fleet_control.sql. Zero values mean "use
+ * defaults" — the service layer's WithDefaults() / Validate() owns
+ * the canonicalisation (M5 plan decision 5).
+ *
+ * @generated from message corellia.v1.DeployConfig
+ */
+export type DeployConfig = Message<"corellia.v1.DeployConfig"> & {
+  /**
+   * @generated from field: string region = 1;
+   */
+  region: string;
+
+  /**
+   * @generated from field: string cpu_kind = 2;
+   */
+  cpuKind: string;
+
+  /**
+   * @generated from field: int32 cpus = 3;
+   */
+  cpus: number;
+
+  /**
+   * @generated from field: int32 memory_mb = 4;
+   */
+  memoryMb: number;
+
+  /**
+   * @generated from field: string restart_policy = 5;
+   */
+  restartPolicy: string;
+
+  /**
+   * @generated from field: int32 restart_max_retries = 6;
+   */
+  restartMaxRetries: number;
+
+  /**
+   * @generated from field: string lifecycle_mode = 7;
+   */
+  lifecycleMode: string;
+
+  /**
+   * @generated from field: int32 desired_replicas = 8;
+   */
+  desiredReplicas: number;
+
+  /**
+   * @generated from field: int32 volume_size_gb = 9;
+   */
+  volumeSizeGb: number;
+};
+
+/**
+ * Describes the message corellia.v1.DeployConfig.
+ * Use `create(DeployConfigSchema)` to create a new message.
+ */
+export const DeployConfigSchema: GenMessage<DeployConfig> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 3);
+
+/**
+ * Region is Corellia's projection of fly.Region — re-exporting fly.Region
+ * would leak the Fly type past internal/deploy and break blueprint §11.1.
+ * Four fields per M5 plan decision 17.
+ *
+ * @generated from message corellia.v1.Region
+ */
+export type Region = Message<"corellia.v1.Region"> & {
+  /**
+   * @generated from field: string code = 1;
+   */
+  code: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: bool deprecated = 3;
+   */
+  deprecated: boolean;
+
+  /**
+   * @generated from field: bool requires_paid_plan = 4;
+   */
+  requiresPaidPlan: boolean;
+};
+
+/**
+ * Describes the message corellia.v1.Region.
+ * Use `create(RegionSchema)` to create a new message.
+ */
+export const RegionSchema: GenMessage<Region> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 4);
+
+/**
+ * PlacementResult is the FE-renderable answer to "can this config fit
+ * in this region for this org's token?" M5 plan decision 10.
+ *
+ * @generated from message corellia.v1.PlacementResult
+ */
+export type PlacementResult = Message<"corellia.v1.PlacementResult"> & {
+  /**
+   * @generated from field: bool available = 1;
+   */
+  available: boolean;
+
+  /**
+   * @generated from field: string reason = 2;
+   */
+  reason: string;
+
+  /**
+   * @generated from field: repeated string alternate_regions = 3;
+   */
+  alternateRegions: string[];
+};
+
+/**
+ * Describes the message corellia.v1.PlacementResult.
+ * Use `create(PlacementResultSchema)` to create a new message.
+ */
+export const PlacementResultSchema: GenMessage<PlacementResult> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 5);
+
+/**
+ * MachineState is the per-replica observation projected from
+ * flaps.List. M5 plan decision 2: no agent_machines table; per-machine
+ * state is read from Fly on demand.
+ *
+ * @generated from message corellia.v1.MachineState
+ */
+export type MachineState = Message<"corellia.v1.MachineState"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string region = 2;
+   */
+  region: string;
+
+  /**
+   * raw Fly state
+   *
+   * @generated from field: string state = 3;
+   */
+  state: string;
+
+  /**
+   * @generated from field: string cpu_kind = 4;
+   */
+  cpuKind: string;
+
+  /**
+   * @generated from field: int32 cpus = 5;
+   */
+  cpus: number;
+
+  /**
+   * @generated from field: int32 memory_mb = 6;
+   */
+  memoryMb: number;
+
+  /**
+   * RFC3339
+   *
+   * @generated from field: string created_at = 7;
+   */
+  createdAt: string;
+
+  /**
+   * @generated from field: string attached_volume_id = 8;
+   */
+  attachedVolumeId: string;
+};
+
+/**
+ * Describes the message corellia.v1.MachineState.
+ * Use `create(MachineStateSchema)` to create a new message.
+ */
+export const MachineStateSchema: GenMessage<MachineState> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 6);
+
+/**
+ * VolumeRef is one row of agent_volumes projected to the wire.
+ * machine_id is empty until SetAgentVolumeMachine fills it (Phase 3.5).
+ *
+ * @generated from message corellia.v1.VolumeRef
+ */
+export type VolumeRef = Message<"corellia.v1.VolumeRef"> & {
+  /**
+   * @generated from field: string volume_id = 1;
+   */
+  volumeId: string;
+
+  /**
+   * @generated from field: string region = 2;
+   */
+  region: string;
+
+  /**
+   * @generated from field: int32 size_gb = 3;
+   */
+  sizeGb: number;
+
+  /**
+   * @generated from field: string machine_id = 4;
+   */
+  machineId: string;
+};
+
+/**
+ * Describes the message corellia.v1.VolumeRef.
+ * Use `create(VolumeRefSchema)` to create a new message.
+ */
+export const VolumeRefSchema: GenMessage<VolumeRef> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 7);
+
+/**
+ * DriftEntry is one categorised drift bullet. The fleet inspector
+ * renders one bullet per entry (M5 plan decision 8 — drift summary
+ * granularity).
+ *
+ * @generated from message corellia.v1.DriftEntry
+ */
+export type DriftEntry = Message<"corellia.v1.DriftEntry"> & {
+  /**
+   * @generated from field: corellia.v1.DriftCategory category = 1;
+   */
+  category: DriftCategory;
+
+  /**
+   * @generated from field: string detail = 2;
+   */
+  detail: string;
+};
+
+/**
+ * Describes the message corellia.v1.DriftEntry.
+ * Use `create(DriftEntrySchema)` to create a new message.
+ */
+export const DriftEntrySchema: GenMessage<DriftEntry> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 8);
+
+/**
+ * DriftSummary is the per-instance drift report. Empty `entries` slice
+ * means "no drift" — the FE renders the row's banner accordingly.
+ *
+ * @generated from message corellia.v1.DriftSummary
+ */
+export type DriftSummary = Message<"corellia.v1.DriftSummary"> & {
+  /**
+   * @generated from field: repeated corellia.v1.DriftEntry entries = 1;
+   */
+  entries: DriftEntry[];
+};
+
+/**
+ * Describes the message corellia.v1.DriftSummary.
+ * Use `create(DriftSummarySchema)` to create a new message.
+ */
+export const DriftSummarySchema: GenMessage<DriftSummary> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 9);
+
+/**
+ * UpdateResult is the typed return from UpdateAgentDeployConfig
+ * (dry-run preview AND apply success). Mirrors agents.UpdateResult (Go).
+ * estimated_downtime_seconds is a coarse FE-renderable estimate, not a
+ * measurement. wipes_persistent_state is true only on REQUIRES_RESPAWN
+ * (region change today) — explicit so the FE doesn't re-derive.
+ *
+ * @generated from message corellia.v1.UpdateResult
+ */
+export type UpdateResult = Message<"corellia.v1.UpdateResult"> & {
+  /**
+   * @generated from field: corellia.v1.UpdateKind update_kind = 1;
+   */
+  updateKind: UpdateKind;
+
+  /**
+   * @generated from field: int32 estimated_downtime_seconds = 2;
+   */
+  estimatedDowntimeSeconds: number;
+
+  /**
+   * @generated from field: bool wipes_persistent_state = 3;
+   */
+  wipesPersistentState: boolean;
+};
+
+/**
+ * Describes the message corellia.v1.UpdateResult.
+ * Use `create(UpdateResultSchema)` to create a new message.
+ */
+export const UpdateResultSchema: GenMessage<UpdateResult> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 10);
+
+/**
+ * BulkResult is one row of a BulkUpdateAgentDeployConfig fan-out.
+ * Partial failure is normal (M5 plan decision 28); the FE renders a
+ * row per result so failed instances stay selected for retry.
+ *
+ * @generated from message corellia.v1.BulkResult
+ */
+export type BulkResult = Message<"corellia.v1.BulkResult"> & {
+  /**
+   * @generated from field: string instance_id = 1;
+   */
+  instanceId: string;
+
+  /**
+   * @generated from field: corellia.v1.UpdateKind update_kind = 2;
+   */
+  updateKind: UpdateKind;
+
+  /**
+   * Empty on success. On failure, carries the human-readable message
+   * (already redacted server-side per the M4 ErrFlyAPI pattern).
+   *
+   * @generated from field: string error_message = 3;
+   */
+  errorMessage: string;
+};
+
+/**
+ * Describes the message corellia.v1.BulkResult.
+ * Use `create(BulkResultSchema)` to create a new message.
+ */
+export const BulkResultSchema: GenMessage<BulkResult> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 11);
+
+/**
  * AgentInstance is the wire shape for a deployed agent. Empty-string
  * sentinels are used for "not yet set" semantics on optional scalars
  * (deploy_external_ref, logs_url, last_started_at, last_stopped_at) —
  * the alternative `optional string` would force every FE consumer to
  * branch on presence; empty-string is a single check.
+ *
+ * M5 widening (Phase 5): fields 13–23 carry the deploy-config columns
+ * + the per-instance volumes + drift summary. List queries unwidened
+ * in Phase 5 will leave fields 13–23 at their proto3 zero values; the
+ * Get path (which loads via the widened query) populates them.
  *
  * @generated from message corellia.v1.AgentInstance
  */
@@ -154,6 +496,70 @@ export type AgentInstance = Message<"corellia.v1.AgentInstance"> & {
    * @generated from field: string last_stopped_at = 12;
    */
   lastStoppedAt: string;
+
+  /**
+   * M5 deploy-config projection (fields 13–21). Mirror DeployConfig.
+   * Inlined (rather than `DeployConfig deploy_config = 13`) so existing
+   * FE consumers can drop the new fields onto fleet-row columns
+   * without unwrapping a nested message.
+   *
+   * @generated from field: string region = 13;
+   */
+  region: string;
+
+  /**
+   * @generated from field: string cpu_kind = 14;
+   */
+  cpuKind: string;
+
+  /**
+   * @generated from field: int32 cpus = 15;
+   */
+  cpus: number;
+
+  /**
+   * @generated from field: int32 memory_mb = 16;
+   */
+  memoryMb: number;
+
+  /**
+   * @generated from field: string restart_policy = 17;
+   */
+  restartPolicy: string;
+
+  /**
+   * @generated from field: int32 restart_max_retries = 18;
+   */
+  restartMaxRetries: number;
+
+  /**
+   * @generated from field: string lifecycle_mode = 19;
+   */
+  lifecycleMode: string;
+
+  /**
+   * @generated from field: int32 desired_replicas = 20;
+   */
+  desiredReplicas: number;
+
+  /**
+   * @generated from field: int32 volume_size_gb = 21;
+   */
+  volumeSizeGb: number;
+
+  /**
+   * M5 drift + volumes (fields 22–23). Drift is computed on demand;
+   * volumes is the projected agent_volumes rows for this instance,
+   * one per replica (M5 plan decision 8).
+   *
+   * @generated from field: corellia.v1.DriftSummary drift_summary = 22;
+   */
+  driftSummary?: DriftSummary | undefined;
+
+  /**
+   * @generated from field: repeated corellia.v1.VolumeRef volumes = 23;
+   */
+  volumes: VolumeRef[];
 };
 
 /**
@@ -161,7 +567,7 @@ export type AgentInstance = Message<"corellia.v1.AgentInstance"> & {
  * Use `create(AgentInstanceSchema)` to create a new message.
  */
 export const AgentInstanceSchema: GenMessage<AgentInstance> = /*@__PURE__*/
-  messageDesc(file_corellia_v1_agents, 3);
+  messageDesc(file_corellia_v1_agents, 12);
 
 /**
  * @generated from message corellia.v1.SpawnAgentRequest
@@ -195,6 +601,15 @@ export type SpawnAgentRequest = Message<"corellia.v1.SpawnAgentRequest"> & {
    * @generated from field: string model_api_key = 5;
    */
   modelApiKey: string;
+
+  /**
+   * M5 widening. Optional — unset means "use defaults" (server-side
+   * WithDefaults canonicalises). Field-presence semantics make
+   * partial overrides expressible.
+   *
+   * @generated from field: optional corellia.v1.DeployConfig deploy_config = 6;
+   */
+  deployConfig?: DeployConfig | undefined;
 };
 
 /**
@@ -202,7 +617,7 @@ export type SpawnAgentRequest = Message<"corellia.v1.SpawnAgentRequest"> & {
  * Use `create(SpawnAgentRequestSchema)` to create a new message.
  */
 export const SpawnAgentRequestSchema: GenMessage<SpawnAgentRequest> = /*@__PURE__*/
-  messageDesc(file_corellia_v1_agents, 4);
+  messageDesc(file_corellia_v1_agents, 13);
 
 /**
  * @generated from message corellia.v1.SpawnAgentResponse
@@ -219,7 +634,7 @@ export type SpawnAgentResponse = Message<"corellia.v1.SpawnAgentResponse"> & {
  * Use `create(SpawnAgentResponseSchema)` to create a new message.
  */
 export const SpawnAgentResponseSchema: GenMessage<SpawnAgentResponse> = /*@__PURE__*/
-  messageDesc(file_corellia_v1_agents, 5);
+  messageDesc(file_corellia_v1_agents, 14);
 
 /**
  * @generated from message corellia.v1.SpawnNAgentsRequest
@@ -259,6 +674,13 @@ export type SpawnNAgentsRequest = Message<"corellia.v1.SpawnNAgentsRequest"> & {
    * @generated from field: string model_api_key = 6;
    */
   modelApiKey: string;
+
+  /**
+   * M5 widening. Same DeployConfig applied to every spawned agent.
+   *
+   * @generated from field: optional corellia.v1.DeployConfig deploy_config = 7;
+   */
+  deployConfig?: DeployConfig | undefined;
 };
 
 /**
@@ -266,7 +688,7 @@ export type SpawnNAgentsRequest = Message<"corellia.v1.SpawnNAgentsRequest"> & {
  * Use `create(SpawnNAgentsRequestSchema)` to create a new message.
  */
 export const SpawnNAgentsRequestSchema: GenMessage<SpawnNAgentsRequest> = /*@__PURE__*/
-  messageDesc(file_corellia_v1_agents, 6);
+  messageDesc(file_corellia_v1_agents, 15);
 
 /**
  * @generated from message corellia.v1.SpawnNAgentsResponse
@@ -283,7 +705,7 @@ export type SpawnNAgentsResponse = Message<"corellia.v1.SpawnNAgentsResponse"> &
  * Use `create(SpawnNAgentsResponseSchema)` to create a new message.
  */
 export const SpawnNAgentsResponseSchema: GenMessage<SpawnNAgentsResponse> = /*@__PURE__*/
-  messageDesc(file_corellia_v1_agents, 7);
+  messageDesc(file_corellia_v1_agents, 16);
 
 /**
  * @generated from message corellia.v1.ListAgentInstancesRequest
@@ -296,7 +718,7 @@ export type ListAgentInstancesRequest = Message<"corellia.v1.ListAgentInstancesR
  * Use `create(ListAgentInstancesRequestSchema)` to create a new message.
  */
 export const ListAgentInstancesRequestSchema: GenMessage<ListAgentInstancesRequest> = /*@__PURE__*/
-  messageDesc(file_corellia_v1_agents, 8);
+  messageDesc(file_corellia_v1_agents, 17);
 
 /**
  * @generated from message corellia.v1.ListAgentInstancesResponse
@@ -313,7 +735,7 @@ export type ListAgentInstancesResponse = Message<"corellia.v1.ListAgentInstances
  * Use `create(ListAgentInstancesResponseSchema)` to create a new message.
  */
 export const ListAgentInstancesResponseSchema: GenMessage<ListAgentInstancesResponse> = /*@__PURE__*/
-  messageDesc(file_corellia_v1_agents, 9);
+  messageDesc(file_corellia_v1_agents, 18);
 
 /**
  * @generated from message corellia.v1.GetAgentInstanceRequest
@@ -330,7 +752,7 @@ export type GetAgentInstanceRequest = Message<"corellia.v1.GetAgentInstanceReque
  * Use `create(GetAgentInstanceRequestSchema)` to create a new message.
  */
 export const GetAgentInstanceRequestSchema: GenMessage<GetAgentInstanceRequest> = /*@__PURE__*/
-  messageDesc(file_corellia_v1_agents, 10);
+  messageDesc(file_corellia_v1_agents, 19);
 
 /**
  * @generated from message corellia.v1.GetAgentInstanceResponse
@@ -347,7 +769,7 @@ export type GetAgentInstanceResponse = Message<"corellia.v1.GetAgentInstanceResp
  * Use `create(GetAgentInstanceResponseSchema)` to create a new message.
  */
 export const GetAgentInstanceResponseSchema: GenMessage<GetAgentInstanceResponse> = /*@__PURE__*/
-  messageDesc(file_corellia_v1_agents, 11);
+  messageDesc(file_corellia_v1_agents, 20);
 
 /**
  * @generated from message corellia.v1.StopAgentInstanceRequest
@@ -364,7 +786,7 @@ export type StopAgentInstanceRequest = Message<"corellia.v1.StopAgentInstanceReq
  * Use `create(StopAgentInstanceRequestSchema)` to create a new message.
  */
 export const StopAgentInstanceRequestSchema: GenMessage<StopAgentInstanceRequest> = /*@__PURE__*/
-  messageDesc(file_corellia_v1_agents, 12);
+  messageDesc(file_corellia_v1_agents, 21);
 
 /**
  * @generated from message corellia.v1.StopAgentInstanceResponse
@@ -381,7 +803,7 @@ export type StopAgentInstanceResponse = Message<"corellia.v1.StopAgentInstanceRe
  * Use `create(StopAgentInstanceResponseSchema)` to create a new message.
  */
 export const StopAgentInstanceResponseSchema: GenMessage<StopAgentInstanceResponse> = /*@__PURE__*/
-  messageDesc(file_corellia_v1_agents, 13);
+  messageDesc(file_corellia_v1_agents, 22);
 
 /**
  * @generated from message corellia.v1.DestroyAgentInstanceRequest
@@ -398,7 +820,7 @@ export type DestroyAgentInstanceRequest = Message<"corellia.v1.DestroyAgentInsta
  * Use `create(DestroyAgentInstanceRequestSchema)` to create a new message.
  */
 export const DestroyAgentInstanceRequestSchema: GenMessage<DestroyAgentInstanceRequest> = /*@__PURE__*/
-  messageDesc(file_corellia_v1_agents, 14);
+  messageDesc(file_corellia_v1_agents, 23);
 
 /**
  * @generated from message corellia.v1.DestroyAgentInstanceResponse
@@ -415,7 +837,352 @@ export type DestroyAgentInstanceResponse = Message<"corellia.v1.DestroyAgentInst
  * Use `create(DestroyAgentInstanceResponseSchema)` to create a new message.
  */
 export const DestroyAgentInstanceResponseSchema: GenMessage<DestroyAgentInstanceResponse> = /*@__PURE__*/
-  messageDesc(file_corellia_v1_agents, 15);
+  messageDesc(file_corellia_v1_agents, 24);
+
+/**
+ * @generated from message corellia.v1.ListDeploymentRegionsRequest
+ */
+export type ListDeploymentRegionsRequest = Message<"corellia.v1.ListDeploymentRegionsRequest"> & {
+};
+
+/**
+ * Describes the message corellia.v1.ListDeploymentRegionsRequest.
+ * Use `create(ListDeploymentRegionsRequestSchema)` to create a new message.
+ */
+export const ListDeploymentRegionsRequestSchema: GenMessage<ListDeploymentRegionsRequest> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 25);
+
+/**
+ * @generated from message corellia.v1.ListDeploymentRegionsResponse
+ */
+export type ListDeploymentRegionsResponse = Message<"corellia.v1.ListDeploymentRegionsResponse"> & {
+  /**
+   * @generated from field: repeated corellia.v1.Region regions = 1;
+   */
+  regions: Region[];
+};
+
+/**
+ * Describes the message corellia.v1.ListDeploymentRegionsResponse.
+ * Use `create(ListDeploymentRegionsResponseSchema)` to create a new message.
+ */
+export const ListDeploymentRegionsResponseSchema: GenMessage<ListDeploymentRegionsResponse> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 26);
+
+/**
+ * @generated from message corellia.v1.CheckDeploymentPlacementRequest
+ */
+export type CheckDeploymentPlacementRequest = Message<"corellia.v1.CheckDeploymentPlacementRequest"> & {
+  /**
+   * @generated from field: corellia.v1.DeployConfig deploy_config = 1;
+   */
+  deployConfig?: DeployConfig | undefined;
+};
+
+/**
+ * Describes the message corellia.v1.CheckDeploymentPlacementRequest.
+ * Use `create(CheckDeploymentPlacementRequestSchema)` to create a new message.
+ */
+export const CheckDeploymentPlacementRequestSchema: GenMessage<CheckDeploymentPlacementRequest> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 27);
+
+/**
+ * @generated from message corellia.v1.CheckDeploymentPlacementResponse
+ */
+export type CheckDeploymentPlacementResponse = Message<"corellia.v1.CheckDeploymentPlacementResponse"> & {
+  /**
+   * @generated from field: corellia.v1.PlacementResult placement_result = 1;
+   */
+  placementResult?: PlacementResult | undefined;
+};
+
+/**
+ * Describes the message corellia.v1.CheckDeploymentPlacementResponse.
+ * Use `create(CheckDeploymentPlacementResponseSchema)` to create a new message.
+ */
+export const CheckDeploymentPlacementResponseSchema: GenMessage<CheckDeploymentPlacementResponse> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 28);
+
+/**
+ * @generated from message corellia.v1.UpdateAgentDeployConfigRequest
+ */
+export type UpdateAgentDeployConfigRequest = Message<"corellia.v1.UpdateAgentDeployConfigRequest"> & {
+  /**
+   * @generated from field: string instance_id = 1;
+   */
+  instanceId: string;
+
+  /**
+   * @generated from field: corellia.v1.DeployConfig deploy_config = 2;
+   */
+  deployConfig?: DeployConfig | undefined;
+
+  /**
+   * dry_run=true → server returns UpdateResult without mutating Fly or
+   * the agent_instances row. Drives the FE preview screen.
+   *
+   * @generated from field: bool dry_run = 3;
+   */
+  dryRun: boolean;
+};
+
+/**
+ * Describes the message corellia.v1.UpdateAgentDeployConfigRequest.
+ * Use `create(UpdateAgentDeployConfigRequestSchema)` to create a new message.
+ */
+export const UpdateAgentDeployConfigRequestSchema: GenMessage<UpdateAgentDeployConfigRequest> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 29);
+
+/**
+ * @generated from message corellia.v1.UpdateAgentDeployConfigResponse
+ */
+export type UpdateAgentDeployConfigResponse = Message<"corellia.v1.UpdateAgentDeployConfigResponse"> & {
+  /**
+   * @generated from field: corellia.v1.UpdateResult update_result = 1;
+   */
+  updateResult?: UpdateResult | undefined;
+};
+
+/**
+ * Describes the message corellia.v1.UpdateAgentDeployConfigResponse.
+ * Use `create(UpdateAgentDeployConfigResponseSchema)` to create a new message.
+ */
+export const UpdateAgentDeployConfigResponseSchema: GenMessage<UpdateAgentDeployConfigResponse> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 30);
+
+/**
+ * @generated from message corellia.v1.StartAgentInstanceRequest
+ */
+export type StartAgentInstanceRequest = Message<"corellia.v1.StartAgentInstanceRequest"> & {
+  /**
+   * @generated from field: string instance_id = 1;
+   */
+  instanceId: string;
+};
+
+/**
+ * Describes the message corellia.v1.StartAgentInstanceRequest.
+ * Use `create(StartAgentInstanceRequestSchema)` to create a new message.
+ */
+export const StartAgentInstanceRequestSchema: GenMessage<StartAgentInstanceRequest> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 31);
+
+/**
+ * @generated from message corellia.v1.StartAgentInstanceResponse
+ */
+export type StartAgentInstanceResponse = Message<"corellia.v1.StartAgentInstanceResponse"> & {
+  /**
+   * @generated from field: corellia.v1.AgentInstance instance = 1;
+   */
+  instance?: AgentInstance | undefined;
+};
+
+/**
+ * Describes the message corellia.v1.StartAgentInstanceResponse.
+ * Use `create(StartAgentInstanceResponseSchema)` to create a new message.
+ */
+export const StartAgentInstanceResponseSchema: GenMessage<StartAgentInstanceResponse> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 32);
+
+/**
+ * @generated from message corellia.v1.ResizeAgentReplicasRequest
+ */
+export type ResizeAgentReplicasRequest = Message<"corellia.v1.ResizeAgentReplicasRequest"> & {
+  /**
+   * @generated from field: string instance_id = 1;
+   */
+  instanceId: string;
+
+  /**
+   * @generated from field: int32 desired_replicas = 2;
+   */
+  desiredReplicas: number;
+};
+
+/**
+ * Describes the message corellia.v1.ResizeAgentReplicasRequest.
+ * Use `create(ResizeAgentReplicasRequestSchema)` to create a new message.
+ */
+export const ResizeAgentReplicasRequestSchema: GenMessage<ResizeAgentReplicasRequest> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 33);
+
+/**
+ * @generated from message corellia.v1.ResizeAgentReplicasResponse
+ */
+export type ResizeAgentReplicasResponse = Message<"corellia.v1.ResizeAgentReplicasResponse"> & {
+  /**
+   * @generated from field: corellia.v1.AgentInstance instance = 1;
+   */
+  instance?: AgentInstance | undefined;
+};
+
+/**
+ * Describes the message corellia.v1.ResizeAgentReplicasResponse.
+ * Use `create(ResizeAgentReplicasResponseSchema)` to create a new message.
+ */
+export const ResizeAgentReplicasResponseSchema: GenMessage<ResizeAgentReplicasResponse> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 34);
+
+/**
+ * @generated from message corellia.v1.ResizeAgentVolumeRequest
+ */
+export type ResizeAgentVolumeRequest = Message<"corellia.v1.ResizeAgentVolumeRequest"> & {
+  /**
+   * @generated from field: string instance_id = 1;
+   */
+  instanceId: string;
+
+  /**
+   * @generated from field: int32 volume_size_gb = 2;
+   */
+  volumeSizeGb: number;
+};
+
+/**
+ * Describes the message corellia.v1.ResizeAgentVolumeRequest.
+ * Use `create(ResizeAgentVolumeRequestSchema)` to create a new message.
+ */
+export const ResizeAgentVolumeRequestSchema: GenMessage<ResizeAgentVolumeRequest> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 35);
+
+/**
+ * @generated from message corellia.v1.ResizeAgentVolumeResponse
+ */
+export type ResizeAgentVolumeResponse = Message<"corellia.v1.ResizeAgentVolumeResponse"> & {
+  /**
+   * @generated from field: corellia.v1.AgentInstance instance = 1;
+   */
+  instance?: AgentInstance | undefined;
+
+  /**
+   * True when Fly required a machine restart for the new size to take
+   * effect. The FE renders a different toast in that case ("brief
+   * restart") vs the no-restart case ("instant").
+   *
+   * @generated from field: bool needs_restart = 2;
+   */
+  needsRestart: boolean;
+};
+
+/**
+ * Describes the message corellia.v1.ResizeAgentVolumeResponse.
+ * Use `create(ResizeAgentVolumeResponseSchema)` to create a new message.
+ */
+export const ResizeAgentVolumeResponseSchema: GenMessage<ResizeAgentVolumeResponse> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 36);
+
+/**
+ * BulkConfigDelta is DeployConfig minus volume_size_gb — bulk apply
+ * must not touch volume size (M5 plan decision 8.4). Carved as a
+ * distinct wire message so the proto encodes the invariant; no caller
+ * can accidentally include volume_size_gb in a bulk delta.
+ *
+ * CONTRACT — "don't change" semantics live on the FE, NOT the wire.
+ * Every field is required; the BE applies the delta uniformly to
+ * every selected instance. The FE form (`<BulkConfigDeltaForm>`)
+ * implements per-field skip by pre-filling skipped fields with the
+ * common-among-selection value, so a skipped-but-uniform field is a
+ * true no-op for the BE. Skipped-but-divergent selections surface a
+ * warning before submit. Direct callers that bypass the form (e.g.
+ * custom scripts) must compute the desired uniform values
+ * themselves — there is no per-field optional sentinel.
+ *
+ * @generated from message corellia.v1.BulkConfigDelta
+ */
+export type BulkConfigDelta = Message<"corellia.v1.BulkConfigDelta"> & {
+  /**
+   * @generated from field: string region = 1;
+   */
+  region: string;
+
+  /**
+   * @generated from field: string cpu_kind = 2;
+   */
+  cpuKind: string;
+
+  /**
+   * @generated from field: int32 cpus = 3;
+   */
+  cpus: number;
+
+  /**
+   * @generated from field: int32 memory_mb = 4;
+   */
+  memoryMb: number;
+
+  /**
+   * @generated from field: string restart_policy = 5;
+   */
+  restartPolicy: string;
+
+  /**
+   * @generated from field: int32 restart_max_retries = 6;
+   */
+  restartMaxRetries: number;
+
+  /**
+   * @generated from field: string lifecycle_mode = 7;
+   */
+  lifecycleMode: string;
+
+  /**
+   * @generated from field: int32 desired_replicas = 8;
+   */
+  desiredReplicas: number;
+};
+
+/**
+ * Describes the message corellia.v1.BulkConfigDelta.
+ * Use `create(BulkConfigDeltaSchema)` to create a new message.
+ */
+export const BulkConfigDeltaSchema: GenMessage<BulkConfigDelta> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 37);
+
+/**
+ * @generated from message corellia.v1.BulkUpdateAgentDeployConfigRequest
+ */
+export type BulkUpdateAgentDeployConfigRequest = Message<"corellia.v1.BulkUpdateAgentDeployConfigRequest"> & {
+  /**
+   * @generated from field: repeated string instance_ids = 1;
+   */
+  instanceIds: string[];
+
+  /**
+   * @generated from field: corellia.v1.BulkConfigDelta deploy_config_delta = 2;
+   */
+  deployConfigDelta?: BulkConfigDelta | undefined;
+
+  /**
+   * dry_run=true → server returns BulkResult per id without mutating.
+   *
+   * @generated from field: bool dry_run = 3;
+   */
+  dryRun: boolean;
+};
+
+/**
+ * Describes the message corellia.v1.BulkUpdateAgentDeployConfigRequest.
+ * Use `create(BulkUpdateAgentDeployConfigRequestSchema)` to create a new message.
+ */
+export const BulkUpdateAgentDeployConfigRequestSchema: GenMessage<BulkUpdateAgentDeployConfigRequest> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 38);
+
+/**
+ * @generated from message corellia.v1.BulkUpdateAgentDeployConfigResponse
+ */
+export type BulkUpdateAgentDeployConfigResponse = Message<"corellia.v1.BulkUpdateAgentDeployConfigResponse"> & {
+  /**
+   * @generated from field: repeated corellia.v1.BulkResult results = 1;
+   */
+  results: BulkResult[];
+};
+
+/**
+ * Describes the message corellia.v1.BulkUpdateAgentDeployConfigResponse.
+ * Use `create(BulkUpdateAgentDeployConfigResponseSchema)` to create a new message.
+ */
+export const BulkUpdateAgentDeployConfigResponseSchema: GenMessage<BulkUpdateAgentDeployConfigResponse> = /*@__PURE__*/
+  messageDesc(file_corellia_v1_agents, 39);
 
 /**
  * ModelProvider is the (closed) v1 set. Adding values is a non-breaking
@@ -452,6 +1219,87 @@ export enum ModelProvider {
  */
 export const ModelProviderSchema: GenEnum<ModelProvider> = /*@__PURE__*/
   enumDesc(file_corellia_v1_agents, 0);
+
+/**
+ * UpdateKind mirrors deploy.UpdateKind. Three values per M5 plan
+ * decision 6: in-place / brief restart / destroy + respawn. Drives the
+ * FE confirmation copy (silent toast / brief-restart toast / destructive
+ * modal).
+ *
+ * @generated from enum corellia.v1.UpdateKind
+ */
+export enum UpdateKind {
+  /**
+   * @generated from enum value: UPDATE_KIND_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: UPDATE_KIND_LIVE_APPLIED = 1;
+   */
+  LIVE_APPLIED = 1,
+
+  /**
+   * @generated from enum value: UPDATE_KIND_LIVE_APPLIED_WITH_RESTART = 2;
+   */
+  LIVE_APPLIED_WITH_RESTART = 2,
+
+  /**
+   * @generated from enum value: UPDATE_KIND_REQUIRES_RESPAWN = 3;
+   */
+  REQUIRES_RESPAWN = 3,
+}
+
+/**
+ * Describes the enum corellia.v1.UpdateKind.
+ */
+export const UpdateKindSchema: GenEnum<UpdateKind> = /*@__PURE__*/
+  enumDesc(file_corellia_v1_agents, 1);
+
+/**
+ * DriftCategory enumerates the five drift categories from M5 plan §4
+ * Phase 4. Closed set in v1.5; widening is a typed-enum addition, not
+ * a string-format change.
+ *
+ * @generated from enum corellia.v1.DriftCategory
+ */
+export enum DriftCategory {
+  /**
+   * @generated from enum value: DRIFT_CATEGORY_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: DRIFT_CATEGORY_COUNT_MISMATCH = 1;
+   */
+  COUNT_MISMATCH = 1,
+
+  /**
+   * @generated from enum value: DRIFT_CATEGORY_SIZE_MISMATCH = 2;
+   */
+  SIZE_MISMATCH = 2,
+
+  /**
+   * @generated from enum value: DRIFT_CATEGORY_VOLUME_MISMATCH = 3;
+   */
+  VOLUME_MISMATCH = 3,
+
+  /**
+   * @generated from enum value: DRIFT_CATEGORY_VOLUME_SIZE_MISMATCH = 4;
+   */
+  VOLUME_SIZE_MISMATCH = 4,
+
+  /**
+   * @generated from enum value: DRIFT_CATEGORY_VOLUME_UNATTACHED = 5;
+   */
+  VOLUME_UNATTACHED = 5,
+}
+
+/**
+ * Describes the enum corellia.v1.DriftCategory.
+ */
+export const DriftCategorySchema: GenEnum<DriftCategory> = /*@__PURE__*/
+  enumDesc(file_corellia_v1_agents, 2);
 
 /**
  * @generated from service corellia.v1.AgentsService
@@ -519,6 +1367,65 @@ export const AgentsService: GenService<{
     methodKind: "unary";
     input: typeof DestroyAgentInstanceRequestSchema;
     output: typeof DestroyAgentInstanceResponseSchema;
+  },
+  /**
+   * M5 fleet-control (plan §4 Phase 5). Service methods land on
+   * *agents.Service; handlers stay <30 LOC per blueprint §11.9.
+   *
+   * @generated from rpc corellia.v1.AgentsService.ListDeploymentRegions
+   */
+  listDeploymentRegions: {
+    methodKind: "unary";
+    input: typeof ListDeploymentRegionsRequestSchema;
+    output: typeof ListDeploymentRegionsResponseSchema;
+  },
+  /**
+   * @generated from rpc corellia.v1.AgentsService.CheckDeploymentPlacement
+   */
+  checkDeploymentPlacement: {
+    methodKind: "unary";
+    input: typeof CheckDeploymentPlacementRequestSchema;
+    output: typeof CheckDeploymentPlacementResponseSchema;
+  },
+  /**
+   * @generated from rpc corellia.v1.AgentsService.UpdateAgentDeployConfig
+   */
+  updateAgentDeployConfig: {
+    methodKind: "unary";
+    input: typeof UpdateAgentDeployConfigRequestSchema;
+    output: typeof UpdateAgentDeployConfigResponseSchema;
+  },
+  /**
+   * @generated from rpc corellia.v1.AgentsService.StartAgentInstance
+   */
+  startAgentInstance: {
+    methodKind: "unary";
+    input: typeof StartAgentInstanceRequestSchema;
+    output: typeof StartAgentInstanceResponseSchema;
+  },
+  /**
+   * @generated from rpc corellia.v1.AgentsService.ResizeAgentReplicas
+   */
+  resizeAgentReplicas: {
+    methodKind: "unary";
+    input: typeof ResizeAgentReplicasRequestSchema;
+    output: typeof ResizeAgentReplicasResponseSchema;
+  },
+  /**
+   * @generated from rpc corellia.v1.AgentsService.ResizeAgentVolume
+   */
+  resizeAgentVolume: {
+    methodKind: "unary";
+    input: typeof ResizeAgentVolumeRequestSchema;
+    output: typeof ResizeAgentVolumeResponseSchema;
+  },
+  /**
+   * @generated from rpc corellia.v1.AgentsService.BulkUpdateAgentDeployConfig
+   */
+  bulkUpdateAgentDeployConfig: {
+    methodKind: "unary";
+    input: typeof BulkUpdateAgentDeployConfigRequestSchema;
+    output: typeof BulkUpdateAgentDeployConfigResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_corellia_v1_agents, 0);

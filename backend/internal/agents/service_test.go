@@ -45,6 +45,23 @@ type fakeQueries struct {
 	destroyedCalls int32
 	failedCalls    int32
 	runningCalls   int32
+
+	// M5 fleet-control. agentVolumes is keyed by instance ID.
+	agentVolumes               map[uuid.UUID][]db.AgentVolume
+	listVolumesErr             error
+	updateDeployConfigErr      error
+	updateDeployConfigCalls    int32
+	lastUpdateDeployConfig     db.UpdateAgentDeployConfigParams
+	updateReplicasErr          error
+	updateReplicasCalls        int32
+	lastUpdateReplicas         db.UpdateAgentReplicasParams
+	updateInstanceVolSizeErr   error
+	updateInstanceVolSizeCalls int32
+	lastUpdateInstanceVolSize  db.UpdateAgentInstanceVolumeSizeParams
+	updateVolSizeErr           error
+	updateVolSizeCalls         int32
+	bulkUpdateErr              error
+	bulkUpdateCalls            int32
 }
 
 func (f *fakeQueries) ListAgentTemplates(_ context.Context) ([]db.ListAgentTemplatesRow, error) {
@@ -106,6 +123,36 @@ func (f *fakeQueries) ReapStalePendingInstances(_ context.Context) ([]uuid.UUID,
 	return f.reapIDs, f.reapErr
 }
 
+func (f *fakeQueries) UpdateAgentDeployConfig(_ context.Context, arg db.UpdateAgentDeployConfigParams) error {
+	atomic.AddInt32(&f.updateDeployConfigCalls, 1)
+	f.lastUpdateDeployConfig = arg
+	return f.updateDeployConfigErr
+}
+func (f *fakeQueries) UpdateAgentReplicas(_ context.Context, arg db.UpdateAgentReplicasParams) error {
+	atomic.AddInt32(&f.updateReplicasCalls, 1)
+	f.lastUpdateReplicas = arg
+	return f.updateReplicasErr
+}
+func (f *fakeQueries) UpdateAgentInstanceVolumeSize(_ context.Context, arg db.UpdateAgentInstanceVolumeSizeParams) error {
+	atomic.AddInt32(&f.updateInstanceVolSizeCalls, 1)
+	f.lastUpdateInstanceVolSize = arg
+	return f.updateInstanceVolSizeErr
+}
+func (f *fakeQueries) UpdateAgentVolumeSize(_ context.Context, _ db.UpdateAgentVolumeSizeParams) error {
+	atomic.AddInt32(&f.updateVolSizeCalls, 1)
+	return f.updateVolSizeErr
+}
+func (f *fakeQueries) BulkUpdateAgentDeployConfig(_ context.Context, _ db.BulkUpdateAgentDeployConfigParams) error {
+	atomic.AddInt32(&f.bulkUpdateCalls, 1)
+	return f.bulkUpdateErr
+}
+func (f *fakeQueries) ListAgentVolumesByInstance(_ context.Context, instanceID uuid.UUID) ([]db.AgentVolume, error) {
+	if f.listVolumesErr != nil {
+		return nil, f.listVolumesErr
+	}
+	return f.agentVolumes[instanceID], nil
+}
+
 type fakeAdapters struct {
 	adapter db.HarnessAdapter
 	err     error
@@ -131,12 +178,34 @@ type fakeDeployTarget struct {
 	stopCount    int32
 	destroyCount int32
 	lastSpec     deploy.SpawnSpec
+	lastCfg      deploy.DeployConfig
+
+	// M5 fleet-control injection points.
+	updateKind          deploy.UpdateKind
+	updateErr           error
+	updateCount         int32
+	previewKind         deploy.UpdateKind
+	previewErr          error
+	previewCount        int32
+	startErr            error
+	startCount          int32
+	listRegions         []deploy.Region
+	listRegionsErr      error
+	placement           deploy.PlacementResult
+	placementErr        error
+	machines            []deploy.MachineState
+	listMachinesErr     error
+	ensureVolume        deploy.VolumeRef
+	ensureVolumeErr     error
+	extendVolumeRestart bool
+	extendVolumeErr     error
 }
 
 func (f *fakeDeployTarget) Kind() string { return f.kind }
-func (f *fakeDeployTarget) Spawn(_ context.Context, spec deploy.SpawnSpec) (deploy.SpawnResult, error) {
+func (f *fakeDeployTarget) Spawn(_ context.Context, spec deploy.SpawnSpec, cfg deploy.DeployConfig) (deploy.SpawnResult, error) {
 	atomic.AddInt32(&f.spawnCount, 1)
 	f.lastSpec = spec
+	f.lastCfg = cfg
 	if f.spawnErr != nil {
 		return deploy.SpawnResult{}, f.spawnErr
 	}
@@ -161,6 +230,64 @@ func (f *fakeDeployTarget) Health(_ context.Context, _ string) (deploy.HealthSta
 	return f.healthSeq[idx], nil
 }
 
+// M5 fleet-control: every new DeployTarget method tracks its call
+// count and accepts canned responses + per-method error injection.
+// Tests assert on the counts to pin the order-of-operations
+// invariants from plan §4 Phase 4.
+func (f *fakeDeployTarget) Update(_ context.Context, _ string, cfg deploy.DeployConfig) (deploy.UpdateKind, error) {
+	atomic.AddInt32(&f.updateCount, 1)
+	f.lastCfg = cfg
+	if f.updateErr != nil {
+		return "", f.updateErr
+	}
+	if f.updateKind == "" {
+		return deploy.UpdateLiveApplied, nil
+	}
+	return f.updateKind, nil
+}
+func (f *fakeDeployTarget) PreviewUpdate(_ context.Context, _ string, cfg deploy.DeployConfig) (deploy.UpdateKind, error) {
+	atomic.AddInt32(&f.previewCount, 1)
+	f.lastCfg = cfg
+	if f.previewErr != nil {
+		return "", f.previewErr
+	}
+	if f.previewKind == "" {
+		return deploy.UpdateLiveApplied, nil
+	}
+	return f.previewKind, nil
+}
+func (f *fakeDeployTarget) Start(_ context.Context, _ string) error {
+	atomic.AddInt32(&f.startCount, 1)
+	return f.startErr
+}
+func (f *fakeDeployTarget) ListRegions(_ context.Context) ([]deploy.Region, error) {
+	return f.listRegions, f.listRegionsErr
+}
+func (f *fakeDeployTarget) CheckPlacement(_ context.Context, _ deploy.DeployConfig) (deploy.PlacementResult, error) {
+	if f.placementErr != nil {
+		return deploy.PlacementResult{}, f.placementErr
+	}
+	if f.placement.Available || f.placement.Reason != "" || len(f.placement.AlternateRegions) > 0 {
+		return f.placement, nil
+	}
+	return deploy.PlacementResult{Available: true}, nil
+}
+func (f *fakeDeployTarget) ListMachines(_ context.Context, _ string) ([]deploy.MachineState, error) {
+	return f.machines, f.listMachinesErr
+}
+func (f *fakeDeployTarget) EnsureVolume(_ context.Context, _ string, region string, sizeGB int) (deploy.VolumeRef, error) {
+	if f.ensureVolumeErr != nil {
+		return deploy.VolumeRef{}, f.ensureVolumeErr
+	}
+	if f.ensureVolume.VolumeID != "" {
+		return f.ensureVolume, nil
+	}
+	return deploy.VolumeRef{VolumeID: "vol_fake", Region: region, SizeGB: sizeGB}, nil
+}
+func (f *fakeDeployTarget) ExtendVolume(_ context.Context, _ string, _ string, _ int) (bool, error) {
+	return f.extendVolumeRestart, f.extendVolumeErr
+}
+
 // fakeResolver returns a single target keyed by Kind().
 type fakeResolver struct {
 	target deploy.DeployTarget
@@ -183,6 +310,10 @@ type fakeTransactor struct {
 }
 
 func (f *fakeTransactor) WithSpawnTx(_ context.Context, fn func(agents.SpawnTx) error) error {
+	return fn(f.q)
+}
+
+func (f *fakeTransactor) WithResizeVolumeTx(_ context.Context, fn func(agents.ResizeVolumeTx) error) error {
 	return fn(f.q)
 }
 
@@ -673,4 +804,519 @@ func TestReapStalePending(t *testing.T) {
 	if len(got) != len(want) {
 		t.Fatalf("len: got %d, want %d", len(got), len(want))
 	}
+}
+
+// ---------- Phase 4 — Spawn DeployConfig validation + persist ----------
+
+func TestSpawn_PersistsDeployConfigInTx(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	in := validSpawnInput()
+	in.DeployConfig = deploy.DeployConfig{
+		Region:          "lhr",
+		CPUKind:         "shared",
+		CPUs:            2,
+		MemoryMB:        1024,
+		RestartPolicy:   "on-failure",
+		LifecycleMode:   "always-on",
+		DesiredReplicas: 3,
+		VolumeSizeGB:    5,
+	}
+	if _, err := s.Spawn(context.Background(), in); err != nil {
+		t.Fatalf("Spawn: %v", err)
+	}
+	if atomic.LoadInt32(&q.updateDeployConfigCalls) != 1 {
+		t.Errorf("UpdateAgentDeployConfig calls: got %d, want 1 (must run inside spawn tx)", q.updateDeployConfigCalls)
+	}
+	if got := q.lastUpdateDeployConfig.Region; got != "lhr" {
+		t.Errorf("persisted Region: got %q, want %q", got, "lhr")
+	}
+	if got := q.lastUpdateDeployConfig.DesiredReplicas; got != 3 {
+		t.Errorf("persisted DesiredReplicas: got %d, want 3", got)
+	}
+	if got := q.lastUpdateDeployConfig.VolumeSizeGb; got != 5 {
+		t.Errorf("persisted VolumeSizeGB: got %d, want 5", got)
+	}
+	if d.lastCfg.Region != "lhr" || d.lastCfg.DesiredReplicas != 3 {
+		t.Errorf("deployer.Spawn cfg not threaded: %+v", d.lastCfg)
+	}
+}
+
+func TestSpawn_RejectsInvalidVolumeSize(t *testing.T) {
+	q, a, _, r := newSpawnReadyHarness()
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+	in := validSpawnInput()
+	in.DeployConfig = deploy.DeployConfig{VolumeSizeGB: 99999} // out of [1,500]
+	_, err := s.Spawn(context.Background(), in)
+	if !errors.Is(err, deploy.ErrInvalidVolumeSize) {
+		t.Fatalf("err: got %v, want ErrInvalidVolumeSize", err)
+	}
+	if atomic.LoadInt32(&q.insertCalls) != 0 {
+		t.Errorf("InsertAgentInstance called %d times, want 0 (validation must precede DB writes)", q.insertCalls)
+	}
+}
+
+func TestSpawn_RejectsInvalidLifecycle(t *testing.T) {
+	q, a, _, r := newSpawnReadyHarness()
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+	in := validSpawnInput()
+	in.DeployConfig = deploy.DeployConfig{LifecycleMode: "idle-on-demand"}
+	_, err := s.Spawn(context.Background(), in)
+	if !errors.Is(err, deploy.ErrLifecycleUnsupported) {
+		t.Fatalf("err: got %v, want ErrLifecycleUnsupported", err)
+	}
+}
+
+// ---------- Phase 4 — UpdateDeployConfig ----------
+
+func newReadyInstance(externalRef string) db.GetAgentInstanceByIDRow {
+	id := uuid.New()
+	ref := externalRef
+	return db.GetAgentInstanceByIDRow{
+		ID:                id,
+		Name:              "alpha",
+		AgentTemplateID:   uuid.New(),
+		OwnerUserID:       uuid.New(),
+		OrgID:             uuid.New(),
+		DeployTargetID:    uuid.New(),
+		DeployExternalRef: &ref,
+		ModelProvider:     "openrouter",
+		ModelName:         "claude",
+		Status:            "running",
+		ConfigOverrides:   []byte(`{}`),
+		Region:            "iad",
+		CpuKind:           "shared",
+		Cpus:              1,
+		MemoryMb:          256,
+		RestartPolicy:     "on-failure",
+		RestartMaxRetries: 3,
+		LifecycleMode:     "always-on",
+		DesiredReplicas:   1,
+		VolumeSizeGb:      1,
+		TemplateName:      "Hermes",
+	}
+}
+
+func TestUpdateDeployConfig_DryRunDoesNotMutate(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newReadyInstance("fly-app:corellia-agent-deadbeef")
+	q.getInst = row
+	d.previewKind = deploy.UpdateLiveApplied
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	cfg := deployConfigFromRow(row)
+	cfg.MemoryMB = 1024
+	res, err := s.UpdateDeployConfig(context.Background(), row.ID, row.OrgID, cfg, true)
+	if err != nil {
+		t.Fatalf("UpdateDeployConfig: %v", err)
+	}
+	if res.Kind != deploy.UpdateLiveApplied {
+		t.Errorf("Kind = %v, want LiveApplied", res.Kind)
+	}
+	if atomic.LoadInt32(&d.updateCount) != 0 {
+		t.Errorf("deployer.Update count: got %d, want 0 (dry run must not mutate)", d.updateCount)
+	}
+	if atomic.LoadInt32(&q.updateDeployConfigCalls) != 0 {
+		t.Errorf("UpdateAgentDeployConfig count: got %d, want 0 (dry run must not persist)", q.updateDeployConfigCalls)
+	}
+	if atomic.LoadInt32(&d.previewCount) != 1 {
+		t.Errorf("PreviewUpdate count: got %d, want 1", d.previewCount)
+	}
+}
+
+func TestUpdateDeployConfig_ApplyLive(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newReadyInstance("fly-app:corellia-agent-deadbeef")
+	q.getInst = row
+	d.previewKind = deploy.UpdateLiveApplied
+	d.updateKind = deploy.UpdateLiveApplied
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	cfg := deployConfigFromRow(row)
+	cfg.MemoryMB = 1024
+	res, err := s.UpdateDeployConfig(context.Background(), row.ID, row.OrgID, cfg, false)
+	if err != nil {
+		t.Fatalf("UpdateDeployConfig: %v", err)
+	}
+	if res.Kind != deploy.UpdateLiveApplied {
+		t.Errorf("Kind = %v, want LiveApplied", res.Kind)
+	}
+	if atomic.LoadInt32(&d.updateCount) != 1 {
+		t.Errorf("deployer.Update count: got %d, want 1", d.updateCount)
+	}
+	if atomic.LoadInt32(&q.updateDeployConfigCalls) != 1 {
+		t.Errorf("UpdateAgentDeployConfig count: got %d, want 1", q.updateDeployConfigCalls)
+	}
+	if got := q.lastUpdateDeployConfig.MemoryMb; got != 1024 {
+		t.Errorf("persisted MemoryMB: got %d, want 1024", got)
+	}
+}
+
+func TestUpdateDeployConfig_PlacementUnavailable(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newReadyInstance("fly-app:corellia-agent-deadbeef")
+	q.getInst = row
+	d.placement = deploy.PlacementResult{Available: false, Reason: "iad full"}
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	cfg := deployConfigFromRow(row)
+	_, err := s.UpdateDeployConfig(context.Background(), row.ID, row.OrgID, cfg, false)
+	if !errors.Is(err, deploy.ErrPlacementUnavailable) {
+		t.Fatalf("err: got %v, want ErrPlacementUnavailable", err)
+	}
+	if atomic.LoadInt32(&d.updateCount) != 0 {
+		t.Errorf("deployer.Update count: got %d, want 0 (placement gate)", d.updateCount)
+	}
+}
+
+func TestUpdateDeployConfig_RequiresRespawn(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newReadyInstance("fly-app:corellia-agent-deadbeef")
+	q.getInst = row
+	d.previewKind = deploy.UpdateRequiresRespawn
+	d.spawnResult = deploy.SpawnResult{ExternalRef: "fly-app:corellia-agent-newapp01", MachineID: "m-new"}
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	cfg := deployConfigFromRow(row)
+	cfg.Region = "lhr"
+	res, err := s.UpdateDeployConfig(context.Background(), row.ID, row.OrgID, cfg, false)
+	if err != nil {
+		t.Fatalf("UpdateDeployConfig: %v", err)
+	}
+	if res.Kind != deploy.UpdateRequiresRespawn {
+		t.Errorf("Kind = %v, want RequiresRespawn", res.Kind)
+	}
+	if atomic.LoadInt32(&d.destroyCount) != 1 {
+		t.Errorf("deployer.Destroy count: got %d, want 1", d.destroyCount)
+	}
+	if atomic.LoadInt32(&d.spawnCount) != 1 {
+		t.Errorf("deployer.Spawn count: got %d, want 1 (respawn)", d.spawnCount)
+	}
+	if atomic.LoadInt32(&d.updateCount) != 0 {
+		t.Errorf("deployer.Update count: got %d, want 0 (respawn path skips Update)", d.updateCount)
+	}
+	if atomic.LoadInt32(&q.updateDeployConfigCalls) != 1 {
+		t.Errorf("UpdateAgentDeployConfig count: got %d, want 1", q.updateDeployConfigCalls)
+	}
+}
+
+// ---------- Phase 4 — ResizeReplicas ----------
+
+func TestResizeReplicas_HappyPath(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newReadyInstance("fly-app:corellia-agent-deadbeef")
+	q.getInst = row
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	res, err := s.ResizeReplicas(context.Background(), row.ID, row.OrgID, 4)
+	if err != nil {
+		t.Fatalf("ResizeReplicas: %v", err)
+	}
+	if res.Kind != deploy.UpdateLiveApplied {
+		t.Errorf("Kind = %v, want LiveApplied", res.Kind)
+	}
+	if atomic.LoadInt32(&q.updateReplicasCalls) != 1 {
+		t.Errorf("UpdateAgentReplicas count: got %d, want 1", q.updateReplicasCalls)
+	}
+	if got := q.lastUpdateReplicas.DesiredReplicas; got != 4 {
+		t.Errorf("persisted DesiredReplicas: got %d, want 4", got)
+	}
+	if d.lastCfg.DesiredReplicas != 4 {
+		t.Errorf("deployer.Update cfg.DesiredReplicas: got %d, want 4", d.lastCfg.DesiredReplicas)
+	}
+}
+
+func TestResizeReplicas_OutOfRange(t *testing.T) {
+	q, a, _, r := newSpawnReadyHarness()
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+	for _, n := range []int{0, -1, 11, 100} {
+		_, err := s.ResizeReplicas(context.Background(), uuid.New(), uuid.New(), n)
+		if !errors.Is(err, deploy.ErrInvalidSize) {
+			t.Errorf("desired=%d: err = %v, want ErrInvalidSize", n, err)
+		}
+	}
+}
+
+// ---------- Phase 4 — ResizeVolume ----------
+
+func TestResizeVolume_HappyPath(t *testing.T) {
+	q, a, _, r := newSpawnReadyHarness()
+	row := newReadyInstance("fly-app:corellia-agent-deadbeef")
+	row.VolumeSizeGb = 1
+	q.getInst = row
+	q.agentVolumes = map[uuid.UUID][]db.AgentVolume{
+		row.ID: {
+			{ID: uuid.New(), AgentInstanceID: row.ID, FlyVolumeID: "vol_a", Region: "iad", SizeGb: 1},
+			{ID: uuid.New(), AgentInstanceID: row.ID, FlyVolumeID: "vol_b", Region: "iad", SizeGb: 1},
+		},
+	}
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	res, err := s.ResizeVolume(context.Background(), row.ID, row.OrgID, 5)
+	if err != nil {
+		t.Fatalf("ResizeVolume: %v", err)
+	}
+	if res.Kind != deploy.UpdateLiveApplied {
+		t.Errorf("Kind = %v, want LiveApplied", res.Kind)
+	}
+	if got := atomic.LoadInt32(&q.updateInstanceVolSizeCalls); got != 1 {
+		t.Errorf("parent volume_size_gb update count: got %d, want 1", got)
+	}
+	if got := atomic.LoadInt32(&q.updateVolSizeCalls); got != 2 {
+		t.Errorf("per-volume size_gb update count: got %d, want 2 (one per volume)", got)
+	}
+}
+
+func TestResizeVolume_RejectsShrink(t *testing.T) {
+	q, a, _, r := newSpawnReadyHarness()
+	row := newReadyInstance("fly-app:corellia-agent-deadbeef")
+	row.VolumeSizeGb = 5
+	q.getInst = row
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	_, err := s.ResizeVolume(context.Background(), row.ID, row.OrgID, 1)
+	if !errors.Is(err, deploy.ErrVolumeShrink) {
+		t.Fatalf("err: got %v, want ErrVolumeShrink", err)
+	}
+}
+
+func TestResizeVolume_OutOfRange(t *testing.T) {
+	q, a, _, r := newSpawnReadyHarness()
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+	for _, n := range []int{0, -1, 501, 9999} {
+		_, err := s.ResizeVolume(context.Background(), uuid.New(), uuid.New(), n)
+		if !errors.Is(err, deploy.ErrInvalidVolumeSize) {
+			t.Errorf("size=%d: err = %v, want ErrInvalidVolumeSize", n, err)
+		}
+	}
+}
+
+// ---------- Phase 4 — StartInstance ----------
+
+func TestStartInstance_HappyPath(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newReadyInstance("fly-app:corellia-agent-deadbeef")
+	q.getInst = row
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	if _, err := s.StartInstance(context.Background(), row.ID, row.OrgID); err != nil {
+		t.Fatalf("StartInstance: %v", err)
+	}
+	if atomic.LoadInt32(&d.startCount) != 1 {
+		t.Errorf("deployer.Start count: got %d, want 1", d.startCount)
+	}
+}
+
+func TestStartInstance_NotFound(t *testing.T) {
+	q, a, _, r := newSpawnReadyHarness()
+	q.getInstErr = pgx.ErrNoRows
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+	_, err := s.StartInstance(context.Background(), uuid.New(), uuid.New())
+	if !errors.Is(err, agents.ErrInstanceNotFound) {
+		t.Fatalf("err: got %v, want ErrInstanceNotFound", err)
+	}
+}
+
+// ---------- Phase 4 — BulkUpdateDeployConfig ----------
+
+func TestBulkUpdateDeployConfig_PartialFailure(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	id1 := uuid.New()
+	id2 := uuid.New()
+	id3 := uuid.New()
+	orgID := uuid.New()
+	// fakeQueries.getInst is shared across calls — for partial-failure we
+	// need different rows per ID. Hack: set a callback-style return below.
+	rows := map[uuid.UUID]db.GetAgentInstanceByIDRow{
+		id1: newReadyInstance("fly-app:corellia-agent-aaaaaaaa"),
+		id2: newReadyInstance(""), // pending — no external ref → ErrInstanceNotFound
+		id3: newReadyInstance("fly-app:corellia-agent-cccccccc"),
+	}
+	for k, v := range rows {
+		v.ID = k
+		v.OrgID = orgID
+		rows[k] = v
+	}
+	q.getInst = rows[id1] // baseline
+	// Override the fakeQueries' getter via a small wrapper. Easiest: load
+	// rows by iteration in the helper and have a callback. Since
+	// fakeQueries.getInst is a single value, we instead route through a
+	// closure-aware fake by mutating per call — implemented via a pre-test
+	// stub here:
+	originalGet := q.getInstErr
+	defer func() { q.getInstErr = originalGet }()
+	// Use the queries-level callback: replace GetAgentInstanceByID via a
+	// dedicated map lookup.
+	q.agentVolumes = map[uuid.UUID][]db.AgentVolume{}
+	q2 := &perIDQueries{fakeQueries: q, byID: rows}
+	s := agents.NewService(q2, a, r, &fakeTransactor{q: q})
+
+	delta := agents.BulkConfigDelta{
+		Region: "iad", CPUKind: "shared", CPUs: 1, MemoryMB: 256,
+		RestartPolicy: "on-failure", RestartMaxRetries: 3,
+		LifecycleMode: "always-on", DesiredReplicas: 1,
+	}
+	results, err := s.BulkUpdateDeployConfig(context.Background(),
+		[]uuid.UUID{id1, id2, id3}, orgID, delta, false)
+	if err != nil {
+		t.Fatalf("BulkUpdateDeployConfig: %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("results len: got %d, want 3", len(results))
+	}
+
+	byID := map[uuid.UUID]agents.BulkResult{}
+	for _, r := range results {
+		byID[r.InstanceID] = r
+	}
+	if byID[id1].Err != nil {
+		t.Errorf("id1: unexpected err %v", byID[id1].Err)
+	}
+	if !errors.Is(byID[id2].Err, agents.ErrInstanceNotFound) {
+		t.Errorf("id2: err = %v, want ErrInstanceNotFound (no external ref)", byID[id2].Err)
+	}
+	if byID[id3].Err != nil {
+		t.Errorf("id3: unexpected err %v", byID[id3].Err)
+	}
+	// Two successful instances → two deployer.Update calls.
+	if got := atomic.LoadInt32(&d.updateCount); got != 2 {
+		t.Errorf("deployer.Update count: got %d, want 2 (one per successful row)", got)
+	}
+}
+
+func TestBulkUpdateDeployConfig_OverLimit(t *testing.T) {
+	q, a, _, r := newSpawnReadyHarness()
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	ids := make([]uuid.UUID, 51)
+	for i := range ids {
+		ids[i] = uuid.New()
+	}
+	_, err := s.BulkUpdateDeployConfig(context.Background(), ids, uuid.New(), agents.BulkConfigDelta{}, false)
+	if !errors.Is(err, agents.ErrBulkLimit) {
+		t.Fatalf("err: got %v, want ErrBulkLimit", err)
+	}
+}
+
+// ---------- Phase 4 — DetectDrift ----------
+
+func TestDetectDrift_CountMismatch(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newReadyInstance("fly-app:corellia-agent-deadbeef")
+	row.DesiredReplicas = 3
+	q.getInst = row
+	d.machines = []deploy.MachineState{
+		{ID: "m1", Region: "iad", CPUKind: "shared", CPUs: 1, MemoryMB: 256},
+	}
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	report, err := s.DetectDrift(context.Background(), row.ID, row.OrgID)
+	if err != nil {
+		t.Fatalf("DetectDrift: %v", err)
+	}
+	if !containsCategory(report.Categories, agents.DriftCountMismatch) {
+		t.Errorf("missing count_mismatch: %v", report.Categories)
+	}
+}
+
+func TestDetectDrift_SizeMismatch(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newReadyInstance("fly-app:corellia-agent-deadbeef")
+	q.getInst = row
+	d.machines = []deploy.MachineState{
+		{ID: "m1", CPUKind: "shared", CPUs: 4, MemoryMB: 1024}, // differs from row's 1×256
+	}
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	report, err := s.DetectDrift(context.Background(), row.ID, row.OrgID)
+	if err != nil {
+		t.Fatalf("DetectDrift: %v", err)
+	}
+	if !containsCategory(report.Categories, agents.DriftSizeMismatch) {
+		t.Errorf("missing size_mismatch: %v", report.Categories)
+	}
+}
+
+func TestDetectDrift_VolumeUnattached(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newReadyInstance("fly-app:corellia-agent-deadbeef")
+	q.getInst = row
+	d.machines = []deploy.MachineState{
+		{ID: "m1", CPUKind: "shared", CPUs: 1, MemoryMB: 256},
+	}
+	q.agentVolumes = map[uuid.UUID][]db.AgentVolume{
+		row.ID: {
+			{ID: uuid.New(), AgentInstanceID: row.ID, FlyVolumeID: "vol_a", SizeGb: 1, FlyMachineID: nil},
+		},
+	}
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	report, err := s.DetectDrift(context.Background(), row.ID, row.OrgID)
+	if err != nil {
+		t.Fatalf("DetectDrift: %v", err)
+	}
+	if !containsCategory(report.Categories, agents.DriftVolumeUnattached) {
+		t.Errorf("missing volume_unattached: %v", report.Categories)
+	}
+}
+
+func TestDetectDrift_NoDrift(t *testing.T) {
+	q, a, d, r := newSpawnReadyHarness()
+	row := newReadyInstance("fly-app:corellia-agent-deadbeef")
+	q.getInst = row
+	d.machines = []deploy.MachineState{
+		{ID: "m1", CPUKind: "shared", CPUs: 1, MemoryMB: 256},
+	}
+	s := agents.NewService(q, a, r, &fakeTransactor{q: q})
+
+	report, err := s.DetectDrift(context.Background(), row.ID, row.OrgID)
+	if err != nil {
+		t.Fatalf("DetectDrift: %v", err)
+	}
+	if len(report.Categories) != 0 {
+		t.Errorf("unexpected drift: %v", report.Categories)
+	}
+}
+
+// ---------- helpers ----------
+
+// deployConfigFromRow mirrors the production helper for tests.
+func deployConfigFromRow(r db.GetAgentInstanceByIDRow) deploy.DeployConfig {
+	return deploy.DeployConfig{
+		Region:            r.Region,
+		CPUKind:           r.CpuKind,
+		CPUs:              int(r.Cpus),
+		MemoryMB:          int(r.MemoryMb),
+		RestartPolicy:     r.RestartPolicy,
+		RestartMaxRetries: int(r.RestartMaxRetries),
+		LifecycleMode:     r.LifecycleMode,
+		DesiredReplicas:   int(r.DesiredReplicas),
+		VolumeSizeGB:      int(r.VolumeSizeGb),
+	}
+}
+
+func containsCategory(haystack []agents.DriftCategory, needle agents.DriftCategory) bool {
+	for _, c := range haystack {
+		if c == needle {
+			return true
+		}
+	}
+	return false
+}
+
+// perIDQueries layers a per-ID GetAgentInstanceByID lookup on top of
+// fakeQueries — the bulk-failure test needs different rows for
+// different IDs in one run, which the single-value fakeQueries.getInst
+// can't express. Embed + override pattern keeps the shape minimal.
+type perIDQueries struct {
+	*fakeQueries
+	byID map[uuid.UUID]db.GetAgentInstanceByIDRow
+}
+
+func (p *perIDQueries) GetAgentInstanceByID(_ context.Context, arg db.GetAgentInstanceByIDParams) (db.GetAgentInstanceByIDRow, error) {
+	if row, ok := p.byID[arg.ID]; ok {
+		return row, nil
+	}
+	return db.GetAgentInstanceByIDRow{}, pgx.ErrNoRows
 }

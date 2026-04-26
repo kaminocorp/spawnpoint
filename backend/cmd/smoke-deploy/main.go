@@ -72,6 +72,11 @@ func main() {
 		imageRef = defaultImageRef
 	}
 
+	// M5 Phase 2: smoke binary passes a zero DeployConfig; Spawn
+	// applies WithDefaults internally so the smoke continues to
+	// run on the M4 single-replica / shared-cpu-1x / iad path
+	// without any behaviour change. Phase 9 (integration matrix)
+	// extends this with the real volume-persistence sentinel test.
 	res, err := target.Spawn(ctx, deploy.SpawnSpec{
 		Name:     fmt.Sprintf("smoke-%d", time.Now().Unix()),
 		ImageRef: imageRef,
@@ -81,7 +86,7 @@ func main() {
 			"CORELLIA_MODEL_NAME":     "anthropic/claude-3.5-sonnet",
 			"CORELLIA_MODEL_API_KEY":  apiKey,
 		},
-	})
+	}, deploy.DeployConfig{})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "spawn:", err)
 		os.Exit(1)

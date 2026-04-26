@@ -1,4 +1,4 @@
-import { SIMPLEX_NOISE_GLSL } from "@/components/sign-in/shaders/simplex-noise";
+import { SIMPLEX_NOISE_GLSL } from "@/lib/shaders/simplex-noise";
 
 /**
  * Nebula avatar shaders — adapted from `docs/refs/elephantasm-animation.md`,

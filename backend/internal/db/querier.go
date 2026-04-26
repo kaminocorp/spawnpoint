@@ -11,12 +11,41 @@ import (
 )
 
 type Querier interface {
+	// M5 Phase 4 caller (BulkUpdateDeployConfig). id = ANY($1) is the
+	// pgx-friendly form of "in this set" — sqlc generates a []uuid.UUID
+	// param. org_id filter is applied to every row; instance IDs that
+	// belong to another org silently no-op (the service layer pre-filters
+	// via ListAgentInstancesByOrg, so this is defence-in-depth, not the
+	// primary tenancy gate).
+	//
+	// Per decision 8.4 volume_size_gb is intentionally absent from the
+	// bulk delta — bulk-extending across a fleet creates surprise cost
+	// and is rarely the right action. Per-instance ResizeVolume is the
+	// power-user path.
+	BulkUpdateAgentDeployConfig(ctx context.Context, arg BulkUpdateAgentDeployConfigParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// Called by the service layer after flaps.DeleteVolume succeeds
+	// (decision 8.5 cascade-delete on agents.Service.Destroy, plus the
+	// LIFO scale-down branch in Phase 3.5). Hard-delete (not soft) per
+	// decision 8.5: there's no audit value in keeping a row that points
+	// at a non-existent Fly volume.
+	//
+	// Keyed by fly_volume_id — the caller already holds it from the
+	// ListAgentVolumesByInstance enumeration step, so we save the round-
+	// trip vs keying by row UUID.
+	DeleteAgentVolume(ctx context.Context, flyVolumeID string) error
 	// Single-row read with org guard at the query layer. Two-arg shape
 	// (id + org_id) is the M4-wide multi-tenancy posture: every read that
 	// could surface a row must be parameterised by the requesting user's
 	// org. Misuse — passing only id — would be a compile error because
 	// sqlc generates a struct-arg with both fields.
+	//
+	// M5 Phase 4: the projection now includes the nine deploy-config
+	// columns added by migration 20260426160000. UpdateDeployConfig /
+	// ResizeReplicas / ResizeVolume / DetectDrift load the current
+	// desired state via this query before applying their respective
+	// delta. The fleet-page list query (ListAgentInstancesByOrg) is
+	// widened in Phase 5/6 when the FE row card needs those fields.
 	GetAgentInstanceByID(ctx context.Context, arg GetAgentInstanceByIDParams) (GetAgentInstanceByIDRow, error)
 	// M4 spawn flow's first step (decision 27 step 2): resolve the chosen
 	// template + its harness_adapter so we know which adapter image to spawn.
@@ -37,6 +66,23 @@ type Querier interface {
 	// typos. last_started_at / last_stopped_at default to NULL until the
 	// polling goroutine flips status to 'running' (and beyond).
 	InsertAgentInstance(ctx context.Context, arg InsertAgentInstanceParams) (AgentInstance, error)
+	// M5 fleet-control. agent_volumes is the Corellia-side mirror of Fly's
+	// volume state — one row per provisioned Fly volume, tracking which
+	// replica owns it. The Fly API is the source of truth for volume
+	// existence + actual size; this table tracks (a) "we asked for this
+	// volume to exist" and (b) "we believe it should be attached to this
+	// machine and this size." Drift detection compares the two.
+	//
+	// Per Phase 3.5: writes to this table happen via the volumeRecorder
+	// interface injected into FlyDeployTarget — same package boundary that
+	// keeps agents.Service free of Fly-API knowledge while keeping
+	// FlyDeployTarget free of direct DB access.
+	// Called by the volumeRecorder right after flaps.CreateVolume returns
+	// (decision 8.6 step 2 of Spawn's revised order). fly_machine_id is
+	// intentionally omitted — the row is inserted *before* flaps.Launch
+	// runs, so the machine ID isn't known yet (Q10's "unattached is a
+	// legitimate state" — modeled cleanly here).
+	InsertAgentVolume(ctx context.Context, arg InsertAgentVolumeParams) (AgentVolume, error)
 	// Audit-only DB record. The actual secret value is set on the Fly app
 	// via FlyDeployTarget.Spawn → Fly's app-secrets API; storage_ref is the
 	// opaque handle pointing at it. This insert lives in the same pgx.Tx as
@@ -53,6 +99,14 @@ type Querier interface {
 	// off the row type so the catalog service can't accidentally surface them.
 	// M4 widens this or adds a sibling query when the deploy modal needs default_config.
 	ListAgentTemplates(ctx context.Context) ([]ListAgentTemplatesRow, error)
+	// Hot read path: the deployment inspector (Phase 7) renders one row
+	// per replica volume; DetectDrift (Phase 4) iterates these against
+	// flaps.List output. Returned in created_at order so the inspector's
+	// per-replica list is stable across renders (LIFO scale-down per
+	// decision 7 means the most-recently-created are the first to be
+	// destroyed; ordering by created_at ASC keeps the survivors at the
+	// top of the list).
+	ListAgentVolumesByInstance(ctx context.Context, agentInstanceID uuid.UUID) ([]AgentVolume, error)
 	// v1 has no caller; v1.5 admin views surface the registry. Same shipped-
 	// early rationale as secrets.ListSecretsByInstance — querier widening is
 	// free, and the contract surface is more honest with both reads visible.
@@ -90,6 +144,49 @@ type Querier interface {
 	// Mirrors SetAgentInstanceRunning's shape — same single-purpose,
 	// timestamp-invariant-pinning rationale.
 	SetAgentInstanceStopped(ctx context.Context, id uuid.UUID) error
+	// Called by the volumeRecorder right after flaps.Launch returns
+	// (decision 8.6 step 4). Pins the volume to its machine; from this
+	// point forward the (agent_instance_id, fly_machine_id) UNIQUE
+	// constraint enforces "one volume per machine per agent."
+	//
+	// Keyed by fly_volume_id (not the row's UUID id) because the caller
+	// has just produced the volume ID via flaps.CreateVolume and held it
+	// across the Launch call — passing it back here is one fewer DB
+	// round-trip than re-fetching the row's UUID id.
+	SetAgentVolumeMachine(ctx context.Context, arg SetAgentVolumeMachineParams) error
+	// M5 Phase 4 caller (UpdateDeployConfig non-dry-run path). Writes the
+	// full nine-tuple of deploy-config columns in one statement so the
+	// service layer doesn't have to compose deltas at the SQL boundary.
+	// The (id, org_id) pair is the multi-tenancy gate (matches the
+	// GetAgentInstanceByID two-arg shape — same posture as M4).
+	UpdateAgentDeployConfig(ctx context.Context, arg UpdateAgentDeployConfigParams) error
+	// M5 Phase 4 caller (ResizeVolume). Mirrors UpdateAgentReplicas's
+	// single-column shape — separate RPC (ResizeAgentVolume), separate
+	// live-update path (flaps.ExtendVolume per replica). Per decision 8.3
+	// volumes are extend-only; the service layer rejects newSizeGB <
+	// current with ErrVolumeShrink before this query runs, so the CHECK
+	// (1..500) is the only DB-side guard needed.
+	//
+	// Naming note: this writes the *parent's* desired-state column on
+	// agent_instances. The per-row mirror update on agent_volumes is the
+	// separately-namespaced UpdateAgentVolumeSize. Same caller (ResizeVolume)
+	// runs both inside one tx; the names had to diverge because sqlc's
+	// query-name namespace is per-package, not per-table.
+	UpdateAgentInstanceVolumeSize(ctx context.Context, arg UpdateAgentInstanceVolumeSizeParams) error
+	// M5 Phase 4 caller (ResizeReplicas). Single-column update kept
+	// separate from UpdateAgentDeployConfig because replica resize is its
+	// own flow with its own RPC (ResizeAgentReplicas) and its own
+	// reconciliation loop (per-replica volume provisioning/cleanup is
+	// decision 7's Corellia-side reconciliation; this query is just the
+	// DB-side desired-state flip).
+	UpdateAgentReplicas(ctx context.Context, arg UpdateAgentReplicasParams) error
+	// Called by the service layer after flaps.ExtendVolume succeeds
+	// (Phase 4 ResizeVolume). Per-volume update; ResizeVolume loops over
+	// the agent's volumes and calls this once per replica, all inside the
+	// same tx as the agent_instances.volume_size_gb update so a partial
+	// failure doesn't leave the parent's desired-state out of sync with
+	// the per-volume desired-state.
+	UpdateAgentVolumeSize(ctx context.Context, arg UpdateAgentVolumeSizeParams) error
 	UpdateHarnessAdapterImageRef(ctx context.Context, arg UpdateHarnessAdapterImageRefParams) (HarnessAdapter, error)
 	UpdateOrganizationName(ctx context.Context, arg UpdateOrganizationNameParams) (Organization, error)
 	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error)

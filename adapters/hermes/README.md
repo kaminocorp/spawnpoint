@@ -108,29 +108,65 @@ Optional overrides:
 
 Notes on what the smoke does *not* probe (and why):
 
-- **No `/health` poll.** Hermes 0.x is a CLI-shaped agent — it does
-  not expose `/health` (see "Known limitations" below). The smoke
-  asserts `fly machines list --json` reports `state == started` and
-  prints the recent log tail for an operator eyeball-check.
-- **No `--port` binding** in the `fly machines run` invocation. Hermes
-  has no HTTP listener, so port-binding would only confuse Fly's
-  proxy-attached health checks.
+- **No `/health` poll.** The adapter does not start any HTTP listener
+  today, so the smoke has nothing to probe (see "Known limitations"
+  §1 below for the corrected framing — Hermes v0.11.0 *can* host HTTP,
+  the adapter just doesn't ask it to). The smoke asserts
+  `fly machines list --json` reports `state == started` and prints the
+  recent log tail for an operator eyeball-check.
+- **No `--port` binding** in the `fly machines run` invocation. Nothing
+  inside the container listens externally yet, so port-binding would
+  only confuse Fly's proxy-attached health checks. Both this and the
+  `/health` gap above close together when the chat sidecar lands
+  (`docs/plans/hermes-chat-sidecar.md`).
 - **`fly logs --no-tail`** hangs on empty log streams; the script
   bounds it to 15s using `gtimeout` (from `brew install coreutils`)
   with a backgrounded-and-killed fallback when `gtimeout` is absent.
 
 ## Known limitations
 
-1. **No HTTP runtime contract.** Hermes 0.x is a CLI-shaped agent; it
-   does not expose the `/health` and `/chat` endpoints `blueprint.md`
-   §3.1 describes. The adapter today exec's into Hermes's CLI mode.
-   Phase 7's smoke test (per the M3 plan) and M4's `Health()` polling
-   currently have no `/health` endpoint to probe — Phase 7 needs to
-   fall back to "Fly machine state == started" and a process-liveness
-   check via `fly logs`. Closing this gap (likely via a sidecar HTTP
-   wrapper in front of `hermes chat`) is a v1.5 concern; flagged here
-   so the next plan reader does not assume the contract is fully
-   implemented.
+1. **No Corellia-shaped HTTP runtime contract — but the gap is smaller
+   than the M3 inspection found.** Supersedes the original "Hermes 0.x
+   is CLI-shaped" framing from M3 (changelog 0.5.0 §525, §549) and the
+   matching restatement in this section's prior version; corrected in
+   changelog 0.9.5. Re-inspection of the same pinned digest
+   (`sha256:d4ee57f2…` = `nousresearch/hermes-agent:v2026.4.23` =
+   "Hermes Agent v0.11.0", which remains the latest stable release as
+   of this entry) shows the upstream image actually ships:
+
+   - **`AIAgent` Python class** (`run_agent.py`) — a clean
+     instantiable interface with a `.chat(prompt)` method, used by
+     Hermes's own oneshot mode. A FastAPI sidecar can `from
+     run_agent import AIAgent` and skip subprocess overhead entirely.
+   - **`hermes -z "prompt"` and `hermes chat -q "prompt"`** —
+     non-interactive single-turn modes. Each invocation is cold-start
+     (`load_config` + provider client init), but they're real and
+     work today.
+   - **A FastAPI dashboard** (`hermes_cli/web_server.py`, launched
+     via `python -m hermes_cli.main web`) — proves `fastapi` +
+     `uvicorn` are present in the image (the `[all]` extra the
+     upstream Dockerfile installs pulls them in) and that running
+     HTTP listeners alongside `hermes` is a documented pattern. The
+     dashboard itself binds `127.0.0.1:9119` and is *not* what we
+     want for Corellia's `/chat` — but the runtime is there.
+   - **SQLite-backed sessions** under `$HERMES_HOME/sessions/`
+     (`hermes_state.SessionDB`) — multi-turn threading with
+     `--session-id` and `HERMES_TUI_RESUME` env-var resume.
+   - **A long-running multi-session pattern** (`gateway/run.py`,
+     `gateway/session.py`) that already wires `AIAgent` into a daemon
+     loop dispatching messages from Telegram/Slack/Discord. Same
+     conceptual shape as our planned chat sidecar, just with
+     messenger adapters instead of HTTP.
+
+   What's actually missing is a Corellia-shaped `POST /chat` (and the
+   matching `GET /health`) bound to the Fly machine's external port
+   so Corellia's BE can reach it. The adapter doesn't start the
+   bundled dashboard either, so today the container has no listener
+   at all. Closing this gap is a sidecar inside the adapter image,
+   importing `AIAgent` directly. Plan: `docs/plans/hermes-chat-sidecar.md`.
+
+   M4's `Health()` polling and the smoke test still fall back to
+   "Fly machine state == started" until the sidecar lands.
 
 2. **Model name not wired.** `CORELLIA_MODEL_NAME` is currently
    observability-only at the adapter (no native env-var consumer in

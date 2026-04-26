@@ -100,6 +100,13 @@ ORDER BY ai.created_at DESC;
 -- could surface a row must be parameterised by the requesting user's
 -- org. Misuse — passing only id — would be a compile error because
 -- sqlc generates a struct-arg with both fields.
+--
+-- M5 Phase 4: the projection now includes the nine deploy-config
+-- columns added by migration 20260426160000. UpdateDeployConfig /
+-- ResizeReplicas / ResizeVolume / DetectDrift load the current
+-- desired state via this query before applying their respective
+-- delta. The fleet-page list query (ListAgentInstancesByOrg) is
+-- widened in Phase 5/6 when the FE row card needs those fields.
 SELECT
     ai.id,
     ai.name,
@@ -116,10 +123,92 @@ SELECT
     ai.last_stopped_at,
     ai.created_at,
     ai.updated_at,
+    ai.region,
+    ai.cpu_kind,
+    ai.cpus,
+    ai.memory_mb,
+    ai.restart_policy,
+    ai.restart_max_retries,
+    ai.lifecycle_mode,
+    ai.desired_replicas,
+    ai.volume_size_gb,
     t.name AS template_name
 FROM agent_instances ai
 JOIN agent_templates t ON t.id = ai.agent_template_id
 WHERE ai.id = $1 AND ai.org_id = $2;
+
+-- name: UpdateAgentDeployConfig :exec
+-- M5 Phase 4 caller (UpdateDeployConfig non-dry-run path). Writes the
+-- full nine-tuple of deploy-config columns in one statement so the
+-- service layer doesn't have to compose deltas at the SQL boundary.
+-- The (id, org_id) pair is the multi-tenancy gate (matches the
+-- GetAgentInstanceByID two-arg shape — same posture as M4).
+UPDATE agent_instances
+   SET region              = $3,
+       cpu_kind            = $4,
+       cpus                = $5,
+       memory_mb           = $6,
+       restart_policy      = $7,
+       restart_max_retries = $8,
+       lifecycle_mode      = $9,
+       desired_replicas    = $10,
+       volume_size_gb      = $11,
+       updated_at          = now()
+ WHERE id = $1 AND org_id = $2;
+
+-- name: UpdateAgentReplicas :exec
+-- M5 Phase 4 caller (ResizeReplicas). Single-column update kept
+-- separate from UpdateAgentDeployConfig because replica resize is its
+-- own flow with its own RPC (ResizeAgentReplicas) and its own
+-- reconciliation loop (per-replica volume provisioning/cleanup is
+-- decision 7's Corellia-side reconciliation; this query is just the
+-- DB-side desired-state flip).
+UPDATE agent_instances
+   SET desired_replicas = $3,
+       updated_at       = now()
+ WHERE id = $1 AND org_id = $2;
+
+-- name: UpdateAgentInstanceVolumeSize :exec
+-- M5 Phase 4 caller (ResizeVolume). Mirrors UpdateAgentReplicas's
+-- single-column shape — separate RPC (ResizeAgentVolume), separate
+-- live-update path (flaps.ExtendVolume per replica). Per decision 8.3
+-- volumes are extend-only; the service layer rejects newSizeGB <
+-- current with ErrVolumeShrink before this query runs, so the CHECK
+-- (1..500) is the only DB-side guard needed.
+--
+-- Naming note: this writes the *parent's* desired-state column on
+-- agent_instances. The per-row mirror update on agent_volumes is the
+-- separately-namespaced UpdateAgentVolumeSize. Same caller (ResizeVolume)
+-- runs both inside one tx; the names had to diverge because sqlc's
+-- query-name namespace is per-package, not per-table.
+UPDATE agent_instances
+   SET volume_size_gb = $3,
+       updated_at     = now()
+ WHERE id = $1 AND org_id = $2;
+
+-- name: BulkUpdateAgentDeployConfig :exec
+-- M5 Phase 4 caller (BulkUpdateDeployConfig). id = ANY($1) is the
+-- pgx-friendly form of "in this set" — sqlc generates a []uuid.UUID
+-- param. org_id filter is applied to every row; instance IDs that
+-- belong to another org silently no-op (the service layer pre-filters
+-- via ListAgentInstancesByOrg, so this is defence-in-depth, not the
+-- primary tenancy gate).
+--
+-- Per decision 8.4 volume_size_gb is intentionally absent from the
+-- bulk delta — bulk-extending across a fleet creates surprise cost
+-- and is rarely the right action. Per-instance ResizeVolume is the
+-- power-user path.
+UPDATE agent_instances
+   SET region              = $3,
+       cpu_kind             = $4,
+       cpus                 = $5,
+       memory_mb            = $6,
+       restart_policy       = $7,
+       restart_max_retries  = $8,
+       lifecycle_mode       = $9,
+       desired_replicas     = $10,
+       updated_at           = now()
+ WHERE id = ANY($1::uuid[]) AND org_id = $2;
 
 -- name: ReapStalePendingInstances :many
 -- Boot-time sweep (decision 32). Reaps any pending row older than 5

@@ -25,6 +25,15 @@ type AgentInstance struct {
 	LastStoppedAt     pgtype.Timestamptz `json:"last_stopped_at"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	Region            string             `json:"region"`
+	CpuKind           string             `json:"cpu_kind"`
+	Cpus              int32              `json:"cpus"`
+	MemoryMb          int32              `json:"memory_mb"`
+	RestartPolicy     string             `json:"restart_policy"`
+	RestartMaxRetries int32              `json:"restart_max_retries"`
+	LifecycleMode     string             `json:"lifecycle_mode"`
+	DesiredReplicas   int32              `json:"desired_replicas"`
+	VolumeSizeGb      int32              `json:"volume_size_gb"`
 }
 
 type AgentTemplate struct {
@@ -36,6 +45,18 @@ type AgentTemplate struct {
 	CreatedByUserID  pgtype.UUID        `json:"created_by_user_id"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AgentVolume struct {
+	ID              uuid.UUID          `json:"id"`
+	AgentInstanceID uuid.UUID          `json:"agent_instance_id"`
+	FlyVolumeID     string             `json:"fly_volume_id"`
+	FlyMachineID    *string            `json:"fly_machine_id"`
+	Region          string             `json:"region"`
+	SizeGb          int32              `json:"size_gb"`
+	MountPath       string             `json:"mount_path"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
 type DeployTarget struct {

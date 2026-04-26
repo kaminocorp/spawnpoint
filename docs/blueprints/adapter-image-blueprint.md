@@ -83,6 +83,14 @@ upstream image. (Source: `blueprint.md` §3.)
 | **Packaging**     | OCI image distributable via a registry, declared by digest, with a known entrypoint, declared exposed ports, and declared minimum resource footprint (CPU, RAM) |
 | **Metadata**      | A `corellia.yaml` manifest embedded in the image (or repo) declaring name, version, required env, default model, supported tools (post-v1), resource requirements, adapter version |
 
+> *v1.5 Pillar B refines the **Configuration** sub-contract's runtime
+> presence.* The adapter no longer only translates `CORELLIA_*` env vars
+> at boot — it also fetches `CORELLIA_TOOL_MANIFEST_URL`, renders a live
+> scope-state file, and registers a Corellia-authored Python plugin
+> inside Hermes that consults the scope state on every tool call. The
+> plugin loads via Hermes's own documented user-plugin discovery path
+> (`$HERMES_HOME/plugins/<name>/`) — no upstream fork. See [§4.4](#44-what-v15-pillar-b-adds-the-in-process-plugin-corellia_guard).
+
 Upstream Hermes satisfies *none* of these on its own:
 
 - Native env names: `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`,
@@ -101,7 +109,9 @@ Packaging is bridged (we publish to GHCR with a captured digest).
 ## 4. The three artifacts that make a v1 adapter
 
 `adapters/hermes/` is the canonical example. Three files, ~150 lines total,
-and that's the entire abstraction.
+and that's the entire abstraction. (v1.5 Pillar B's tool-governance work
+adds a fourth artefact — the in-process plugin described in [§4.4](#44-what-v15-pillar-b-adds-the-in-process-plugin-corellia_guard) —
+without changing this section's account of v1's three files.)
 
 ```
 adapters/hermes/
@@ -208,6 +218,160 @@ This subtlety is invisible during local `docker run` testing and only
 manifests as data loss under production rolling deploys. The comment block
 in `entrypoint.sh` documents it explicitly so a future "let me add
 post-exec cleanup" refactor doesn't silently regress it.
+
+### 4.4 What v1.5 Pillar B adds: the in-process plugin (`corellia_guard`)
+
+§4.1–§4.3 describe the v1 adapter: a translation shim that runs *once* at
+boot and is gone the moment `exec` hands off to upstream. v1.5 Pillar B
+(per-tool scope governance) needs more — a Corellia presence that **stays
+alive for the agent's whole life**, enforces per-tool scopes Hermes's
+config schema cannot express, and re-reads policy when the operator
+changes a grant hours after spawn.
+
+That presence is shipped as a **plugin loaded by Hermes via Hermes's own
+documented plugin-discovery path** (`hermes_cli/plugins.py`'s "user
+plugins" source: `$HERMES_HOME/plugins/<name>/`). It is *not* a separate
+process, *not* a sidecar container, *not* an upstream fork. It is a
+Python module that registers a `pre_tool_call` hook and lives inside
+Hermes's address space for the agent's whole life — visible to Hermes
+through a first-class extension point the upstream team published for
+exactly this kind of layered policy.
+
+#### How `adapters/hermes/` grows
+
+```
+adapters/hermes/
+├── Dockerfile              # +1 COPY line for the plugin source
+├── entrypoint.sh           # grows: fetch manifest, render scope.json,
+│                           # cp plugin into $HERMES_HOME/plugins/,
+│                           # add corellia_guard to plugins.enabled
+├── smoke.sh
+├── README.md
+├── .dockerignore
+└── plugin/                 # NEW
+    └── corellia_guard/
+        ├── plugin.yaml      # Hermes plugin manifest (name, version, hooks)
+        ├── __init__.py      # register(ctx) + pre_tool_call hook
+        ├── scope.py         # scope-state file reader + matcher logic
+        └── tests/           # pytest unit tests, run in CI alongside Go tests
+```
+
+The new directory is a sibling of the Dockerfile that ships it — same
+review surface, same release cadence, same digest-pinning. **The plugin
+is not a separate distribution channel.** Source baked into the adapter
+image at build time; copied into Hermes's view of the filesystem at
+boot. Versioning is the adapter's versioning; no parallel pin.
+
+#### What stays on the running Fly machine
+
+```
+$HERMES_HOME/                        # writable volume layer
+├── config.yaml                      # rendered by entrypoint
+│                                    #   platform_toolsets: [...]
+│                                    #   mcp_servers: { ... }
+│                                    #   plugins.enabled: [corellia_guard]
+│                                    #   skills.disabled: [...]
+├── .env                             # rendered by entrypoint (provider keys)
+├── plugins/
+│   └── corellia_guard/              # cp -r from /opt/corellia/...
+│       ├── plugin.yaml
+│       └── __init__.py + scope.py
+├── corellia/
+│   └── scope.json                   # live channel from control plane
+└── skills/                          # (Pillar C; out of v1.5 Tools scope)
+```
+
+Three things live on the VM for the agent instance's whole life:
+
+1. **The plugin's source on disk** at
+   `$HERMES_HOME/plugins/corellia_guard/`. Sits on the writable
+   filesystem layer; never re-fetched, never expires.
+2. **The plugin's code loaded into Hermes's process memory.** Hermes's
+   plugin-discovery walks `$HERMES_HOME/plugins/` at startup, calls
+   `register(ctx)` once, registers the `pre_tool_call` hook in Hermes's
+   hook registry. From that point on, **every tool call** the agent
+   makes flows through the plugin's matcher before reaching the tool.
+3. **The scope-state file** at `$HERMES_HOME/corellia/scope.json` —
+   the live channel between control plane and plugin. Written by the
+   entrypoint at boot from the manifest; refreshed by a daemon thread
+   the plugin spawns inside `register(ctx)` that polls
+   `CORELLIA_TOOL_MANIFEST_URL` on a TTL. The plugin re-reads it on
+   each tool call (cheap — single mtime stat, parse only on change).
+
+#### Why a plugin and not just config
+
+Hermes's `config.yaml` can express coarse-grained gating ("this agent
+has the `web` toolset enabled") but not the fine-grained scopes
+Corellia's vision needs. Specifically, four scopes Hermes's schema
+does not natively express:
+
+- URL pattern allowlist on the `web` toolset
+- Command-pattern allowlist on the `terminal` toolset
+- Path allowlist on the `file` toolset
+- Per-channel allowlist on Slack / Discord / Telegram gateway toolsets
+
+For each, the `pre_tool_call` hook receives the structured tool name +
+arguments Hermes already passes to its plugin contract, matches
+against the granted scope read from `scope.json`, and returns
+allow / reject. `pre_tool_call` is a stable, documented lifecycle
+hook (`hermes_cli/plugins.py:60–82`) intended for exactly this kind
+of out-of-tree policy layering. **No upstream fork.** This is
+`blueprint.md` §11.5 ("capabilities added via adapter wrappers, never
+by modifying upstream") cashed out at runtime instead of at boot.
+
+#### Why this preserves the digest-pinning invariant
+
+The plugin's version is bound to the adapter image's version. New
+scope shape, bug fix, matcher refactor: cut a new adapter image,
+capture the new manifest-list digest, run the bump pipeline (§5.3),
+update `harness_adapters.adapter_image_ref`. Existing AgentInstances
+continue running the prior plugin until rolled forward — same
+governance primitive as the upstream digest pin. **The plugin has no
+separate pinning surface.** Mechanically, it is source code shipped
+inside the adapter image, the same way `entrypoint.sh` is.
+
+This preserves the "one HarnessAdapter row per harness, identified
+by two digests" model from §5–§6. The adapter is still the single
+shim layer; v1.5 just grows the shim to include a runtime resident,
+not only a boot-time translator.
+
+#### What the plugin deliberately does *not* do
+
+Three boundaries, stated up front so future work doesn't drift:
+
+- **Does not talk to the model.** No prompt rewriting, no
+  system-message manipulation, no tool-result munging. Hermes's LLM
+  dispatch is unmodified.
+- **Does not intercept network traffic.** No outbound HTTP proxy, no
+  TLS termination, no DNS routing. Enforcement happens at Hermes's
+  *structured* tool-dispatch boundary, where tool name + arguments
+  are visible. Egress from arbitrary `code_execution` Python is the
+  one case the plugin can't see; if v1.6+ ever needs to gate that,
+  the answer is a narrow sidecar HTTP proxy as a separate Fly
+  container — not a fatter plugin.
+- **Does not modify Hermes itself.** The upstream image is
+  byte-untouched at the pinned digest. The plugin lives in
+  `$HERMES_HOME/plugins/`, which is *outside* the upstream image's
+  filesystem — it materialises on the writable volume at boot and is
+  pure additive.
+
+#### Cross-harness portability
+
+When a future adapter ships at, say, `adapters/claude-sdk/`, the same
+shape applies: `Dockerfile` + `entrypoint.sh` + `plugin/` directory,
+where the plugin's *contract* with that harness is whatever runtime
+extension point that harness publishes (system-prompt fragments,
+tool registrations, middleware hooks). The Corellia-authored
+manifest the plugin consumes is **harness-neutral**; the per-harness
+translation — including the runtime-extension layer — lives in the
+adapter. The four sub-contracts hold; only the bytes the adapter
+writes change. v2's generated-adapter pipeline (§9) must understand
+the runtime-extension surface for whichever harness it's targeting,
+exactly the same way it must understand the env-var-translation
+surface today.
+
+Source-grounded feasibility study and the per-mechanism citations
+into Hermes's source: `docs/plans/v1.5-tools-governance-technical-overview.md`.
 
 ---
 
@@ -534,6 +698,18 @@ governance possible: any running agent is reducible to "one
 `harness_adapters` row + one `agent_templates` row + one `agent_instances`
 row + the env vars at spawn time," and all of those are auditable.
 
+v1.5 Pillar B extends the *running agent* box without changing any
+other box on the diagram. The same Fly machine, booted from the same
+adapter digest, additionally fetches `CORELLIA_TOOL_MANIFEST_URL`,
+materialises the `corellia_guard` plugin (§4.4) into
+`$HERMES_HOME/plugins/`, writes the initial scope state to
+`$HERMES_HOME/corellia/scope.json`, and the plugin's `register()`
+spawns a daemon thread that re-fetches the manifest on TTL. The
+audit identity ("one `harness_adapters` row + one template + one
+instance + env vars") is unchanged — the manifest is per-instance
+state served by the control plane and identified by the same instance
+ID. Pillar B is purely additive on the §10 lifecycle.
+
 ---
 
 ## 11. Reversibility test (`blueprint.md` §15)
@@ -597,6 +773,17 @@ is fully implemented. (Source: `adapters/hermes/README.md`.)
    `harness_adapters.signature_verified_at TIMESTAMPTZ NULL` column. Out
    of scope for hackathon; flagged as the canonical "real governance
    posture" follow-up.
+6. **No tool / scope enforcement.** The v1 entrypoint translates only
+   the four `CORELLIA_*` model-binding env vars; `CORELLIA_TOOL_MANIFEST_URL`
+   is reserved in `blueprint.md` §3.2 but unread. Per-tool grants
+   (toolset enable/disable, MCP per-server tool allowlists), per-toolset
+   scopes (URL / path / command / channel allowlists), and skill-equipping
+   flows are all absent. Closing this gap is the scope of v1.5 Pillar B
+   (Tools governance), implemented as the in-process plugin described
+   in [§4.4](#44-what-v15-pillar-b-adds-the-in-process-plugin-corellia_guard).
+   Source-grounded feasibility study:
+   `docs/plans/v1.5-tools-governance-technical-overview.md`. Vision:
+   `docs/plans/v1.5-tools-and-skills-vision.md`.
 
 ---
 

@@ -77,6 +77,123 @@ func (ModelProvider) EnumDescriptor() ([]byte, []int) {
 	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{0}
 }
 
+// UpdateKind mirrors deploy.UpdateKind. Three values per M5 plan
+// decision 6: in-place / brief restart / destroy + respawn. Drives the
+// FE confirmation copy (silent toast / brief-restart toast / destructive
+// modal).
+type UpdateKind int32
+
+const (
+	UpdateKind_UPDATE_KIND_UNSPECIFIED               UpdateKind = 0
+	UpdateKind_UPDATE_KIND_LIVE_APPLIED              UpdateKind = 1
+	UpdateKind_UPDATE_KIND_LIVE_APPLIED_WITH_RESTART UpdateKind = 2
+	UpdateKind_UPDATE_KIND_REQUIRES_RESPAWN          UpdateKind = 3
+)
+
+// Enum value maps for UpdateKind.
+var (
+	UpdateKind_name = map[int32]string{
+		0: "UPDATE_KIND_UNSPECIFIED",
+		1: "UPDATE_KIND_LIVE_APPLIED",
+		2: "UPDATE_KIND_LIVE_APPLIED_WITH_RESTART",
+		3: "UPDATE_KIND_REQUIRES_RESPAWN",
+	}
+	UpdateKind_value = map[string]int32{
+		"UPDATE_KIND_UNSPECIFIED":               0,
+		"UPDATE_KIND_LIVE_APPLIED":              1,
+		"UPDATE_KIND_LIVE_APPLIED_WITH_RESTART": 2,
+		"UPDATE_KIND_REQUIRES_RESPAWN":          3,
+	}
+)
+
+func (x UpdateKind) Enum() *UpdateKind {
+	p := new(UpdateKind)
+	*p = x
+	return p
+}
+
+func (x UpdateKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (UpdateKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_corellia_v1_agents_proto_enumTypes[1].Descriptor()
+}
+
+func (UpdateKind) Type() protoreflect.EnumType {
+	return &file_corellia_v1_agents_proto_enumTypes[1]
+}
+
+func (x UpdateKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use UpdateKind.Descriptor instead.
+func (UpdateKind) EnumDescriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{1}
+}
+
+// DriftCategory enumerates the five drift categories from M5 plan §4
+// Phase 4. Closed set in v1.5; widening is a typed-enum addition, not
+// a string-format change.
+type DriftCategory int32
+
+const (
+	DriftCategory_DRIFT_CATEGORY_UNSPECIFIED          DriftCategory = 0
+	DriftCategory_DRIFT_CATEGORY_COUNT_MISMATCH       DriftCategory = 1
+	DriftCategory_DRIFT_CATEGORY_SIZE_MISMATCH        DriftCategory = 2
+	DriftCategory_DRIFT_CATEGORY_VOLUME_MISMATCH      DriftCategory = 3
+	DriftCategory_DRIFT_CATEGORY_VOLUME_SIZE_MISMATCH DriftCategory = 4
+	DriftCategory_DRIFT_CATEGORY_VOLUME_UNATTACHED    DriftCategory = 5
+)
+
+// Enum value maps for DriftCategory.
+var (
+	DriftCategory_name = map[int32]string{
+		0: "DRIFT_CATEGORY_UNSPECIFIED",
+		1: "DRIFT_CATEGORY_COUNT_MISMATCH",
+		2: "DRIFT_CATEGORY_SIZE_MISMATCH",
+		3: "DRIFT_CATEGORY_VOLUME_MISMATCH",
+		4: "DRIFT_CATEGORY_VOLUME_SIZE_MISMATCH",
+		5: "DRIFT_CATEGORY_VOLUME_UNATTACHED",
+	}
+	DriftCategory_value = map[string]int32{
+		"DRIFT_CATEGORY_UNSPECIFIED":          0,
+		"DRIFT_CATEGORY_COUNT_MISMATCH":       1,
+		"DRIFT_CATEGORY_SIZE_MISMATCH":        2,
+		"DRIFT_CATEGORY_VOLUME_MISMATCH":      3,
+		"DRIFT_CATEGORY_VOLUME_SIZE_MISMATCH": 4,
+		"DRIFT_CATEGORY_VOLUME_UNATTACHED":    5,
+	}
+)
+
+func (x DriftCategory) Enum() *DriftCategory {
+	p := new(DriftCategory)
+	*p = x
+	return p
+}
+
+func (x DriftCategory) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (DriftCategory) Descriptor() protoreflect.EnumDescriptor {
+	return file_corellia_v1_agents_proto_enumTypes[2].Descriptor()
+}
+
+func (DriftCategory) Type() protoreflect.EnumType {
+	return &file_corellia_v1_agents_proto_enumTypes[2]
+}
+
+func (x DriftCategory) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use DriftCategory.Descriptor instead.
+func (DriftCategory) EnumDescriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{2}
+}
+
 type ListAgentTemplatesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -217,11 +334,666 @@ func (x *AgentTemplate) GetDescription() string {
 	return ""
 }
 
+// DeployConfig is the wire shape of the nine fleet-control fields.
+// Mirrors deploy.DeployConfig (Go) and the nine columns added in
+// migration 20260426160000_fleet_control.sql. Zero values mean "use
+// defaults" — the service layer's WithDefaults() / Validate() owns
+// the canonicalisation (M5 plan decision 5).
+type DeployConfig struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Region            string                 `protobuf:"bytes,1,opt,name=region,proto3" json:"region,omitempty"`
+	CpuKind           string                 `protobuf:"bytes,2,opt,name=cpu_kind,json=cpuKind,proto3" json:"cpu_kind,omitempty"`
+	Cpus              int32                  `protobuf:"varint,3,opt,name=cpus,proto3" json:"cpus,omitempty"`
+	MemoryMb          int32                  `protobuf:"varint,4,opt,name=memory_mb,json=memoryMb,proto3" json:"memory_mb,omitempty"`
+	RestartPolicy     string                 `protobuf:"bytes,5,opt,name=restart_policy,json=restartPolicy,proto3" json:"restart_policy,omitempty"`
+	RestartMaxRetries int32                  `protobuf:"varint,6,opt,name=restart_max_retries,json=restartMaxRetries,proto3" json:"restart_max_retries,omitempty"`
+	LifecycleMode     string                 `protobuf:"bytes,7,opt,name=lifecycle_mode,json=lifecycleMode,proto3" json:"lifecycle_mode,omitempty"`
+	DesiredReplicas   int32                  `protobuf:"varint,8,opt,name=desired_replicas,json=desiredReplicas,proto3" json:"desired_replicas,omitempty"`
+	VolumeSizeGb      int32                  `protobuf:"varint,9,opt,name=volume_size_gb,json=volumeSizeGb,proto3" json:"volume_size_gb,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *DeployConfig) Reset() {
+	*x = DeployConfig{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeployConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeployConfig) ProtoMessage() {}
+
+func (x *DeployConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeployConfig.ProtoReflect.Descriptor instead.
+func (*DeployConfig) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *DeployConfig) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *DeployConfig) GetCpuKind() string {
+	if x != nil {
+		return x.CpuKind
+	}
+	return ""
+}
+
+func (x *DeployConfig) GetCpus() int32 {
+	if x != nil {
+		return x.Cpus
+	}
+	return 0
+}
+
+func (x *DeployConfig) GetMemoryMb() int32 {
+	if x != nil {
+		return x.MemoryMb
+	}
+	return 0
+}
+
+func (x *DeployConfig) GetRestartPolicy() string {
+	if x != nil {
+		return x.RestartPolicy
+	}
+	return ""
+}
+
+func (x *DeployConfig) GetRestartMaxRetries() int32 {
+	if x != nil {
+		return x.RestartMaxRetries
+	}
+	return 0
+}
+
+func (x *DeployConfig) GetLifecycleMode() string {
+	if x != nil {
+		return x.LifecycleMode
+	}
+	return ""
+}
+
+func (x *DeployConfig) GetDesiredReplicas() int32 {
+	if x != nil {
+		return x.DesiredReplicas
+	}
+	return 0
+}
+
+func (x *DeployConfig) GetVolumeSizeGb() int32 {
+	if x != nil {
+		return x.VolumeSizeGb
+	}
+	return 0
+}
+
+// Region is Corellia's projection of fly.Region — re-exporting fly.Region
+// would leak the Fly type past internal/deploy and break blueprint §11.1.
+// Four fields per M5 plan decision 17.
+type Region struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Code             string                 `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
+	Name             string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Deprecated       bool                   `protobuf:"varint,3,opt,name=deprecated,proto3" json:"deprecated,omitempty"`
+	RequiresPaidPlan bool                   `protobuf:"varint,4,opt,name=requires_paid_plan,json=requiresPaidPlan,proto3" json:"requires_paid_plan,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *Region) Reset() {
+	*x = Region{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Region) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Region) ProtoMessage() {}
+
+func (x *Region) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Region.ProtoReflect.Descriptor instead.
+func (*Region) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *Region) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+func (x *Region) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Region) GetDeprecated() bool {
+	if x != nil {
+		return x.Deprecated
+	}
+	return false
+}
+
+func (x *Region) GetRequiresPaidPlan() bool {
+	if x != nil {
+		return x.RequiresPaidPlan
+	}
+	return false
+}
+
+// PlacementResult is the FE-renderable answer to "can this config fit
+// in this region for this org's token?" M5 plan decision 10.
+type PlacementResult struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Available        bool                   `protobuf:"varint,1,opt,name=available,proto3" json:"available,omitempty"`
+	Reason           string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	AlternateRegions []string               `protobuf:"bytes,3,rep,name=alternate_regions,json=alternateRegions,proto3" json:"alternate_regions,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *PlacementResult) Reset() {
+	*x = PlacementResult{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlacementResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlacementResult) ProtoMessage() {}
+
+func (x *PlacementResult) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlacementResult.ProtoReflect.Descriptor instead.
+func (*PlacementResult) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *PlacementResult) GetAvailable() bool {
+	if x != nil {
+		return x.Available
+	}
+	return false
+}
+
+func (x *PlacementResult) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *PlacementResult) GetAlternateRegions() []string {
+	if x != nil {
+		return x.AlternateRegions
+	}
+	return nil
+}
+
+// MachineState is the per-replica observation projected from
+// flaps.List. M5 plan decision 2: no agent_machines table; per-machine
+// state is read from Fly on demand.
+type MachineState struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Region           string                 `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
+	State            string                 `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"` // raw Fly state
+	CpuKind          string                 `protobuf:"bytes,4,opt,name=cpu_kind,json=cpuKind,proto3" json:"cpu_kind,omitempty"`
+	Cpus             int32                  `protobuf:"varint,5,opt,name=cpus,proto3" json:"cpus,omitempty"`
+	MemoryMb         int32                  `protobuf:"varint,6,opt,name=memory_mb,json=memoryMb,proto3" json:"memory_mb,omitempty"`
+	CreatedAt        string                 `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // RFC3339
+	AttachedVolumeId string                 `protobuf:"bytes,8,opt,name=attached_volume_id,json=attachedVolumeId,proto3" json:"attached_volume_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *MachineState) Reset() {
+	*x = MachineState{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MachineState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MachineState) ProtoMessage() {}
+
+func (x *MachineState) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MachineState.ProtoReflect.Descriptor instead.
+func (*MachineState) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *MachineState) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *MachineState) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *MachineState) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *MachineState) GetCpuKind() string {
+	if x != nil {
+		return x.CpuKind
+	}
+	return ""
+}
+
+func (x *MachineState) GetCpus() int32 {
+	if x != nil {
+		return x.Cpus
+	}
+	return 0
+}
+
+func (x *MachineState) GetMemoryMb() int32 {
+	if x != nil {
+		return x.MemoryMb
+	}
+	return 0
+}
+
+func (x *MachineState) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+func (x *MachineState) GetAttachedVolumeId() string {
+	if x != nil {
+		return x.AttachedVolumeId
+	}
+	return ""
+}
+
+// VolumeRef is one row of agent_volumes projected to the wire.
+// machine_id is empty until SetAgentVolumeMachine fills it (Phase 3.5).
+type VolumeRef struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	VolumeId      string                 `protobuf:"bytes,1,opt,name=volume_id,json=volumeId,proto3" json:"volume_id,omitempty"`
+	Region        string                 `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
+	SizeGb        int32                  `protobuf:"varint,3,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
+	MachineId     string                 `protobuf:"bytes,4,opt,name=machine_id,json=machineId,proto3" json:"machine_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VolumeRef) Reset() {
+	*x = VolumeRef{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VolumeRef) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VolumeRef) ProtoMessage() {}
+
+func (x *VolumeRef) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VolumeRef.ProtoReflect.Descriptor instead.
+func (*VolumeRef) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *VolumeRef) GetVolumeId() string {
+	if x != nil {
+		return x.VolumeId
+	}
+	return ""
+}
+
+func (x *VolumeRef) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *VolumeRef) GetSizeGb() int32 {
+	if x != nil {
+		return x.SizeGb
+	}
+	return 0
+}
+
+func (x *VolumeRef) GetMachineId() string {
+	if x != nil {
+		return x.MachineId
+	}
+	return ""
+}
+
+// DriftEntry is one categorised drift bullet. The fleet inspector
+// renders one bullet per entry (M5 plan decision 8 — drift summary
+// granularity).
+type DriftEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Category      DriftCategory          `protobuf:"varint,1,opt,name=category,proto3,enum=corellia.v1.DriftCategory" json:"category,omitempty"`
+	Detail        string                 `protobuf:"bytes,2,opt,name=detail,proto3" json:"detail,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DriftEntry) Reset() {
+	*x = DriftEntry{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DriftEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DriftEntry) ProtoMessage() {}
+
+func (x *DriftEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DriftEntry.ProtoReflect.Descriptor instead.
+func (*DriftEntry) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *DriftEntry) GetCategory() DriftCategory {
+	if x != nil {
+		return x.Category
+	}
+	return DriftCategory_DRIFT_CATEGORY_UNSPECIFIED
+}
+
+func (x *DriftEntry) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+// DriftSummary is the per-instance drift report. Empty `entries` slice
+// means "no drift" — the FE renders the row's banner accordingly.
+type DriftSummary struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entries       []*DriftEntry          `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DriftSummary) Reset() {
+	*x = DriftSummary{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DriftSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DriftSummary) ProtoMessage() {}
+
+func (x *DriftSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DriftSummary.ProtoReflect.Descriptor instead.
+func (*DriftSummary) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *DriftSummary) GetEntries() []*DriftEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+// UpdateResult is the typed return from UpdateAgentDeployConfig
+// (dry-run preview AND apply success). Mirrors agents.UpdateResult (Go).
+// estimated_downtime_seconds is a coarse FE-renderable estimate, not a
+// measurement. wipes_persistent_state is true only on REQUIRES_RESPAWN
+// (region change today) — explicit so the FE doesn't re-derive.
+type UpdateResult struct {
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	UpdateKind               UpdateKind             `protobuf:"varint,1,opt,name=update_kind,json=updateKind,proto3,enum=corellia.v1.UpdateKind" json:"update_kind,omitempty"`
+	EstimatedDowntimeSeconds int32                  `protobuf:"varint,2,opt,name=estimated_downtime_seconds,json=estimatedDowntimeSeconds,proto3" json:"estimated_downtime_seconds,omitempty"`
+	WipesPersistentState     bool                   `protobuf:"varint,3,opt,name=wipes_persistent_state,json=wipesPersistentState,proto3" json:"wipes_persistent_state,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *UpdateResult) Reset() {
+	*x = UpdateResult{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateResult) ProtoMessage() {}
+
+func (x *UpdateResult) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateResult.ProtoReflect.Descriptor instead.
+func (*UpdateResult) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *UpdateResult) GetUpdateKind() UpdateKind {
+	if x != nil {
+		return x.UpdateKind
+	}
+	return UpdateKind_UPDATE_KIND_UNSPECIFIED
+}
+
+func (x *UpdateResult) GetEstimatedDowntimeSeconds() int32 {
+	if x != nil {
+		return x.EstimatedDowntimeSeconds
+	}
+	return 0
+}
+
+func (x *UpdateResult) GetWipesPersistentState() bool {
+	if x != nil {
+		return x.WipesPersistentState
+	}
+	return false
+}
+
+// BulkResult is one row of a BulkUpdateAgentDeployConfig fan-out.
+// Partial failure is normal (M5 plan decision 28); the FE renders a
+// row per result so failed instances stay selected for retry.
+type BulkResult struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	InstanceId string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	UpdateKind UpdateKind             `protobuf:"varint,2,opt,name=update_kind,json=updateKind,proto3,enum=corellia.v1.UpdateKind" json:"update_kind,omitempty"`
+	// Empty on success. On failure, carries the human-readable message
+	// (already redacted server-side per the M4 ErrFlyAPI pattern).
+	ErrorMessage  string `protobuf:"bytes,3,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BulkResult) Reset() {
+	*x = BulkResult{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BulkResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BulkResult) ProtoMessage() {}
+
+func (x *BulkResult) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BulkResult.ProtoReflect.Descriptor instead.
+func (*BulkResult) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *BulkResult) GetInstanceId() string {
+	if x != nil {
+		return x.InstanceId
+	}
+	return ""
+}
+
+func (x *BulkResult) GetUpdateKind() UpdateKind {
+	if x != nil {
+		return x.UpdateKind
+	}
+	return UpdateKind_UPDATE_KIND_UNSPECIFIED
+}
+
+func (x *BulkResult) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
 // AgentInstance is the wire shape for a deployed agent. Empty-string
 // sentinels are used for "not yet set" semantics on optional scalars
 // (deploy_external_ref, logs_url, last_started_at, last_stopped_at) —
 // the alternative `optional string` would force every FE consumer to
 // branch on presence; empty-string is a single check.
+//
+// M5 widening (Phase 5): fields 13–23 carry the deploy-config columns
+// + the per-instance volumes + drift summary. List queries unwidened
+// in Phase 5 will leave fields 13–23 at their proto3 zero values; the
+// Get path (which loads via the widened query) populates them.
 type AgentInstance struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	Id         string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -247,13 +1019,31 @@ type AgentInstance struct {
 	CreatedAt     string `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	LastStartedAt string `protobuf:"bytes,11,opt,name=last_started_at,json=lastStartedAt,proto3" json:"last_started_at,omitempty"`
 	LastStoppedAt string `protobuf:"bytes,12,opt,name=last_stopped_at,json=lastStoppedAt,proto3" json:"last_stopped_at,omitempty"`
+	// M5 deploy-config projection (fields 13–21). Mirror DeployConfig.
+	// Inlined (rather than `DeployConfig deploy_config = 13`) so existing
+	// FE consumers can drop the new fields onto fleet-row columns
+	// without unwrapping a nested message.
+	Region            string `protobuf:"bytes,13,opt,name=region,proto3" json:"region,omitempty"`
+	CpuKind           string `protobuf:"bytes,14,opt,name=cpu_kind,json=cpuKind,proto3" json:"cpu_kind,omitempty"`
+	Cpus              int32  `protobuf:"varint,15,opt,name=cpus,proto3" json:"cpus,omitempty"`
+	MemoryMb          int32  `protobuf:"varint,16,opt,name=memory_mb,json=memoryMb,proto3" json:"memory_mb,omitempty"`
+	RestartPolicy     string `protobuf:"bytes,17,opt,name=restart_policy,json=restartPolicy,proto3" json:"restart_policy,omitempty"`
+	RestartMaxRetries int32  `protobuf:"varint,18,opt,name=restart_max_retries,json=restartMaxRetries,proto3" json:"restart_max_retries,omitempty"`
+	LifecycleMode     string `protobuf:"bytes,19,opt,name=lifecycle_mode,json=lifecycleMode,proto3" json:"lifecycle_mode,omitempty"`
+	DesiredReplicas   int32  `protobuf:"varint,20,opt,name=desired_replicas,json=desiredReplicas,proto3" json:"desired_replicas,omitempty"`
+	VolumeSizeGb      int32  `protobuf:"varint,21,opt,name=volume_size_gb,json=volumeSizeGb,proto3" json:"volume_size_gb,omitempty"`
+	// M5 drift + volumes (fields 22–23). Drift is computed on demand;
+	// volumes is the projected agent_volumes rows for this instance,
+	// one per replica (M5 plan decision 8).
+	DriftSummary  *DriftSummary `protobuf:"bytes,22,opt,name=drift_summary,json=driftSummary,proto3" json:"drift_summary,omitempty"`
+	Volumes       []*VolumeRef  `protobuf:"bytes,23,rep,name=volumes,proto3" json:"volumes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AgentInstance) Reset() {
 	*x = AgentInstance{}
-	mi := &file_corellia_v1_agents_proto_msgTypes[3]
+	mi := &file_corellia_v1_agents_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -265,7 +1055,7 @@ func (x *AgentInstance) String() string {
 func (*AgentInstance) ProtoMessage() {}
 
 func (x *AgentInstance) ProtoReflect() protoreflect.Message {
-	mi := &file_corellia_v1_agents_proto_msgTypes[3]
+	mi := &file_corellia_v1_agents_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -278,7 +1068,7 @@ func (x *AgentInstance) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentInstance.ProtoReflect.Descriptor instead.
 func (*AgentInstance) Descriptor() ([]byte, []int) {
-	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{3}
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *AgentInstance) GetId() string {
@@ -365,6 +1155,83 @@ func (x *AgentInstance) GetLastStoppedAt() string {
 	return ""
 }
 
+func (x *AgentInstance) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *AgentInstance) GetCpuKind() string {
+	if x != nil {
+		return x.CpuKind
+	}
+	return ""
+}
+
+func (x *AgentInstance) GetCpus() int32 {
+	if x != nil {
+		return x.Cpus
+	}
+	return 0
+}
+
+func (x *AgentInstance) GetMemoryMb() int32 {
+	if x != nil {
+		return x.MemoryMb
+	}
+	return 0
+}
+
+func (x *AgentInstance) GetRestartPolicy() string {
+	if x != nil {
+		return x.RestartPolicy
+	}
+	return ""
+}
+
+func (x *AgentInstance) GetRestartMaxRetries() int32 {
+	if x != nil {
+		return x.RestartMaxRetries
+	}
+	return 0
+}
+
+func (x *AgentInstance) GetLifecycleMode() string {
+	if x != nil {
+		return x.LifecycleMode
+	}
+	return ""
+}
+
+func (x *AgentInstance) GetDesiredReplicas() int32 {
+	if x != nil {
+		return x.DesiredReplicas
+	}
+	return 0
+}
+
+func (x *AgentInstance) GetVolumeSizeGb() int32 {
+	if x != nil {
+		return x.VolumeSizeGb
+	}
+	return 0
+}
+
+func (x *AgentInstance) GetDriftSummary() *DriftSummary {
+	if x != nil {
+		return x.DriftSummary
+	}
+	return nil
+}
+
+func (x *AgentInstance) GetVolumes() []*VolumeRef {
+	if x != nil {
+		return x.Volumes
+	}
+	return nil
+}
+
 type SpawnAgentRequest struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	TemplateId string                 `protobuf:"bytes,1,opt,name=template_id,json=templateId,proto3" json:"template_id,omitempty"`
@@ -374,14 +1241,18 @@ type SpawnAgentRequest struct {
 	// SECRET — never log this field. Forwarded once to the deploy
 	// target's secret store and never written to Corellia's database
 	// (spawn-flow plan decision 7).
-	ModelApiKey   string `protobuf:"bytes,5,opt,name=model_api_key,json=modelApiKey,proto3" json:"model_api_key,omitempty"`
+	ModelApiKey string `protobuf:"bytes,5,opt,name=model_api_key,json=modelApiKey,proto3" json:"model_api_key,omitempty"`
+	// M5 widening. Optional — unset means "use defaults" (server-side
+	// WithDefaults canonicalises). Field-presence semantics make
+	// partial overrides expressible.
+	DeployConfig  *DeployConfig `protobuf:"bytes,6,opt,name=deploy_config,json=deployConfig,proto3,oneof" json:"deploy_config,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SpawnAgentRequest) Reset() {
 	*x = SpawnAgentRequest{}
-	mi := &file_corellia_v1_agents_proto_msgTypes[4]
+	mi := &file_corellia_v1_agents_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -393,7 +1264,7 @@ func (x *SpawnAgentRequest) String() string {
 func (*SpawnAgentRequest) ProtoMessage() {}
 
 func (x *SpawnAgentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_corellia_v1_agents_proto_msgTypes[4]
+	mi := &file_corellia_v1_agents_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -406,7 +1277,7 @@ func (x *SpawnAgentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpawnAgentRequest.ProtoReflect.Descriptor instead.
 func (*SpawnAgentRequest) Descriptor() ([]byte, []int) {
-	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{4}
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *SpawnAgentRequest) GetTemplateId() string {
@@ -444,6 +1315,13 @@ func (x *SpawnAgentRequest) GetModelApiKey() string {
 	return ""
 }
 
+func (x *SpawnAgentRequest) GetDeployConfig() *DeployConfig {
+	if x != nil {
+		return x.DeployConfig
+	}
+	return nil
+}
+
 type SpawnAgentResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Instance      *AgentInstance         `protobuf:"bytes,1,opt,name=instance,proto3" json:"instance,omitempty"`
@@ -453,7 +1331,7 @@ type SpawnAgentResponse struct {
 
 func (x *SpawnAgentResponse) Reset() {
 	*x = SpawnAgentResponse{}
-	mi := &file_corellia_v1_agents_proto_msgTypes[5]
+	mi := &file_corellia_v1_agents_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -465,7 +1343,7 @@ func (x *SpawnAgentResponse) String() string {
 func (*SpawnAgentResponse) ProtoMessage() {}
 
 func (x *SpawnAgentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_corellia_v1_agents_proto_msgTypes[5]
+	mi := &file_corellia_v1_agents_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -478,7 +1356,7 @@ func (x *SpawnAgentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpawnAgentResponse.ProtoReflect.Descriptor instead.
 func (*SpawnAgentResponse) Descriptor() ([]byte, []int) {
-	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{5}
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *SpawnAgentResponse) GetInstance() *AgentInstance {
@@ -498,14 +1376,16 @@ type SpawnNAgentsRequest struct {
 	ModelName string        `protobuf:"bytes,5,opt,name=model_name,json=modelName,proto3" json:"model_name,omitempty"`
 	// SECRET — same handling as SpawnAgentRequest. Reused across all N
 	// spawns per decision 15 (demo affordance).
-	ModelApiKey   string `protobuf:"bytes,6,opt,name=model_api_key,json=modelApiKey,proto3" json:"model_api_key,omitempty"`
+	ModelApiKey string `protobuf:"bytes,6,opt,name=model_api_key,json=modelApiKey,proto3" json:"model_api_key,omitempty"`
+	// M5 widening. Same DeployConfig applied to every spawned agent.
+	DeployConfig  *DeployConfig `protobuf:"bytes,7,opt,name=deploy_config,json=deployConfig,proto3,oneof" json:"deploy_config,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SpawnNAgentsRequest) Reset() {
 	*x = SpawnNAgentsRequest{}
-	mi := &file_corellia_v1_agents_proto_msgTypes[6]
+	mi := &file_corellia_v1_agents_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -517,7 +1397,7 @@ func (x *SpawnNAgentsRequest) String() string {
 func (*SpawnNAgentsRequest) ProtoMessage() {}
 
 func (x *SpawnNAgentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_corellia_v1_agents_proto_msgTypes[6]
+	mi := &file_corellia_v1_agents_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -530,7 +1410,7 @@ func (x *SpawnNAgentsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpawnNAgentsRequest.ProtoReflect.Descriptor instead.
 func (*SpawnNAgentsRequest) Descriptor() ([]byte, []int) {
-	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{6}
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SpawnNAgentsRequest) GetTemplateId() string {
@@ -575,6 +1455,13 @@ func (x *SpawnNAgentsRequest) GetModelApiKey() string {
 	return ""
 }
 
+func (x *SpawnNAgentsRequest) GetDeployConfig() *DeployConfig {
+	if x != nil {
+		return x.DeployConfig
+	}
+	return nil
+}
+
 type SpawnNAgentsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Instances     []*AgentInstance       `protobuf:"bytes,1,rep,name=instances,proto3" json:"instances,omitempty"`
@@ -584,7 +1471,7 @@ type SpawnNAgentsResponse struct {
 
 func (x *SpawnNAgentsResponse) Reset() {
 	*x = SpawnNAgentsResponse{}
-	mi := &file_corellia_v1_agents_proto_msgTypes[7]
+	mi := &file_corellia_v1_agents_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -596,7 +1483,7 @@ func (x *SpawnNAgentsResponse) String() string {
 func (*SpawnNAgentsResponse) ProtoMessage() {}
 
 func (x *SpawnNAgentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_corellia_v1_agents_proto_msgTypes[7]
+	mi := &file_corellia_v1_agents_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -609,7 +1496,7 @@ func (x *SpawnNAgentsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpawnNAgentsResponse.ProtoReflect.Descriptor instead.
 func (*SpawnNAgentsResponse) Descriptor() ([]byte, []int) {
-	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{7}
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *SpawnNAgentsResponse) GetInstances() []*AgentInstance {
@@ -627,7 +1514,7 @@ type ListAgentInstancesRequest struct {
 
 func (x *ListAgentInstancesRequest) Reset() {
 	*x = ListAgentInstancesRequest{}
-	mi := &file_corellia_v1_agents_proto_msgTypes[8]
+	mi := &file_corellia_v1_agents_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -639,7 +1526,7 @@ func (x *ListAgentInstancesRequest) String() string {
 func (*ListAgentInstancesRequest) ProtoMessage() {}
 
 func (x *ListAgentInstancesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_corellia_v1_agents_proto_msgTypes[8]
+	mi := &file_corellia_v1_agents_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -652,7 +1539,7 @@ func (x *ListAgentInstancesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentInstancesRequest.ProtoReflect.Descriptor instead.
 func (*ListAgentInstancesRequest) Descriptor() ([]byte, []int) {
-	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{8}
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{17}
 }
 
 type ListAgentInstancesResponse struct {
@@ -664,7 +1551,7 @@ type ListAgentInstancesResponse struct {
 
 func (x *ListAgentInstancesResponse) Reset() {
 	*x = ListAgentInstancesResponse{}
-	mi := &file_corellia_v1_agents_proto_msgTypes[9]
+	mi := &file_corellia_v1_agents_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -676,7 +1563,7 @@ func (x *ListAgentInstancesResponse) String() string {
 func (*ListAgentInstancesResponse) ProtoMessage() {}
 
 func (x *ListAgentInstancesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_corellia_v1_agents_proto_msgTypes[9]
+	mi := &file_corellia_v1_agents_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -689,7 +1576,7 @@ func (x *ListAgentInstancesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentInstancesResponse.ProtoReflect.Descriptor instead.
 func (*ListAgentInstancesResponse) Descriptor() ([]byte, []int) {
-	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{9}
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ListAgentInstancesResponse) GetInstances() []*AgentInstance {
@@ -708,7 +1595,7 @@ type GetAgentInstanceRequest struct {
 
 func (x *GetAgentInstanceRequest) Reset() {
 	*x = GetAgentInstanceRequest{}
-	mi := &file_corellia_v1_agents_proto_msgTypes[10]
+	mi := &file_corellia_v1_agents_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -720,7 +1607,7 @@ func (x *GetAgentInstanceRequest) String() string {
 func (*GetAgentInstanceRequest) ProtoMessage() {}
 
 func (x *GetAgentInstanceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_corellia_v1_agents_proto_msgTypes[10]
+	mi := &file_corellia_v1_agents_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -733,7 +1620,7 @@ func (x *GetAgentInstanceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAgentInstanceRequest.ProtoReflect.Descriptor instead.
 func (*GetAgentInstanceRequest) Descriptor() ([]byte, []int) {
-	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{10}
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetAgentInstanceRequest) GetId() string {
@@ -752,7 +1639,7 @@ type GetAgentInstanceResponse struct {
 
 func (x *GetAgentInstanceResponse) Reset() {
 	*x = GetAgentInstanceResponse{}
-	mi := &file_corellia_v1_agents_proto_msgTypes[11]
+	mi := &file_corellia_v1_agents_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -764,7 +1651,7 @@ func (x *GetAgentInstanceResponse) String() string {
 func (*GetAgentInstanceResponse) ProtoMessage() {}
 
 func (x *GetAgentInstanceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_corellia_v1_agents_proto_msgTypes[11]
+	mi := &file_corellia_v1_agents_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -777,7 +1664,7 @@ func (x *GetAgentInstanceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAgentInstanceResponse.ProtoReflect.Descriptor instead.
 func (*GetAgentInstanceResponse) Descriptor() ([]byte, []int) {
-	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{11}
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetAgentInstanceResponse) GetInstance() *AgentInstance {
@@ -796,7 +1683,7 @@ type StopAgentInstanceRequest struct {
 
 func (x *StopAgentInstanceRequest) Reset() {
 	*x = StopAgentInstanceRequest{}
-	mi := &file_corellia_v1_agents_proto_msgTypes[12]
+	mi := &file_corellia_v1_agents_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -808,7 +1695,7 @@ func (x *StopAgentInstanceRequest) String() string {
 func (*StopAgentInstanceRequest) ProtoMessage() {}
 
 func (x *StopAgentInstanceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_corellia_v1_agents_proto_msgTypes[12]
+	mi := &file_corellia_v1_agents_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -821,7 +1708,7 @@ func (x *StopAgentInstanceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopAgentInstanceRequest.ProtoReflect.Descriptor instead.
 func (*StopAgentInstanceRequest) Descriptor() ([]byte, []int) {
-	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{12}
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *StopAgentInstanceRequest) GetId() string {
@@ -840,7 +1727,7 @@ type StopAgentInstanceResponse struct {
 
 func (x *StopAgentInstanceResponse) Reset() {
 	*x = StopAgentInstanceResponse{}
-	mi := &file_corellia_v1_agents_proto_msgTypes[13]
+	mi := &file_corellia_v1_agents_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -852,7 +1739,7 @@ func (x *StopAgentInstanceResponse) String() string {
 func (*StopAgentInstanceResponse) ProtoMessage() {}
 
 func (x *StopAgentInstanceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_corellia_v1_agents_proto_msgTypes[13]
+	mi := &file_corellia_v1_agents_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -865,7 +1752,7 @@ func (x *StopAgentInstanceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopAgentInstanceResponse.ProtoReflect.Descriptor instead.
 func (*StopAgentInstanceResponse) Descriptor() ([]byte, []int) {
-	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{13}
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *StopAgentInstanceResponse) GetInstance() *AgentInstance {
@@ -884,7 +1771,7 @@ type DestroyAgentInstanceRequest struct {
 
 func (x *DestroyAgentInstanceRequest) Reset() {
 	*x = DestroyAgentInstanceRequest{}
-	mi := &file_corellia_v1_agents_proto_msgTypes[14]
+	mi := &file_corellia_v1_agents_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -896,7 +1783,7 @@ func (x *DestroyAgentInstanceRequest) String() string {
 func (*DestroyAgentInstanceRequest) ProtoMessage() {}
 
 func (x *DestroyAgentInstanceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_corellia_v1_agents_proto_msgTypes[14]
+	mi := &file_corellia_v1_agents_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -909,7 +1796,7 @@ func (x *DestroyAgentInstanceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DestroyAgentInstanceRequest.ProtoReflect.Descriptor instead.
 func (*DestroyAgentInstanceRequest) Descriptor() ([]byte, []int) {
-	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{14}
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *DestroyAgentInstanceRequest) GetId() string {
@@ -928,7 +1815,7 @@ type DestroyAgentInstanceResponse struct {
 
 func (x *DestroyAgentInstanceResponse) Reset() {
 	*x = DestroyAgentInstanceResponse{}
-	mi := &file_corellia_v1_agents_proto_msgTypes[15]
+	mi := &file_corellia_v1_agents_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -940,7 +1827,7 @@ func (x *DestroyAgentInstanceResponse) String() string {
 func (*DestroyAgentInstanceResponse) ProtoMessage() {}
 
 func (x *DestroyAgentInstanceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_corellia_v1_agents_proto_msgTypes[15]
+	mi := &file_corellia_v1_agents_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -953,12 +1840,796 @@ func (x *DestroyAgentInstanceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DestroyAgentInstanceResponse.ProtoReflect.Descriptor instead.
 func (*DestroyAgentInstanceResponse) Descriptor() ([]byte, []int) {
-	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{15}
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *DestroyAgentInstanceResponse) GetInstance() *AgentInstance {
 	if x != nil {
 		return x.Instance
+	}
+	return nil
+}
+
+type ListDeploymentRegionsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDeploymentRegionsRequest) Reset() {
+	*x = ListDeploymentRegionsRequest{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDeploymentRegionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDeploymentRegionsRequest) ProtoMessage() {}
+
+func (x *ListDeploymentRegionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDeploymentRegionsRequest.ProtoReflect.Descriptor instead.
+func (*ListDeploymentRegionsRequest) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{25}
+}
+
+type ListDeploymentRegionsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Regions       []*Region              `protobuf:"bytes,1,rep,name=regions,proto3" json:"regions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDeploymentRegionsResponse) Reset() {
+	*x = ListDeploymentRegionsResponse{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDeploymentRegionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDeploymentRegionsResponse) ProtoMessage() {}
+
+func (x *ListDeploymentRegionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDeploymentRegionsResponse.ProtoReflect.Descriptor instead.
+func (*ListDeploymentRegionsResponse) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *ListDeploymentRegionsResponse) GetRegions() []*Region {
+	if x != nil {
+		return x.Regions
+	}
+	return nil
+}
+
+type CheckDeploymentPlacementRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DeployConfig  *DeployConfig          `protobuf:"bytes,1,opt,name=deploy_config,json=deployConfig,proto3" json:"deploy_config,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckDeploymentPlacementRequest) Reset() {
+	*x = CheckDeploymentPlacementRequest{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckDeploymentPlacementRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckDeploymentPlacementRequest) ProtoMessage() {}
+
+func (x *CheckDeploymentPlacementRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckDeploymentPlacementRequest.ProtoReflect.Descriptor instead.
+func (*CheckDeploymentPlacementRequest) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *CheckDeploymentPlacementRequest) GetDeployConfig() *DeployConfig {
+	if x != nil {
+		return x.DeployConfig
+	}
+	return nil
+}
+
+type CheckDeploymentPlacementResponse struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	PlacementResult *PlacementResult       `protobuf:"bytes,1,opt,name=placement_result,json=placementResult,proto3" json:"placement_result,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *CheckDeploymentPlacementResponse) Reset() {
+	*x = CheckDeploymentPlacementResponse{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckDeploymentPlacementResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckDeploymentPlacementResponse) ProtoMessage() {}
+
+func (x *CheckDeploymentPlacementResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckDeploymentPlacementResponse.ProtoReflect.Descriptor instead.
+func (*CheckDeploymentPlacementResponse) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *CheckDeploymentPlacementResponse) GetPlacementResult() *PlacementResult {
+	if x != nil {
+		return x.PlacementResult
+	}
+	return nil
+}
+
+type UpdateAgentDeployConfigRequest struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	InstanceId   string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	DeployConfig *DeployConfig          `protobuf:"bytes,2,opt,name=deploy_config,json=deployConfig,proto3" json:"deploy_config,omitempty"`
+	// dry_run=true → server returns UpdateResult without mutating Fly or
+	// the agent_instances row. Drives the FE preview screen.
+	DryRun        bool `protobuf:"varint,3,opt,name=dry_run,json=dryRun,proto3" json:"dry_run,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateAgentDeployConfigRequest) Reset() {
+	*x = UpdateAgentDeployConfigRequest{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateAgentDeployConfigRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateAgentDeployConfigRequest) ProtoMessage() {}
+
+func (x *UpdateAgentDeployConfigRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateAgentDeployConfigRequest.ProtoReflect.Descriptor instead.
+func (*UpdateAgentDeployConfigRequest) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *UpdateAgentDeployConfigRequest) GetInstanceId() string {
+	if x != nil {
+		return x.InstanceId
+	}
+	return ""
+}
+
+func (x *UpdateAgentDeployConfigRequest) GetDeployConfig() *DeployConfig {
+	if x != nil {
+		return x.DeployConfig
+	}
+	return nil
+}
+
+func (x *UpdateAgentDeployConfigRequest) GetDryRun() bool {
+	if x != nil {
+		return x.DryRun
+	}
+	return false
+}
+
+type UpdateAgentDeployConfigResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UpdateResult  *UpdateResult          `protobuf:"bytes,1,opt,name=update_result,json=updateResult,proto3" json:"update_result,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateAgentDeployConfigResponse) Reset() {
+	*x = UpdateAgentDeployConfigResponse{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateAgentDeployConfigResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateAgentDeployConfigResponse) ProtoMessage() {}
+
+func (x *UpdateAgentDeployConfigResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateAgentDeployConfigResponse.ProtoReflect.Descriptor instead.
+func (*UpdateAgentDeployConfigResponse) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *UpdateAgentDeployConfigResponse) GetUpdateResult() *UpdateResult {
+	if x != nil {
+		return x.UpdateResult
+	}
+	return nil
+}
+
+type StartAgentInstanceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartAgentInstanceRequest) Reset() {
+	*x = StartAgentInstanceRequest{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartAgentInstanceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartAgentInstanceRequest) ProtoMessage() {}
+
+func (x *StartAgentInstanceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartAgentInstanceRequest.ProtoReflect.Descriptor instead.
+func (*StartAgentInstanceRequest) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *StartAgentInstanceRequest) GetInstanceId() string {
+	if x != nil {
+		return x.InstanceId
+	}
+	return ""
+}
+
+type StartAgentInstanceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Instance      *AgentInstance         `protobuf:"bytes,1,opt,name=instance,proto3" json:"instance,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartAgentInstanceResponse) Reset() {
+	*x = StartAgentInstanceResponse{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartAgentInstanceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartAgentInstanceResponse) ProtoMessage() {}
+
+func (x *StartAgentInstanceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartAgentInstanceResponse.ProtoReflect.Descriptor instead.
+func (*StartAgentInstanceResponse) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *StartAgentInstanceResponse) GetInstance() *AgentInstance {
+	if x != nil {
+		return x.Instance
+	}
+	return nil
+}
+
+type ResizeAgentReplicasRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	InstanceId      string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	DesiredReplicas int32                  `protobuf:"varint,2,opt,name=desired_replicas,json=desiredReplicas,proto3" json:"desired_replicas,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ResizeAgentReplicasRequest) Reset() {
+	*x = ResizeAgentReplicasRequest{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResizeAgentReplicasRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResizeAgentReplicasRequest) ProtoMessage() {}
+
+func (x *ResizeAgentReplicasRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResizeAgentReplicasRequest.ProtoReflect.Descriptor instead.
+func (*ResizeAgentReplicasRequest) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *ResizeAgentReplicasRequest) GetInstanceId() string {
+	if x != nil {
+		return x.InstanceId
+	}
+	return ""
+}
+
+func (x *ResizeAgentReplicasRequest) GetDesiredReplicas() int32 {
+	if x != nil {
+		return x.DesiredReplicas
+	}
+	return 0
+}
+
+type ResizeAgentReplicasResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Instance      *AgentInstance         `protobuf:"bytes,1,opt,name=instance,proto3" json:"instance,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResizeAgentReplicasResponse) Reset() {
+	*x = ResizeAgentReplicasResponse{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResizeAgentReplicasResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResizeAgentReplicasResponse) ProtoMessage() {}
+
+func (x *ResizeAgentReplicasResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResizeAgentReplicasResponse.ProtoReflect.Descriptor instead.
+func (*ResizeAgentReplicasResponse) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *ResizeAgentReplicasResponse) GetInstance() *AgentInstance {
+	if x != nil {
+		return x.Instance
+	}
+	return nil
+}
+
+type ResizeAgentVolumeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	VolumeSizeGb  int32                  `protobuf:"varint,2,opt,name=volume_size_gb,json=volumeSizeGb,proto3" json:"volume_size_gb,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResizeAgentVolumeRequest) Reset() {
+	*x = ResizeAgentVolumeRequest{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResizeAgentVolumeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResizeAgentVolumeRequest) ProtoMessage() {}
+
+func (x *ResizeAgentVolumeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResizeAgentVolumeRequest.ProtoReflect.Descriptor instead.
+func (*ResizeAgentVolumeRequest) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *ResizeAgentVolumeRequest) GetInstanceId() string {
+	if x != nil {
+		return x.InstanceId
+	}
+	return ""
+}
+
+func (x *ResizeAgentVolumeRequest) GetVolumeSizeGb() int32 {
+	if x != nil {
+		return x.VolumeSizeGb
+	}
+	return 0
+}
+
+type ResizeAgentVolumeResponse struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Instance *AgentInstance         `protobuf:"bytes,1,opt,name=instance,proto3" json:"instance,omitempty"`
+	// True when Fly required a machine restart for the new size to take
+	// effect. The FE renders a different toast in that case ("brief
+	// restart") vs the no-restart case ("instant").
+	NeedsRestart  bool `protobuf:"varint,2,opt,name=needs_restart,json=needsRestart,proto3" json:"needs_restart,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResizeAgentVolumeResponse) Reset() {
+	*x = ResizeAgentVolumeResponse{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResizeAgentVolumeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResizeAgentVolumeResponse) ProtoMessage() {}
+
+func (x *ResizeAgentVolumeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResizeAgentVolumeResponse.ProtoReflect.Descriptor instead.
+func (*ResizeAgentVolumeResponse) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *ResizeAgentVolumeResponse) GetInstance() *AgentInstance {
+	if x != nil {
+		return x.Instance
+	}
+	return nil
+}
+
+func (x *ResizeAgentVolumeResponse) GetNeedsRestart() bool {
+	if x != nil {
+		return x.NeedsRestart
+	}
+	return false
+}
+
+// BulkConfigDelta is DeployConfig minus volume_size_gb — bulk apply
+// must not touch volume size (M5 plan decision 8.4). Carved as a
+// distinct wire message so the proto encodes the invariant; no caller
+// can accidentally include volume_size_gb in a bulk delta.
+//
+// CONTRACT — "don't change" semantics live on the FE, NOT the wire.
+// Every field is required; the BE applies the delta uniformly to
+// every selected instance. The FE form (`<BulkConfigDeltaForm>`)
+// implements per-field skip by pre-filling skipped fields with the
+// common-among-selection value, so a skipped-but-uniform field is a
+// true no-op for the BE. Skipped-but-divergent selections surface a
+// warning before submit. Direct callers that bypass the form (e.g.
+// custom scripts) must compute the desired uniform values
+// themselves — there is no per-field optional sentinel.
+type BulkConfigDelta struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Region            string                 `protobuf:"bytes,1,opt,name=region,proto3" json:"region,omitempty"`
+	CpuKind           string                 `protobuf:"bytes,2,opt,name=cpu_kind,json=cpuKind,proto3" json:"cpu_kind,omitempty"`
+	Cpus              int32                  `protobuf:"varint,3,opt,name=cpus,proto3" json:"cpus,omitempty"`
+	MemoryMb          int32                  `protobuf:"varint,4,opt,name=memory_mb,json=memoryMb,proto3" json:"memory_mb,omitempty"`
+	RestartPolicy     string                 `protobuf:"bytes,5,opt,name=restart_policy,json=restartPolicy,proto3" json:"restart_policy,omitempty"`
+	RestartMaxRetries int32                  `protobuf:"varint,6,opt,name=restart_max_retries,json=restartMaxRetries,proto3" json:"restart_max_retries,omitempty"`
+	LifecycleMode     string                 `protobuf:"bytes,7,opt,name=lifecycle_mode,json=lifecycleMode,proto3" json:"lifecycle_mode,omitempty"`
+	DesiredReplicas   int32                  `protobuf:"varint,8,opt,name=desired_replicas,json=desiredReplicas,proto3" json:"desired_replicas,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *BulkConfigDelta) Reset() {
+	*x = BulkConfigDelta{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BulkConfigDelta) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BulkConfigDelta) ProtoMessage() {}
+
+func (x *BulkConfigDelta) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BulkConfigDelta.ProtoReflect.Descriptor instead.
+func (*BulkConfigDelta) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *BulkConfigDelta) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *BulkConfigDelta) GetCpuKind() string {
+	if x != nil {
+		return x.CpuKind
+	}
+	return ""
+}
+
+func (x *BulkConfigDelta) GetCpus() int32 {
+	if x != nil {
+		return x.Cpus
+	}
+	return 0
+}
+
+func (x *BulkConfigDelta) GetMemoryMb() int32 {
+	if x != nil {
+		return x.MemoryMb
+	}
+	return 0
+}
+
+func (x *BulkConfigDelta) GetRestartPolicy() string {
+	if x != nil {
+		return x.RestartPolicy
+	}
+	return ""
+}
+
+func (x *BulkConfigDelta) GetRestartMaxRetries() int32 {
+	if x != nil {
+		return x.RestartMaxRetries
+	}
+	return 0
+}
+
+func (x *BulkConfigDelta) GetLifecycleMode() string {
+	if x != nil {
+		return x.LifecycleMode
+	}
+	return ""
+}
+
+func (x *BulkConfigDelta) GetDesiredReplicas() int32 {
+	if x != nil {
+		return x.DesiredReplicas
+	}
+	return 0
+}
+
+type BulkUpdateAgentDeployConfigRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	InstanceIds       []string               `protobuf:"bytes,1,rep,name=instance_ids,json=instanceIds,proto3" json:"instance_ids,omitempty"`
+	DeployConfigDelta *BulkConfigDelta       `protobuf:"bytes,2,opt,name=deploy_config_delta,json=deployConfigDelta,proto3" json:"deploy_config_delta,omitempty"`
+	// dry_run=true → server returns BulkResult per id without mutating.
+	DryRun        bool `protobuf:"varint,3,opt,name=dry_run,json=dryRun,proto3" json:"dry_run,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BulkUpdateAgentDeployConfigRequest) Reset() {
+	*x = BulkUpdateAgentDeployConfigRequest{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BulkUpdateAgentDeployConfigRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BulkUpdateAgentDeployConfigRequest) ProtoMessage() {}
+
+func (x *BulkUpdateAgentDeployConfigRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BulkUpdateAgentDeployConfigRequest.ProtoReflect.Descriptor instead.
+func (*BulkUpdateAgentDeployConfigRequest) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *BulkUpdateAgentDeployConfigRequest) GetInstanceIds() []string {
+	if x != nil {
+		return x.InstanceIds
+	}
+	return nil
+}
+
+func (x *BulkUpdateAgentDeployConfigRequest) GetDeployConfigDelta() *BulkConfigDelta {
+	if x != nil {
+		return x.DeployConfigDelta
+	}
+	return nil
+}
+
+func (x *BulkUpdateAgentDeployConfigRequest) GetDryRun() bool {
+	if x != nil {
+		return x.DryRun
+	}
+	return false
+}
+
+type BulkUpdateAgentDeployConfigResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Results       []*BulkResult          `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BulkUpdateAgentDeployConfigResponse) Reset() {
+	*x = BulkUpdateAgentDeployConfigResponse{}
+	mi := &file_corellia_v1_agents_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BulkUpdateAgentDeployConfigResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BulkUpdateAgentDeployConfigResponse) ProtoMessage() {}
+
+func (x *BulkUpdateAgentDeployConfigResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_corellia_v1_agents_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BulkUpdateAgentDeployConfigResponse.ProtoReflect.Descriptor instead.
+func (*BulkUpdateAgentDeployConfigResponse) Descriptor() ([]byte, []int) {
+	return file_corellia_v1_agents_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *BulkUpdateAgentDeployConfigResponse) GetResults() []*BulkResult {
+	if x != nil {
+		return x.Results
 	}
 	return nil
 }
@@ -974,7 +2645,62 @@ const file_corellia_v1_agents_proto_rawDesc = "" +
 	"\rAgentTemplate\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription\"\xa2\x03\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\"\xc1\x02\n" +
+	"\fDeployConfig\x12\x16\n" +
+	"\x06region\x18\x01 \x01(\tR\x06region\x12\x19\n" +
+	"\bcpu_kind\x18\x02 \x01(\tR\acpuKind\x12\x12\n" +
+	"\x04cpus\x18\x03 \x01(\x05R\x04cpus\x12\x1b\n" +
+	"\tmemory_mb\x18\x04 \x01(\x05R\bmemoryMb\x12%\n" +
+	"\x0erestart_policy\x18\x05 \x01(\tR\rrestartPolicy\x12.\n" +
+	"\x13restart_max_retries\x18\x06 \x01(\x05R\x11restartMaxRetries\x12%\n" +
+	"\x0elifecycle_mode\x18\a \x01(\tR\rlifecycleMode\x12)\n" +
+	"\x10desired_replicas\x18\b \x01(\x05R\x0fdesiredReplicas\x12$\n" +
+	"\x0evolume_size_gb\x18\t \x01(\x05R\fvolumeSizeGb\"~\n" +
+	"\x06Region\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\tR\x04code\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1e\n" +
+	"\n" +
+	"deprecated\x18\x03 \x01(\bR\n" +
+	"deprecated\x12,\n" +
+	"\x12requires_paid_plan\x18\x04 \x01(\bR\x10requiresPaidPlan\"t\n" +
+	"\x0fPlacementResult\x12\x1c\n" +
+	"\tavailable\x18\x01 \x01(\bR\tavailable\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\x12+\n" +
+	"\x11alternate_regions\x18\x03 \x03(\tR\x10alternateRegions\"\xe5\x01\n" +
+	"\fMachineState\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
+	"\x06region\x18\x02 \x01(\tR\x06region\x12\x14\n" +
+	"\x05state\x18\x03 \x01(\tR\x05state\x12\x19\n" +
+	"\bcpu_kind\x18\x04 \x01(\tR\acpuKind\x12\x12\n" +
+	"\x04cpus\x18\x05 \x01(\x05R\x04cpus\x12\x1b\n" +
+	"\tmemory_mb\x18\x06 \x01(\x05R\bmemoryMb\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\a \x01(\tR\tcreatedAt\x12,\n" +
+	"\x12attached_volume_id\x18\b \x01(\tR\x10attachedVolumeId\"x\n" +
+	"\tVolumeRef\x12\x1b\n" +
+	"\tvolume_id\x18\x01 \x01(\tR\bvolumeId\x12\x16\n" +
+	"\x06region\x18\x02 \x01(\tR\x06region\x12\x17\n" +
+	"\asize_gb\x18\x03 \x01(\x05R\x06sizeGb\x12\x1d\n" +
+	"\n" +
+	"machine_id\x18\x04 \x01(\tR\tmachineId\"\\\n" +
+	"\n" +
+	"DriftEntry\x126\n" +
+	"\bcategory\x18\x01 \x01(\x0e2\x1a.corellia.v1.DriftCategoryR\bcategory\x12\x16\n" +
+	"\x06detail\x18\x02 \x01(\tR\x06detail\"A\n" +
+	"\fDriftSummary\x121\n" +
+	"\aentries\x18\x01 \x03(\v2\x17.corellia.v1.DriftEntryR\aentries\"\xbc\x01\n" +
+	"\fUpdateResult\x128\n" +
+	"\vupdate_kind\x18\x01 \x01(\x0e2\x17.corellia.v1.UpdateKindR\n" +
+	"updateKind\x12<\n" +
+	"\x1aestimated_downtime_seconds\x18\x02 \x01(\x05R\x18estimatedDowntimeSeconds\x124\n" +
+	"\x16wipes_persistent_state\x18\x03 \x01(\bR\x14wipesPersistentState\"\x8c\x01\n" +
+	"\n" +
+	"BulkResult\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\x128\n" +
+	"\vupdate_kind\x18\x02 \x01(\x0e2\x17.corellia.v1.UpdateKindR\n" +
+	"updateKind\x12#\n" +
+	"\rerror_message\x18\x03 \x01(\tR\ferrorMessage\"\xc7\x06\n" +
 	"\rAgentInstance\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1f\n" +
@@ -991,7 +2717,18 @@ const file_corellia_v1_agents_proto_rawDesc = "" +
 	"created_at\x18\n" +
 	" \x01(\tR\tcreatedAt\x12&\n" +
 	"\x0flast_started_at\x18\v \x01(\tR\rlastStartedAt\x12&\n" +
-	"\x0flast_stopped_at\x18\f \x01(\tR\rlastStoppedAt\"\xc3\x01\n" +
+	"\x0flast_stopped_at\x18\f \x01(\tR\rlastStoppedAt\x12\x16\n" +
+	"\x06region\x18\r \x01(\tR\x06region\x12\x19\n" +
+	"\bcpu_kind\x18\x0e \x01(\tR\acpuKind\x12\x12\n" +
+	"\x04cpus\x18\x0f \x01(\x05R\x04cpus\x12\x1b\n" +
+	"\tmemory_mb\x18\x10 \x01(\x05R\bmemoryMb\x12%\n" +
+	"\x0erestart_policy\x18\x11 \x01(\tR\rrestartPolicy\x12.\n" +
+	"\x13restart_max_retries\x18\x12 \x01(\x05R\x11restartMaxRetries\x12%\n" +
+	"\x0elifecycle_mode\x18\x13 \x01(\tR\rlifecycleMode\x12)\n" +
+	"\x10desired_replicas\x18\x14 \x01(\x05R\x0fdesiredReplicas\x12$\n" +
+	"\x0evolume_size_gb\x18\x15 \x01(\x05R\fvolumeSizeGb\x12>\n" +
+	"\rdrift_summary\x18\x16 \x01(\v2\x19.corellia.v1.DriftSummaryR\fdriftSummary\x120\n" +
+	"\avolumes\x18\x17 \x03(\v2\x16.corellia.v1.VolumeRefR\avolumes\"\x9a\x02\n" +
 	"\x11SpawnAgentRequest\x12\x1f\n" +
 	"\vtemplate_id\x18\x01 \x01(\tR\n" +
 	"templateId\x12\x12\n" +
@@ -999,9 +2736,11 @@ const file_corellia_v1_agents_proto_rawDesc = "" +
 	"\bprovider\x18\x03 \x01(\x0e2\x1a.corellia.v1.ModelProviderR\bprovider\x12\x1d\n" +
 	"\n" +
 	"model_name\x18\x04 \x01(\tR\tmodelName\x12\"\n" +
-	"\rmodel_api_key\x18\x05 \x01(\tR\vmodelApiKey\"L\n" +
+	"\rmodel_api_key\x18\x05 \x01(\tR\vmodelApiKey\x12C\n" +
+	"\rdeploy_config\x18\x06 \x01(\v2\x19.corellia.v1.DeployConfigH\x00R\fdeployConfig\x88\x01\x01B\x10\n" +
+	"\x0e_deploy_config\"L\n" +
 	"\x12SpawnAgentResponse\x126\n" +
-	"\binstance\x18\x01 \x01(\v2\x1a.corellia.v1.AgentInstanceR\binstance\"\xe8\x01\n" +
+	"\binstance\x18\x01 \x01(\v2\x1a.corellia.v1.AgentInstanceR\binstance\"\xbf\x02\n" +
 	"\x13SpawnNAgentsRequest\x12\x1f\n" +
 	"\vtemplate_id\x18\x01 \x01(\tR\n" +
 	"templateId\x12\x1f\n" +
@@ -1011,7 +2750,9 @@ const file_corellia_v1_agents_proto_rawDesc = "" +
 	"\bprovider\x18\x04 \x01(\x0e2\x1a.corellia.v1.ModelProviderR\bprovider\x12\x1d\n" +
 	"\n" +
 	"model_name\x18\x05 \x01(\tR\tmodelName\x12\"\n" +
-	"\rmodel_api_key\x18\x06 \x01(\tR\vmodelApiKey\"P\n" +
+	"\rmodel_api_key\x18\x06 \x01(\tR\vmodelApiKey\x12C\n" +
+	"\rdeploy_config\x18\a \x01(\v2\x19.corellia.v1.DeployConfigH\x00R\fdeployConfig\x88\x01\x01B\x10\n" +
+	"\x0e_deploy_config\"P\n" +
 	"\x14SpawnNAgentsResponse\x128\n" +
 	"\tinstances\x18\x01 \x03(\v2\x1a.corellia.v1.AgentInstanceR\tinstances\"\x1b\n" +
 	"\x19ListAgentInstancesRequest\"V\n" +
@@ -1028,14 +2769,74 @@ const file_corellia_v1_agents_proto_rawDesc = "" +
 	"\x1bDestroyAgentInstanceRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"V\n" +
 	"\x1cDestroyAgentInstanceResponse\x126\n" +
-	"\binstance\x18\x01 \x01(\v2\x1a.corellia.v1.AgentInstanceR\binstance*Z\n" +
+	"\binstance\x18\x01 \x01(\v2\x1a.corellia.v1.AgentInstanceR\binstance\"\x1e\n" +
+	"\x1cListDeploymentRegionsRequest\"N\n" +
+	"\x1dListDeploymentRegionsResponse\x12-\n" +
+	"\aregions\x18\x01 \x03(\v2\x13.corellia.v1.RegionR\aregions\"a\n" +
+	"\x1fCheckDeploymentPlacementRequest\x12>\n" +
+	"\rdeploy_config\x18\x01 \x01(\v2\x19.corellia.v1.DeployConfigR\fdeployConfig\"k\n" +
+	" CheckDeploymentPlacementResponse\x12G\n" +
+	"\x10placement_result\x18\x01 \x01(\v2\x1c.corellia.v1.PlacementResultR\x0fplacementResult\"\x9a\x01\n" +
+	"\x1eUpdateAgentDeployConfigRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\x12>\n" +
+	"\rdeploy_config\x18\x02 \x01(\v2\x19.corellia.v1.DeployConfigR\fdeployConfig\x12\x17\n" +
+	"\adry_run\x18\x03 \x01(\bR\x06dryRun\"a\n" +
+	"\x1fUpdateAgentDeployConfigResponse\x12>\n" +
+	"\rupdate_result\x18\x01 \x01(\v2\x19.corellia.v1.UpdateResultR\fupdateResult\"<\n" +
+	"\x19StartAgentInstanceRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\"T\n" +
+	"\x1aStartAgentInstanceResponse\x126\n" +
+	"\binstance\x18\x01 \x01(\v2\x1a.corellia.v1.AgentInstanceR\binstance\"h\n" +
+	"\x1aResizeAgentReplicasRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\x12)\n" +
+	"\x10desired_replicas\x18\x02 \x01(\x05R\x0fdesiredReplicas\"U\n" +
+	"\x1bResizeAgentReplicasResponse\x126\n" +
+	"\binstance\x18\x01 \x01(\v2\x1a.corellia.v1.AgentInstanceR\binstance\"a\n" +
+	"\x18ResizeAgentVolumeRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\x12$\n" +
+	"\x0evolume_size_gb\x18\x02 \x01(\x05R\fvolumeSizeGb\"x\n" +
+	"\x19ResizeAgentVolumeResponse\x126\n" +
+	"\binstance\x18\x01 \x01(\v2\x1a.corellia.v1.AgentInstanceR\binstance\x12#\n" +
+	"\rneeds_restart\x18\x02 \x01(\bR\fneedsRestart\"\x9e\x02\n" +
+	"\x0fBulkConfigDelta\x12\x16\n" +
+	"\x06region\x18\x01 \x01(\tR\x06region\x12\x19\n" +
+	"\bcpu_kind\x18\x02 \x01(\tR\acpuKind\x12\x12\n" +
+	"\x04cpus\x18\x03 \x01(\x05R\x04cpus\x12\x1b\n" +
+	"\tmemory_mb\x18\x04 \x01(\x05R\bmemoryMb\x12%\n" +
+	"\x0erestart_policy\x18\x05 \x01(\tR\rrestartPolicy\x12.\n" +
+	"\x13restart_max_retries\x18\x06 \x01(\x05R\x11restartMaxRetries\x12%\n" +
+	"\x0elifecycle_mode\x18\a \x01(\tR\rlifecycleMode\x12)\n" +
+	"\x10desired_replicas\x18\b \x01(\x05R\x0fdesiredReplicas\"\xae\x01\n" +
+	"\"BulkUpdateAgentDeployConfigRequest\x12!\n" +
+	"\finstance_ids\x18\x01 \x03(\tR\vinstanceIds\x12L\n" +
+	"\x13deploy_config_delta\x18\x02 \x01(\v2\x1c.corellia.v1.BulkConfigDeltaR\x11deployConfigDelta\x12\x17\n" +
+	"\adry_run\x18\x03 \x01(\bR\x06dryRun\"X\n" +
+	"#BulkUpdateAgentDeployConfigResponse\x121\n" +
+	"\aresults\x18\x01 \x03(\v2\x17.corellia.v1.BulkResultR\aresults*Z\n" +
 	"\rModelProvider\x12\x1e\n" +
 	"\x1aMODEL_PROVIDER_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tANTHROPIC\x10\x01\x12\n" +
 	"\n" +
 	"\x06OPENAI\x10\x02\x12\x0e\n" +
 	"\n" +
-	"OPENROUTER\x10\x032\xb3\x05\n" +
+	"OPENROUTER\x10\x03*\x94\x01\n" +
+	"\n" +
+	"UpdateKind\x12\x1b\n" +
+	"\x17UPDATE_KIND_UNSPECIFIED\x10\x00\x12\x1c\n" +
+	"\x18UPDATE_KIND_LIVE_APPLIED\x10\x01\x12)\n" +
+	"%UPDATE_KIND_LIVE_APPLIED_WITH_RESTART\x10\x02\x12 \n" +
+	"\x1cUPDATE_KIND_REQUIRES_RESPAWN\x10\x03*\xe7\x01\n" +
+	"\rDriftCategory\x12\x1e\n" +
+	"\x1aDRIFT_CATEGORY_UNSPECIFIED\x10\x00\x12!\n" +
+	"\x1dDRIFT_CATEGORY_COUNT_MISMATCH\x10\x01\x12 \n" +
+	"\x1cDRIFT_CATEGORY_SIZE_MISMATCH\x10\x02\x12\"\n" +
+	"\x1eDRIFT_CATEGORY_VOLUME_MISMATCH\x10\x03\x12'\n" +
+	"#DRIFT_CATEGORY_VOLUME_SIZE_MISMATCH\x10\x04\x12$\n" +
+	" DRIFT_CATEGORY_VOLUME_UNATTACHED\x10\x052\xca\v\n" +
 	"\rAgentsService\x12e\n" +
 	"\x12ListAgentTemplates\x12&.corellia.v1.ListAgentTemplatesRequest\x1a'.corellia.v1.ListAgentTemplatesResponse\x12M\n" +
 	"\n" +
@@ -1044,7 +2845,14 @@ const file_corellia_v1_agents_proto_rawDesc = "" +
 	"\x12ListAgentInstances\x12&.corellia.v1.ListAgentInstancesRequest\x1a'.corellia.v1.ListAgentInstancesResponse\x12_\n" +
 	"\x10GetAgentInstance\x12$.corellia.v1.GetAgentInstanceRequest\x1a%.corellia.v1.GetAgentInstanceResponse\x12b\n" +
 	"\x11StopAgentInstance\x12%.corellia.v1.StopAgentInstanceRequest\x1a&.corellia.v1.StopAgentInstanceResponse\x12k\n" +
-	"\x14DestroyAgentInstance\x12(.corellia.v1.DestroyAgentInstanceRequest\x1a).corellia.v1.DestroyAgentInstanceResponseBLZJgithub.com/hejijunhao/corellia/backend/internal/gen/corellia/v1;corelliav1b\x06proto3"
+	"\x14DestroyAgentInstance\x12(.corellia.v1.DestroyAgentInstanceRequest\x1a).corellia.v1.DestroyAgentInstanceResponse\x12n\n" +
+	"\x15ListDeploymentRegions\x12).corellia.v1.ListDeploymentRegionsRequest\x1a*.corellia.v1.ListDeploymentRegionsResponse\x12w\n" +
+	"\x18CheckDeploymentPlacement\x12,.corellia.v1.CheckDeploymentPlacementRequest\x1a-.corellia.v1.CheckDeploymentPlacementResponse\x12t\n" +
+	"\x17UpdateAgentDeployConfig\x12+.corellia.v1.UpdateAgentDeployConfigRequest\x1a,.corellia.v1.UpdateAgentDeployConfigResponse\x12e\n" +
+	"\x12StartAgentInstance\x12&.corellia.v1.StartAgentInstanceRequest\x1a'.corellia.v1.StartAgentInstanceResponse\x12h\n" +
+	"\x13ResizeAgentReplicas\x12'.corellia.v1.ResizeAgentReplicasRequest\x1a(.corellia.v1.ResizeAgentReplicasResponse\x12b\n" +
+	"\x11ResizeAgentVolume\x12%.corellia.v1.ResizeAgentVolumeRequest\x1a&.corellia.v1.ResizeAgentVolumeResponse\x12\x80\x01\n" +
+	"\x1bBulkUpdateAgentDeployConfig\x12/.corellia.v1.BulkUpdateAgentDeployConfigRequest\x1a0.corellia.v1.BulkUpdateAgentDeployConfigResponseBLZJgithub.com/hejijunhao/corellia/backend/internal/gen/corellia/v1;corelliav1b\x06proto3"
 
 var (
 	file_corellia_v1_agents_proto_rawDescOnce sync.Once
@@ -1058,57 +2866,115 @@ func file_corellia_v1_agents_proto_rawDescGZIP() []byte {
 	return file_corellia_v1_agents_proto_rawDescData
 }
 
-var file_corellia_v1_agents_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_corellia_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_corellia_v1_agents_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_corellia_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
 var file_corellia_v1_agents_proto_goTypes = []any{
-	(ModelProvider)(0),                   // 0: corellia.v1.ModelProvider
-	(*ListAgentTemplatesRequest)(nil),    // 1: corellia.v1.ListAgentTemplatesRequest
-	(*ListAgentTemplatesResponse)(nil),   // 2: corellia.v1.ListAgentTemplatesResponse
-	(*AgentTemplate)(nil),                // 3: corellia.v1.AgentTemplate
-	(*AgentInstance)(nil),                // 4: corellia.v1.AgentInstance
-	(*SpawnAgentRequest)(nil),            // 5: corellia.v1.SpawnAgentRequest
-	(*SpawnAgentResponse)(nil),           // 6: corellia.v1.SpawnAgentResponse
-	(*SpawnNAgentsRequest)(nil),          // 7: corellia.v1.SpawnNAgentsRequest
-	(*SpawnNAgentsResponse)(nil),         // 8: corellia.v1.SpawnNAgentsResponse
-	(*ListAgentInstancesRequest)(nil),    // 9: corellia.v1.ListAgentInstancesRequest
-	(*ListAgentInstancesResponse)(nil),   // 10: corellia.v1.ListAgentInstancesResponse
-	(*GetAgentInstanceRequest)(nil),      // 11: corellia.v1.GetAgentInstanceRequest
-	(*GetAgentInstanceResponse)(nil),     // 12: corellia.v1.GetAgentInstanceResponse
-	(*StopAgentInstanceRequest)(nil),     // 13: corellia.v1.StopAgentInstanceRequest
-	(*StopAgentInstanceResponse)(nil),    // 14: corellia.v1.StopAgentInstanceResponse
-	(*DestroyAgentInstanceRequest)(nil),  // 15: corellia.v1.DestroyAgentInstanceRequest
-	(*DestroyAgentInstanceResponse)(nil), // 16: corellia.v1.DestroyAgentInstanceResponse
+	(ModelProvider)(0),                          // 0: corellia.v1.ModelProvider
+	(UpdateKind)(0),                             // 1: corellia.v1.UpdateKind
+	(DriftCategory)(0),                          // 2: corellia.v1.DriftCategory
+	(*ListAgentTemplatesRequest)(nil),           // 3: corellia.v1.ListAgentTemplatesRequest
+	(*ListAgentTemplatesResponse)(nil),          // 4: corellia.v1.ListAgentTemplatesResponse
+	(*AgentTemplate)(nil),                       // 5: corellia.v1.AgentTemplate
+	(*DeployConfig)(nil),                        // 6: corellia.v1.DeployConfig
+	(*Region)(nil),                              // 7: corellia.v1.Region
+	(*PlacementResult)(nil),                     // 8: corellia.v1.PlacementResult
+	(*MachineState)(nil),                        // 9: corellia.v1.MachineState
+	(*VolumeRef)(nil),                           // 10: corellia.v1.VolumeRef
+	(*DriftEntry)(nil),                          // 11: corellia.v1.DriftEntry
+	(*DriftSummary)(nil),                        // 12: corellia.v1.DriftSummary
+	(*UpdateResult)(nil),                        // 13: corellia.v1.UpdateResult
+	(*BulkResult)(nil),                          // 14: corellia.v1.BulkResult
+	(*AgentInstance)(nil),                       // 15: corellia.v1.AgentInstance
+	(*SpawnAgentRequest)(nil),                   // 16: corellia.v1.SpawnAgentRequest
+	(*SpawnAgentResponse)(nil),                  // 17: corellia.v1.SpawnAgentResponse
+	(*SpawnNAgentsRequest)(nil),                 // 18: corellia.v1.SpawnNAgentsRequest
+	(*SpawnNAgentsResponse)(nil),                // 19: corellia.v1.SpawnNAgentsResponse
+	(*ListAgentInstancesRequest)(nil),           // 20: corellia.v1.ListAgentInstancesRequest
+	(*ListAgentInstancesResponse)(nil),          // 21: corellia.v1.ListAgentInstancesResponse
+	(*GetAgentInstanceRequest)(nil),             // 22: corellia.v1.GetAgentInstanceRequest
+	(*GetAgentInstanceResponse)(nil),            // 23: corellia.v1.GetAgentInstanceResponse
+	(*StopAgentInstanceRequest)(nil),            // 24: corellia.v1.StopAgentInstanceRequest
+	(*StopAgentInstanceResponse)(nil),           // 25: corellia.v1.StopAgentInstanceResponse
+	(*DestroyAgentInstanceRequest)(nil),         // 26: corellia.v1.DestroyAgentInstanceRequest
+	(*DestroyAgentInstanceResponse)(nil),        // 27: corellia.v1.DestroyAgentInstanceResponse
+	(*ListDeploymentRegionsRequest)(nil),        // 28: corellia.v1.ListDeploymentRegionsRequest
+	(*ListDeploymentRegionsResponse)(nil),       // 29: corellia.v1.ListDeploymentRegionsResponse
+	(*CheckDeploymentPlacementRequest)(nil),     // 30: corellia.v1.CheckDeploymentPlacementRequest
+	(*CheckDeploymentPlacementResponse)(nil),    // 31: corellia.v1.CheckDeploymentPlacementResponse
+	(*UpdateAgentDeployConfigRequest)(nil),      // 32: corellia.v1.UpdateAgentDeployConfigRequest
+	(*UpdateAgentDeployConfigResponse)(nil),     // 33: corellia.v1.UpdateAgentDeployConfigResponse
+	(*StartAgentInstanceRequest)(nil),           // 34: corellia.v1.StartAgentInstanceRequest
+	(*StartAgentInstanceResponse)(nil),          // 35: corellia.v1.StartAgentInstanceResponse
+	(*ResizeAgentReplicasRequest)(nil),          // 36: corellia.v1.ResizeAgentReplicasRequest
+	(*ResizeAgentReplicasResponse)(nil),         // 37: corellia.v1.ResizeAgentReplicasResponse
+	(*ResizeAgentVolumeRequest)(nil),            // 38: corellia.v1.ResizeAgentVolumeRequest
+	(*ResizeAgentVolumeResponse)(nil),           // 39: corellia.v1.ResizeAgentVolumeResponse
+	(*BulkConfigDelta)(nil),                     // 40: corellia.v1.BulkConfigDelta
+	(*BulkUpdateAgentDeployConfigRequest)(nil),  // 41: corellia.v1.BulkUpdateAgentDeployConfigRequest
+	(*BulkUpdateAgentDeployConfigResponse)(nil), // 42: corellia.v1.BulkUpdateAgentDeployConfigResponse
 }
 var file_corellia_v1_agents_proto_depIdxs = []int32{
-	3,  // 0: corellia.v1.ListAgentTemplatesResponse.templates:type_name -> corellia.v1.AgentTemplate
-	0,  // 1: corellia.v1.AgentInstance.provider:type_name -> corellia.v1.ModelProvider
-	0,  // 2: corellia.v1.SpawnAgentRequest.provider:type_name -> corellia.v1.ModelProvider
-	4,  // 3: corellia.v1.SpawnAgentResponse.instance:type_name -> corellia.v1.AgentInstance
-	0,  // 4: corellia.v1.SpawnNAgentsRequest.provider:type_name -> corellia.v1.ModelProvider
-	4,  // 5: corellia.v1.SpawnNAgentsResponse.instances:type_name -> corellia.v1.AgentInstance
-	4,  // 6: corellia.v1.ListAgentInstancesResponse.instances:type_name -> corellia.v1.AgentInstance
-	4,  // 7: corellia.v1.GetAgentInstanceResponse.instance:type_name -> corellia.v1.AgentInstance
-	4,  // 8: corellia.v1.StopAgentInstanceResponse.instance:type_name -> corellia.v1.AgentInstance
-	4,  // 9: corellia.v1.DestroyAgentInstanceResponse.instance:type_name -> corellia.v1.AgentInstance
-	1,  // 10: corellia.v1.AgentsService.ListAgentTemplates:input_type -> corellia.v1.ListAgentTemplatesRequest
-	5,  // 11: corellia.v1.AgentsService.SpawnAgent:input_type -> corellia.v1.SpawnAgentRequest
-	7,  // 12: corellia.v1.AgentsService.SpawnNAgents:input_type -> corellia.v1.SpawnNAgentsRequest
-	9,  // 13: corellia.v1.AgentsService.ListAgentInstances:input_type -> corellia.v1.ListAgentInstancesRequest
-	11, // 14: corellia.v1.AgentsService.GetAgentInstance:input_type -> corellia.v1.GetAgentInstanceRequest
-	13, // 15: corellia.v1.AgentsService.StopAgentInstance:input_type -> corellia.v1.StopAgentInstanceRequest
-	15, // 16: corellia.v1.AgentsService.DestroyAgentInstance:input_type -> corellia.v1.DestroyAgentInstanceRequest
-	2,  // 17: corellia.v1.AgentsService.ListAgentTemplates:output_type -> corellia.v1.ListAgentTemplatesResponse
-	6,  // 18: corellia.v1.AgentsService.SpawnAgent:output_type -> corellia.v1.SpawnAgentResponse
-	8,  // 19: corellia.v1.AgentsService.SpawnNAgents:output_type -> corellia.v1.SpawnNAgentsResponse
-	10, // 20: corellia.v1.AgentsService.ListAgentInstances:output_type -> corellia.v1.ListAgentInstancesResponse
-	12, // 21: corellia.v1.AgentsService.GetAgentInstance:output_type -> corellia.v1.GetAgentInstanceResponse
-	14, // 22: corellia.v1.AgentsService.StopAgentInstance:output_type -> corellia.v1.StopAgentInstanceResponse
-	16, // 23: corellia.v1.AgentsService.DestroyAgentInstance:output_type -> corellia.v1.DestroyAgentInstanceResponse
-	17, // [17:24] is the sub-list for method output_type
-	10, // [10:17] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	5,  // 0: corellia.v1.ListAgentTemplatesResponse.templates:type_name -> corellia.v1.AgentTemplate
+	2,  // 1: corellia.v1.DriftEntry.category:type_name -> corellia.v1.DriftCategory
+	11, // 2: corellia.v1.DriftSummary.entries:type_name -> corellia.v1.DriftEntry
+	1,  // 3: corellia.v1.UpdateResult.update_kind:type_name -> corellia.v1.UpdateKind
+	1,  // 4: corellia.v1.BulkResult.update_kind:type_name -> corellia.v1.UpdateKind
+	0,  // 5: corellia.v1.AgentInstance.provider:type_name -> corellia.v1.ModelProvider
+	12, // 6: corellia.v1.AgentInstance.drift_summary:type_name -> corellia.v1.DriftSummary
+	10, // 7: corellia.v1.AgentInstance.volumes:type_name -> corellia.v1.VolumeRef
+	0,  // 8: corellia.v1.SpawnAgentRequest.provider:type_name -> corellia.v1.ModelProvider
+	6,  // 9: corellia.v1.SpawnAgentRequest.deploy_config:type_name -> corellia.v1.DeployConfig
+	15, // 10: corellia.v1.SpawnAgentResponse.instance:type_name -> corellia.v1.AgentInstance
+	0,  // 11: corellia.v1.SpawnNAgentsRequest.provider:type_name -> corellia.v1.ModelProvider
+	6,  // 12: corellia.v1.SpawnNAgentsRequest.deploy_config:type_name -> corellia.v1.DeployConfig
+	15, // 13: corellia.v1.SpawnNAgentsResponse.instances:type_name -> corellia.v1.AgentInstance
+	15, // 14: corellia.v1.ListAgentInstancesResponse.instances:type_name -> corellia.v1.AgentInstance
+	15, // 15: corellia.v1.GetAgentInstanceResponse.instance:type_name -> corellia.v1.AgentInstance
+	15, // 16: corellia.v1.StopAgentInstanceResponse.instance:type_name -> corellia.v1.AgentInstance
+	15, // 17: corellia.v1.DestroyAgentInstanceResponse.instance:type_name -> corellia.v1.AgentInstance
+	7,  // 18: corellia.v1.ListDeploymentRegionsResponse.regions:type_name -> corellia.v1.Region
+	6,  // 19: corellia.v1.CheckDeploymentPlacementRequest.deploy_config:type_name -> corellia.v1.DeployConfig
+	8,  // 20: corellia.v1.CheckDeploymentPlacementResponse.placement_result:type_name -> corellia.v1.PlacementResult
+	6,  // 21: corellia.v1.UpdateAgentDeployConfigRequest.deploy_config:type_name -> corellia.v1.DeployConfig
+	13, // 22: corellia.v1.UpdateAgentDeployConfigResponse.update_result:type_name -> corellia.v1.UpdateResult
+	15, // 23: corellia.v1.StartAgentInstanceResponse.instance:type_name -> corellia.v1.AgentInstance
+	15, // 24: corellia.v1.ResizeAgentReplicasResponse.instance:type_name -> corellia.v1.AgentInstance
+	15, // 25: corellia.v1.ResizeAgentVolumeResponse.instance:type_name -> corellia.v1.AgentInstance
+	40, // 26: corellia.v1.BulkUpdateAgentDeployConfigRequest.deploy_config_delta:type_name -> corellia.v1.BulkConfigDelta
+	14, // 27: corellia.v1.BulkUpdateAgentDeployConfigResponse.results:type_name -> corellia.v1.BulkResult
+	3,  // 28: corellia.v1.AgentsService.ListAgentTemplates:input_type -> corellia.v1.ListAgentTemplatesRequest
+	16, // 29: corellia.v1.AgentsService.SpawnAgent:input_type -> corellia.v1.SpawnAgentRequest
+	18, // 30: corellia.v1.AgentsService.SpawnNAgents:input_type -> corellia.v1.SpawnNAgentsRequest
+	20, // 31: corellia.v1.AgentsService.ListAgentInstances:input_type -> corellia.v1.ListAgentInstancesRequest
+	22, // 32: corellia.v1.AgentsService.GetAgentInstance:input_type -> corellia.v1.GetAgentInstanceRequest
+	24, // 33: corellia.v1.AgentsService.StopAgentInstance:input_type -> corellia.v1.StopAgentInstanceRequest
+	26, // 34: corellia.v1.AgentsService.DestroyAgentInstance:input_type -> corellia.v1.DestroyAgentInstanceRequest
+	28, // 35: corellia.v1.AgentsService.ListDeploymentRegions:input_type -> corellia.v1.ListDeploymentRegionsRequest
+	30, // 36: corellia.v1.AgentsService.CheckDeploymentPlacement:input_type -> corellia.v1.CheckDeploymentPlacementRequest
+	32, // 37: corellia.v1.AgentsService.UpdateAgentDeployConfig:input_type -> corellia.v1.UpdateAgentDeployConfigRequest
+	34, // 38: corellia.v1.AgentsService.StartAgentInstance:input_type -> corellia.v1.StartAgentInstanceRequest
+	36, // 39: corellia.v1.AgentsService.ResizeAgentReplicas:input_type -> corellia.v1.ResizeAgentReplicasRequest
+	38, // 40: corellia.v1.AgentsService.ResizeAgentVolume:input_type -> corellia.v1.ResizeAgentVolumeRequest
+	41, // 41: corellia.v1.AgentsService.BulkUpdateAgentDeployConfig:input_type -> corellia.v1.BulkUpdateAgentDeployConfigRequest
+	4,  // 42: corellia.v1.AgentsService.ListAgentTemplates:output_type -> corellia.v1.ListAgentTemplatesResponse
+	17, // 43: corellia.v1.AgentsService.SpawnAgent:output_type -> corellia.v1.SpawnAgentResponse
+	19, // 44: corellia.v1.AgentsService.SpawnNAgents:output_type -> corellia.v1.SpawnNAgentsResponse
+	21, // 45: corellia.v1.AgentsService.ListAgentInstances:output_type -> corellia.v1.ListAgentInstancesResponse
+	23, // 46: corellia.v1.AgentsService.GetAgentInstance:output_type -> corellia.v1.GetAgentInstanceResponse
+	25, // 47: corellia.v1.AgentsService.StopAgentInstance:output_type -> corellia.v1.StopAgentInstanceResponse
+	27, // 48: corellia.v1.AgentsService.DestroyAgentInstance:output_type -> corellia.v1.DestroyAgentInstanceResponse
+	29, // 49: corellia.v1.AgentsService.ListDeploymentRegions:output_type -> corellia.v1.ListDeploymentRegionsResponse
+	31, // 50: corellia.v1.AgentsService.CheckDeploymentPlacement:output_type -> corellia.v1.CheckDeploymentPlacementResponse
+	33, // 51: corellia.v1.AgentsService.UpdateAgentDeployConfig:output_type -> corellia.v1.UpdateAgentDeployConfigResponse
+	35, // 52: corellia.v1.AgentsService.StartAgentInstance:output_type -> corellia.v1.StartAgentInstanceResponse
+	37, // 53: corellia.v1.AgentsService.ResizeAgentReplicas:output_type -> corellia.v1.ResizeAgentReplicasResponse
+	39, // 54: corellia.v1.AgentsService.ResizeAgentVolume:output_type -> corellia.v1.ResizeAgentVolumeResponse
+	42, // 55: corellia.v1.AgentsService.BulkUpdateAgentDeployConfig:output_type -> corellia.v1.BulkUpdateAgentDeployConfigResponse
+	42, // [42:56] is the sub-list for method output_type
+	28, // [28:42] is the sub-list for method input_type
+	28, // [28:28] is the sub-list for extension type_name
+	28, // [28:28] is the sub-list for extension extendee
+	0,  // [0:28] is the sub-list for field type_name
 }
 
 func init() { file_corellia_v1_agents_proto_init() }
@@ -1116,13 +2982,15 @@ func file_corellia_v1_agents_proto_init() {
 	if File_corellia_v1_agents_proto != nil {
 		return
 	}
+	file_corellia_v1_agents_proto_msgTypes[13].OneofWrappers = []any{}
+	file_corellia_v1_agents_proto_msgTypes[15].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_corellia_v1_agents_proto_rawDesc), len(file_corellia_v1_agents_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   16,
+			NumEnums:      3,
+			NumMessages:   40,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

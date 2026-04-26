@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { ConnectError } from "@connectrpc/connect";
-import { ExternalLinkIcon, OctagonIcon, TrashIcon } from "lucide-react";
+import {
+  ExternalLinkIcon,
+  OctagonIcon,
+  PlayIcon,
+  SettingsIcon,
+  TrashIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -16,6 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { DeploymentInspector } from "@/components/fleet/deployment-inspector";
 import type { AgentInstance } from "@/gen/corellia/v1/agents_pb";
 import { createApiClient } from "@/lib/api/client";
 
@@ -29,10 +36,18 @@ type Pending = "stop" | "destroy" | null;
 export function AgentRowActions({ instance, onChanged }: Props) {
   const [pending, setPending] = useState<Pending>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   const canStop = instance.status === "running";
   const canDestroy = instance.status !== "destroyed";
   const hasLogs = instance.logsUrl !== "";
+  // Phase 7: Start button is visible when lifecycle_mode=manual AND
+  // the agent is in `stopped`. The BE rejects Start in other states
+  // — gating client-side keeps the surface uncluttered.
+  const canStart =
+    instance.lifecycleMode === "manual" && instance.status === "stopped";
+  const canInspect = instance.status !== "destroyed";
 
   async function confirm() {
     if (!pending) return;
@@ -56,6 +71,21 @@ export function AgentRowActions({ instance, onChanged }: Props) {
     }
   }
 
+  async function startInstance() {
+    setStarting(true);
+    try {
+      const api = createApiClient();
+      await api.agents.startAgentInstance({ instanceId: instance.id });
+      toast.success(`Started ${instance.name}.`);
+      onChanged();
+    } catch (e) {
+      const err = ConnectError.from(e);
+      toast.error(err.message);
+    } finally {
+      setStarting(false);
+    }
+  }
+
   return (
     <div className="flex items-center justify-end gap-1">
       {hasLogs && (
@@ -73,6 +103,28 @@ export function AgentRowActions({ instance, onChanged }: Props) {
         >
           <ExternalLinkIcon />
           Logs
+        </Button>
+      )}
+      {canInspect && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setInspectorOpen(true)}
+          aria-label={`Deployment for ${instance.name}`}
+        >
+          <SettingsIcon />
+          Deployment
+        </Button>
+      )}
+      {canStart && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={startInstance}
+          disabled={starting}
+        >
+          <PlayIcon />
+          Start
         </Button>
       )}
       {canStop && (
@@ -99,6 +151,13 @@ export function AgentRowActions({ instance, onChanged }: Props) {
         </Button>
       )}
 
+      <DeploymentInspector
+        open={inspectorOpen}
+        onOpenChange={setInspectorOpen}
+        instance={instance}
+        onChanged={onChanged}
+      />
+
       <AlertDialog
         open={pending !== null}
         onOpenChange={(open) => {
@@ -114,7 +173,7 @@ export function AgentRowActions({ instance, onChanged }: Props) {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pending === "stop"
-                ? "The Fly machine scales to zero. The agent can be destroyed and re-spawned, but cannot be started again in v1."
+                ? "The Fly machine scales to zero. Manual-lifecycle agents can be started again from the fleet row; always-on agents are managed by Fly's auto-start."
                 : "The Fly app and all its secrets are removed. This cannot be undone — the row stays for audit."}
             </AlertDialogDescription>
           </AlertDialogHeader>

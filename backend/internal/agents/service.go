@@ -38,6 +38,14 @@ var (
 	ErrInstanceNotFound  = errors.New("agent instance not found")
 	ErrFlyAPI            = errors.New("upstream provider error") // redacted (decision 25)
 	ErrTargetUnavailable = errors.New("deploy target unavailable")
+
+	// M5 fleet-control sentinels. Each maps to a Connect code at the
+	// handler layer (Phase 5 sentinel mapping table). Most service-
+	// layer paths delegate to the deploy-package sentinels via
+	// `errors.Is`; these are the agents-package-side names where the
+	// failure is domain-shaped (instance-not-found, bulk size cap)
+	// rather than infrastructure-shaped.
+	ErrBulkLimit = errors.New("bulk operation count exceeds limit")
 )
 
 // Spawn-flow tunables. Decisions 14, 16, 29 in the plan.
@@ -45,7 +53,9 @@ const (
 	maxNameLen          = 80
 	maxNamePrefixLen    = 60
 	maxSpawnCount       = 10
+	maxBulkCount        = 50 // M5 plan decision 28: bulk apply caps at 50.
 	spawnConcurrency    = 3
+	bulkConcurrency     = 3
 	pollInterval        = 2 * time.Second
 	pollBudget          = 90 * time.Second
 	flyDeployTargetName = "fly" // server-resolved per decision 5
@@ -75,6 +85,19 @@ type agentQueries interface {
 	ListAgentInstancesByOrg(ctx context.Context, orgID uuid.UUID) ([]db.ListAgentInstancesByOrgRow, error)
 	GetAgentInstanceByID(ctx context.Context, arg db.GetAgentInstanceByIDParams) (db.GetAgentInstanceByIDRow, error)
 	ReapStalePendingInstances(ctx context.Context) ([]uuid.UUID, error)
+
+	// M5 — fleet control. UpdateAgentDeployConfig writes the full
+	// nine-tuple in one statement; UpdateAgentReplicas /
+	// UpdateAgentInstanceVolumeSize are the single-column flows for
+	// ResizeReplicas / ResizeVolume; BulkUpdateAgentDeployConfig is
+	// the multi-row flow for the fleet bulk-edit surface (Phase 8).
+	// agent_volumes reads/writes feed DetectDrift + ResizeVolume.
+	UpdateAgentDeployConfig(ctx context.Context, arg db.UpdateAgentDeployConfigParams) error
+	UpdateAgentReplicas(ctx context.Context, arg db.UpdateAgentReplicasParams) error
+	UpdateAgentInstanceVolumeSize(ctx context.Context, arg db.UpdateAgentInstanceVolumeSizeParams) error
+	BulkUpdateAgentDeployConfig(ctx context.Context, arg db.BulkUpdateAgentDeployConfigParams) error
+	ListAgentVolumesByInstance(ctx context.Context, agentInstanceID uuid.UUID) ([]db.AgentVolume, error)
+	UpdateAgentVolumeSize(ctx context.Context, arg db.UpdateAgentVolumeSizeParams) error
 }
 
 // adapterReader is the slice of adapters.Service the spawn flow needs.
@@ -107,27 +130,36 @@ func NewService(queries agentQueries, adapters adapterReader, resolver deploy.Re
 // SpawnInput is the resolved, post-auth caller intent. The handler
 // translates wire-form (proto request + auth claims) → SpawnInput; the
 // service never touches connect.Request or auth.Claims directly.
+//
+// M5 Phase 4: gains a DeployConfig field. Zero value is accepted as
+// "use defaults" — DeployConfig.WithDefaults yields the M4-equivalent
+// shape (1 replica, shared/1/256, iad, on-failure×3, always-on, 1GB).
 type SpawnInput struct {
-	TemplateID  uuid.UUID
-	OrgID       uuid.UUID
-	OwnerUserID uuid.UUID
-	Name        string
-	Provider    string
-	ModelName   string
-	APIKey      string // SECRET — never logged, never persisted to our DB
+	TemplateID   uuid.UUID
+	OrgID        uuid.UUID
+	OwnerUserID  uuid.UUID
+	Name         string
+	Provider     string
+	ModelName    string
+	APIKey       string // SECRET — never logged, never persisted to our DB
+	DeployConfig deploy.DeployConfig
 }
 
 // SpawnNInput mirrors SpawnInput plus the fan-out shape. Per decision
 // 15: all N agents share one APIKey (demo affordance, not production).
+// All N spawned agents share the same DeployConfig too — the bulk
+// surface assumes uniform per-agent config (per-agent deviation is
+// the per-instance UpdateDeployConfig flow).
 type SpawnNInput struct {
-	TemplateID  uuid.UUID
-	OrgID       uuid.UUID
-	OwnerUserID uuid.UUID
-	NamePrefix  string
-	Count       int
-	Provider    string
-	ModelName   string
-	APIKey      string
+	TemplateID   uuid.UUID
+	OrgID        uuid.UUID
+	OwnerUserID  uuid.UUID
+	NamePrefix   string
+	Count        int
+	Provider     string
+	ModelName    string
+	APIKey       string
+	DeployConfig deploy.DeployConfig
 }
 
 // ListAgentTemplates returns the M2 catalog. Unchanged contract.
@@ -151,6 +183,10 @@ func (s *Service) ListAgentTemplates(ctx context.Context) ([]*corelliav1.AgentTe
 // network operation doesn't hold a DB connection.
 func (s *Service) Spawn(ctx context.Context, in SpawnInput) (*corelliav1.AgentInstance, error) {
 	if err := validateSpawn(in.Name, in.Provider, in.ModelName, in.APIKey); err != nil {
+		return nil, err
+	}
+	cfg := in.DeployConfig.WithDefaults()
+	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -197,6 +233,23 @@ func (s *Service) Spawn(ctx context.Context, in SpawnInput) (*corelliav1.AgentIn
 		}); qErr != nil {
 			return fmt.Errorf("agents: insert secret audit row: %w", qErr)
 		}
+
+		// M5 Phase 4: persist the resolved DeployConfig in the same
+		// tx. The InsertAgentInstance query relies on column DEFAULTs
+		// for the nine new fields (so the M4 shape was preserved at
+		// the SQL boundary); UpdateAgentDeployConfig overwrites them
+		// with the validated config inside the same atomic boundary.
+		// A two-step pattern (insert + update) inside one tx is
+		// equivalent to a widened insert; chosen for the smaller
+		// SQL-shape change in Phase 1.
+		if qErr = q.UpdateAgentDeployConfig(ctx, deployConfigParams(instance.ID, in.OrgID, cfg)); qErr != nil {
+			return fmt.Errorf("agents: persist deploy config: %w", qErr)
+		}
+		// Patch the in-memory copy so the proto projection at the end
+		// of Spawn reflects the post-update state — InsertAgentInstance
+		// returns the column DEFAULTs, but the cfg the caller asked for
+		// is what hit the row in the same tx via UpdateAgentDeployConfig.
+		applyDeployConfigToInstance(&instance, cfg)
 		return nil
 	}); err != nil {
 		return nil, err
@@ -207,6 +260,11 @@ func (s *Service) Spawn(ctx context.Context, in SpawnInput) (*corelliav1.AgentIn
 	// flip the row to 'failed' synchronously here so the FE gets to see
 	// the pending → failed transition through its normal poll loop
 	// rather than a special inline error path.
+	// M5 Phase 4: cfg fully owns Region / CPUs / MemoryMB; the
+	// per-call SpawnSpec fields (Region/CPUs/MemoryMB) stay empty so
+	// FlyDeployTarget reads them from cfg via WithDefaults. The Phase
+	// 3 fall-through path is now dormant — preserved on the deploy
+	// side as back-compat, unused from here onward.
 	result, err := deployer.Spawn(ctx, deploy.SpawnSpec{
 		Name:     instance.ID.String(),
 		ImageRef: adapter.AdapterImageRef,
@@ -216,7 +274,7 @@ func (s *Service) Spawn(ctx context.Context, in SpawnInput) (*corelliav1.AgentIn
 			"CORELLIA_MODEL_NAME":     in.ModelName,
 			"CORELLIA_MODEL_API_KEY":  in.APIKey,
 		},
-	})
+	}, cfg)
 	if err != nil {
 		// Redact the upstream error (decision 25): generic ErrFlyAPI
 		// to the caller; full err recorded server-side.
@@ -279,13 +337,14 @@ func (s *Service) SpawnN(ctx context.Context, in SpawnNInput) ([]*corelliav1.Age
 
 			name := fmt.Sprintf("%s-%0*d", in.NamePrefix, width, i+1)
 			inst, err := s.Spawn(gctx, SpawnInput{
-				TemplateID:  in.TemplateID,
-				OrgID:       in.OrgID,
-				OwnerUserID: in.OwnerUserID,
-				Name:        name,
-				Provider:    in.Provider,
-				ModelName:   in.ModelName,
-				APIKey:      in.APIKey,
+				TemplateID:   in.TemplateID,
+				OrgID:        in.OrgID,
+				OwnerUserID:  in.OwnerUserID,
+				Name:         name,
+				Provider:     in.Provider,
+				ModelName:    in.ModelName,
+				APIKey:       in.APIKey,
+				DeployConfig: in.DeployConfig,
 			})
 			if err != nil {
 				return err
@@ -589,6 +648,20 @@ func toProtoInstance(i db.AgentInstance, templateName string) *corelliav1.AgentI
 		CreatedAt:         tsToRFC3339(i.CreatedAt),
 		LastStartedAt:     tsToRFC3339(i.LastStartedAt),
 		LastStoppedAt:     tsToRFC3339(i.LastStoppedAt),
+		// M5 deploy-config projection. The Phase 4 spawn-tx patches
+		// these fields onto the in-memory row via
+		// applyDeployConfigToInstance after the UpdateAgentDeployConfig
+		// call, so the Spawn response surfaces the same nine-tuple the
+		// caller asked for.
+		Region:            i.Region,
+		CpuKind:           i.CpuKind,
+		Cpus:              i.Cpus,
+		MemoryMb:          i.MemoryMb,
+		RestartPolicy:     i.RestartPolicy,
+		RestartMaxRetries: i.RestartMaxRetries,
+		LifecycleMode:     i.LifecycleMode,
+		DesiredReplicas:   i.DesiredReplicas,
+		VolumeSizeGb:      i.VolumeSizeGb,
 	}
 }
 
@@ -623,6 +696,19 @@ func toProtoInstanceGetRow(r db.GetAgentInstanceByIDRow) *corelliav1.AgentInstan
 		CreatedAt:         tsToRFC3339(r.CreatedAt),
 		LastStartedAt:     tsToRFC3339(r.LastStartedAt),
 		LastStoppedAt:     tsToRFC3339(r.LastStoppedAt),
+		// M5 deploy-config projection from the Phase 4 widened query.
+		// drift_summary + volumes stay nil here — they need separate
+		// round-trips (DetectDrift / ListAgentVolumesByInstance) and
+		// the M5 inspector calls those RPCs on demand.
+		Region:            r.Region,
+		CpuKind:           r.CpuKind,
+		Cpus:              r.Cpus,
+		MemoryMb:          r.MemoryMb,
+		RestartPolicy:     r.RestartPolicy,
+		RestartMaxRetries: r.RestartMaxRetries,
+		LifecycleMode:     r.LifecycleMode,
+		DesiredReplicas:   r.DesiredReplicas,
+		VolumeSizeGb:      r.VolumeSizeGb,
 	}
 }
 
@@ -684,3 +770,64 @@ func tsToRFC3339(t pgtype.Timestamptz) string {
 }
 
 func ptrOf(s string) *string { return &s }
+
+// applyDeployConfigToInstance writes the cfg's nine fields onto the
+// in-memory db.AgentInstance row. Used by Spawn after the in-tx
+// UpdateAgentDeployConfig call so the wire response surfaces the
+// post-update state without a re-read. The DB row is the source of
+// truth; this helper only keeps the in-memory copy in sync.
+func applyDeployConfigToInstance(i *db.AgentInstance, cfg deploy.DeployConfig) {
+	i.Region = cfg.Region
+	i.CpuKind = cfg.CPUKind
+	i.Cpus = int32(cfg.CPUs)
+	i.MemoryMb = int32(cfg.MemoryMB)
+	i.RestartPolicy = cfg.RestartPolicy
+	i.RestartMaxRetries = int32(cfg.RestartMaxRetries)
+	i.LifecycleMode = cfg.LifecycleMode
+	i.DesiredReplicas = int32(cfg.DesiredReplicas)
+	i.VolumeSizeGb = int32(cfg.VolumeSizeGB)
+}
+
+// deployConfigParams projects a deploy.DeployConfig into the sqlc
+// param shape. Centralised so every caller (Spawn's tx closure,
+// UpdateDeployConfig non-dry-run path, the per-row applyBulkOne
+// helper) stays in lockstep with the column set.
+func deployConfigParams(id, orgID uuid.UUID, cfg deploy.DeployConfig) db.UpdateAgentDeployConfigParams {
+	return db.UpdateAgentDeployConfigParams{
+		ID:                id,
+		OrgID:             orgID,
+		Region:            cfg.Region,
+		CpuKind:           cfg.CPUKind,
+		Cpus:              int32(cfg.CPUs),
+		MemoryMb:          int32(cfg.MemoryMB),
+		RestartPolicy:     cfg.RestartPolicy,
+		RestartMaxRetries: int32(cfg.RestartMaxRetries),
+		LifecycleMode:     cfg.LifecycleMode,
+		DesiredReplicas:   int32(cfg.DesiredReplicas),
+		VolumeSizeGb:      int32(cfg.VolumeSizeGB),
+	}
+}
+
+// deployConfigFromInstance reverses the projection — reads the nine
+// columns off an agent_instances row and returns a DeployConfig.
+// Used by UpdateDeployConfig / ResizeReplicas / ResizeVolume to load
+// the current desired state before applying a delta.
+//
+// WithDefaults is applied because rows inserted before Phase 1's
+// migration carry the column DEFAULTs (which match the M4 shape) but
+// rows inserted post-Phase-1 always carry explicit values from the
+// service layer; either way, the WithDefaults call is idempotent on
+// non-zero inputs.
+func deployConfigFromInstance(r db.GetAgentInstanceByIDRow) deploy.DeployConfig {
+	return deploy.DeployConfig{
+		Region:            r.Region,
+		CPUKind:           r.CpuKind,
+		CPUs:              int(r.Cpus),
+		MemoryMB:          int(r.MemoryMb),
+		RestartPolicy:     r.RestartPolicy,
+		RestartMaxRetries: int(r.RestartMaxRetries),
+		LifecycleMode:     r.LifecycleMode,
+		DesiredReplicas:   int(r.DesiredReplicas),
+		VolumeSizeGB:      int(r.VolumeSizeGb),
+	}.WithDefaults()
+}

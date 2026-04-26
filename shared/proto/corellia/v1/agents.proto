@@ -17,6 +17,16 @@ service AgentsService {
   rpc GetAgentInstance(GetAgentInstanceRequest) returns (GetAgentInstanceResponse);
   rpc StopAgentInstance(StopAgentInstanceRequest) returns (StopAgentInstanceResponse);
   rpc DestroyAgentInstance(DestroyAgentInstanceRequest) returns (DestroyAgentInstanceResponse);
+
+  // M5 fleet-control (plan §4 Phase 5). Service methods land on
+  // *agents.Service; handlers stay <30 LOC per blueprint §11.9.
+  rpc ListDeploymentRegions(ListDeploymentRegionsRequest) returns (ListDeploymentRegionsResponse);
+  rpc CheckDeploymentPlacement(CheckDeploymentPlacementRequest) returns (CheckDeploymentPlacementResponse);
+  rpc UpdateAgentDeployConfig(UpdateAgentDeployConfigRequest) returns (UpdateAgentDeployConfigResponse);
+  rpc StartAgentInstance(StartAgentInstanceRequest) returns (StartAgentInstanceResponse);
+  rpc ResizeAgentReplicas(ResizeAgentReplicasRequest) returns (ResizeAgentReplicasResponse);
+  rpc ResizeAgentVolume(ResizeAgentVolumeRequest) returns (ResizeAgentVolumeResponse);
+  rpc BulkUpdateAgentDeployConfig(BulkUpdateAgentDeployConfigRequest) returns (BulkUpdateAgentDeployConfigResponse);
 }
 
 // ModelProvider is the (closed) v1 set. Adding values is a non-breaking
@@ -30,6 +40,29 @@ enum ModelProvider {
   OPENROUTER = 3;
 }
 
+// UpdateKind mirrors deploy.UpdateKind. Three values per M5 plan
+// decision 6: in-place / brief restart / destroy + respawn. Drives the
+// FE confirmation copy (silent toast / brief-restart toast / destructive
+// modal).
+enum UpdateKind {
+  UPDATE_KIND_UNSPECIFIED = 0;
+  UPDATE_KIND_LIVE_APPLIED = 1;
+  UPDATE_KIND_LIVE_APPLIED_WITH_RESTART = 2;
+  UPDATE_KIND_REQUIRES_RESPAWN = 3;
+}
+
+// DriftCategory enumerates the five drift categories from M5 plan §4
+// Phase 4. Closed set in v1.5; widening is a typed-enum addition, not
+// a string-format change.
+enum DriftCategory {
+  DRIFT_CATEGORY_UNSPECIFIED = 0;
+  DRIFT_CATEGORY_COUNT_MISMATCH = 1;
+  DRIFT_CATEGORY_SIZE_MISMATCH = 2;
+  DRIFT_CATEGORY_VOLUME_MISMATCH = 3;
+  DRIFT_CATEGORY_VOLUME_SIZE_MISMATCH = 4;
+  DRIFT_CATEGORY_VOLUME_UNATTACHED = 5;
+}
+
 message ListAgentTemplatesRequest {}
 message ListAgentTemplatesResponse {
   repeated AgentTemplate templates = 1;
@@ -41,11 +74,110 @@ message AgentTemplate {
   string description = 3;
 }
 
+// DeployConfig is the wire shape of the nine fleet-control fields.
+// Mirrors deploy.DeployConfig (Go) and the nine columns added in
+// migration 20260426160000_fleet_control.sql. Zero values mean "use
+// defaults" — the service layer's WithDefaults() / Validate() owns
+// the canonicalisation (M5 plan decision 5).
+message DeployConfig {
+  string region = 1;
+  string cpu_kind = 2;
+  int32 cpus = 3;
+  int32 memory_mb = 4;
+  string restart_policy = 5;
+  int32 restart_max_retries = 6;
+  string lifecycle_mode = 7;
+  int32 desired_replicas = 8;
+  int32 volume_size_gb = 9;
+}
+
+// Region is Corellia's projection of fly.Region — re-exporting fly.Region
+// would leak the Fly type past internal/deploy and break blueprint §11.1.
+// Four fields per M5 plan decision 17.
+message Region {
+  string code = 1;
+  string name = 2;
+  bool deprecated = 3;
+  bool requires_paid_plan = 4;
+}
+
+// PlacementResult is the FE-renderable answer to "can this config fit
+// in this region for this org's token?" M5 plan decision 10.
+message PlacementResult {
+  bool available = 1;
+  string reason = 2;
+  repeated string alternate_regions = 3;
+}
+
+// MachineState is the per-replica observation projected from
+// flaps.List. M5 plan decision 2: no agent_machines table; per-machine
+// state is read from Fly on demand.
+message MachineState {
+  string id = 1;
+  string region = 2;
+  string state = 3; // raw Fly state
+  string cpu_kind = 4;
+  int32 cpus = 5;
+  int32 memory_mb = 6;
+  string created_at = 7; // RFC3339
+  string attached_volume_id = 8;
+}
+
+// VolumeRef is one row of agent_volumes projected to the wire.
+// machine_id is empty until SetAgentVolumeMachine fills it (Phase 3.5).
+message VolumeRef {
+  string volume_id = 1;
+  string region = 2;
+  int32 size_gb = 3;
+  string machine_id = 4;
+}
+
+// DriftEntry is one categorised drift bullet. The fleet inspector
+// renders one bullet per entry (M5 plan decision 8 — drift summary
+// granularity).
+message DriftEntry {
+  DriftCategory category = 1;
+  string detail = 2;
+}
+
+// DriftSummary is the per-instance drift report. Empty `entries` slice
+// means "no drift" — the FE renders the row's banner accordingly.
+message DriftSummary {
+  repeated DriftEntry entries = 1;
+}
+
+// UpdateResult is the typed return from UpdateAgentDeployConfig
+// (dry-run preview AND apply success). Mirrors agents.UpdateResult (Go).
+// estimated_downtime_seconds is a coarse FE-renderable estimate, not a
+// measurement. wipes_persistent_state is true only on REQUIRES_RESPAWN
+// (region change today) — explicit so the FE doesn't re-derive.
+message UpdateResult {
+  UpdateKind update_kind = 1;
+  int32 estimated_downtime_seconds = 2;
+  bool wipes_persistent_state = 3;
+}
+
+// BulkResult is one row of a BulkUpdateAgentDeployConfig fan-out.
+// Partial failure is normal (M5 plan decision 28); the FE renders a
+// row per result so failed instances stay selected for retry.
+message BulkResult {
+  string instance_id = 1;
+  UpdateKind update_kind = 2;
+  // Empty on success. On failure, carries the human-readable message
+  // (already redacted server-side per the M4 ErrFlyAPI pattern).
+  string error_message = 3;
+}
+
 // AgentInstance is the wire shape for a deployed agent. Empty-string
 // sentinels are used for "not yet set" semantics on optional scalars
 // (deploy_external_ref, logs_url, last_started_at, last_stopped_at) —
 // the alternative `optional string` would force every FE consumer to
 // branch on presence; empty-string is a single check.
+//
+// M5 widening (Phase 5): fields 13–23 carry the deploy-config columns
+// + the per-instance volumes + drift summary. List queries unwidened
+// in Phase 5 will leave fields 13–23 at their proto3 zero values; the
+// Get path (which loads via the widened query) populates them.
 message AgentInstance {
   string id = 1;
   string name = 2;
@@ -70,6 +202,26 @@ message AgentInstance {
   string created_at = 10;
   string last_started_at = 11;
   string last_stopped_at = 12;
+
+  // M5 deploy-config projection (fields 13–21). Mirror DeployConfig.
+  // Inlined (rather than `DeployConfig deploy_config = 13`) so existing
+  // FE consumers can drop the new fields onto fleet-row columns
+  // without unwrapping a nested message.
+  string region = 13;
+  string cpu_kind = 14;
+  int32 cpus = 15;
+  int32 memory_mb = 16;
+  string restart_policy = 17;
+  int32 restart_max_retries = 18;
+  string lifecycle_mode = 19;
+  int32 desired_replicas = 20;
+  int32 volume_size_gb = 21;
+
+  // M5 drift + volumes (fields 22–23). Drift is computed on demand;
+  // volumes is the projected agent_volumes rows for this instance,
+  // one per replica (M5 plan decision 8).
+  DriftSummary drift_summary = 22;
+  repeated VolumeRef volumes = 23;
 }
 
 message SpawnAgentRequest {
@@ -81,6 +233,10 @@ message SpawnAgentRequest {
   // target's secret store and never written to Corellia's database
   // (spawn-flow plan decision 7).
   string model_api_key = 5;
+  // M5 widening. Optional — unset means "use defaults" (server-side
+  // WithDefaults canonicalises). Field-presence semantics make
+  // partial overrides expressible.
+  optional DeployConfig deploy_config = 6;
 }
 message SpawnAgentResponse {
   AgentInstance instance = 1;
@@ -96,6 +252,8 @@ message SpawnNAgentsRequest {
   // SECRET — same handling as SpawnAgentRequest. Reused across all N
   // spawns per decision 15 (demo affordance).
   string model_api_key = 6;
+  // M5 widening. Same DeployConfig applied to every spawned agent.
+  optional DeployConfig deploy_config = 7;
 }
 message SpawnNAgentsResponse {
   repeated AgentInstance instances = 1;
@@ -125,4 +283,91 @@ message DestroyAgentInstanceRequest {
 }
 message DestroyAgentInstanceResponse {
   AgentInstance instance = 1;
+}
+
+// M5 fleet-control RPCs.
+
+message ListDeploymentRegionsRequest {}
+message ListDeploymentRegionsResponse {
+  repeated Region regions = 1;
+}
+
+message CheckDeploymentPlacementRequest {
+  DeployConfig deploy_config = 1;
+}
+message CheckDeploymentPlacementResponse {
+  PlacementResult placement_result = 1;
+}
+
+message UpdateAgentDeployConfigRequest {
+  string instance_id = 1;
+  DeployConfig deploy_config = 2;
+  // dry_run=true → server returns UpdateResult without mutating Fly or
+  // the agent_instances row. Drives the FE preview screen.
+  bool dry_run = 3;
+}
+message UpdateAgentDeployConfigResponse {
+  UpdateResult update_result = 1;
+}
+
+message StartAgentInstanceRequest {
+  string instance_id = 1;
+}
+message StartAgentInstanceResponse {
+  AgentInstance instance = 1;
+}
+
+message ResizeAgentReplicasRequest {
+  string instance_id = 1;
+  int32 desired_replicas = 2;
+}
+message ResizeAgentReplicasResponse {
+  AgentInstance instance = 1;
+}
+
+message ResizeAgentVolumeRequest {
+  string instance_id = 1;
+  int32 volume_size_gb = 2;
+}
+message ResizeAgentVolumeResponse {
+  AgentInstance instance = 1;
+  // True when Fly required a machine restart for the new size to take
+  // effect. The FE renders a different toast in that case ("brief
+  // restart") vs the no-restart case ("instant").
+  bool needs_restart = 2;
+}
+
+// BulkConfigDelta is DeployConfig minus volume_size_gb — bulk apply
+// must not touch volume size (M5 plan decision 8.4). Carved as a
+// distinct wire message so the proto encodes the invariant; no caller
+// can accidentally include volume_size_gb in a bulk delta.
+//
+// CONTRACT — "don't change" semantics live on the FE, NOT the wire.
+// Every field is required; the BE applies the delta uniformly to
+// every selected instance. The FE form (`<BulkConfigDeltaForm>`)
+// implements per-field skip by pre-filling skipped fields with the
+// common-among-selection value, so a skipped-but-uniform field is a
+// true no-op for the BE. Skipped-but-divergent selections surface a
+// warning before submit. Direct callers that bypass the form (e.g.
+// custom scripts) must compute the desired uniform values
+// themselves — there is no per-field optional sentinel.
+message BulkConfigDelta {
+  string region = 1;
+  string cpu_kind = 2;
+  int32 cpus = 3;
+  int32 memory_mb = 4;
+  string restart_policy = 5;
+  int32 restart_max_retries = 6;
+  string lifecycle_mode = 7;
+  int32 desired_replicas = 8;
+}
+
+message BulkUpdateAgentDeployConfigRequest {
+  repeated string instance_ids = 1;
+  BulkConfigDelta deploy_config_delta = 2;
+  // dry_run=true → server returns BulkResult per id without mutating.
+  bool dry_run = 3;
+}
+message BulkUpdateAgentDeployConfigResponse {
+  repeated BulkResult results = 1;
 }

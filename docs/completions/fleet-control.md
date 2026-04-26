@@ -4,7 +4,7 @@
 **Owner:** TBD
 **Supersedes:** —
 **Related:**
-- `docs/plans/v1.5-roadmap.md` (parent; this plan supersedes the roadmap's "Memory → Tools → Skills" sequencing — fleet control becomes the first v1.5 milestone, with Skills next)
+- `docs/plans/governance-expansion-roadmap.md` (parent execution roadmap — fleet control is M5, the first row in §2; superseded the original "Memory → Tools → Skills" v1.5 framing). Per-pillar capability shape: `docs/plans/governance-capabilities.md`.
 - `docs/executing/spawn-flow.md` (M4; this plan extends the same `agent_instances` table and the same `internal/deploy.DeployTarget` interface that M4 introduced)
 - `docs/executing/deploy-target-credentials.md` (the v1.5 credentials evolution that M5 *should not* block on but *will* eventually couple with — region availability and GPU gating are token-scoped)
 - `docs/blueprint.md` §3.3 (declared minimum resource footprint — M5 promotes this from "minimum" to "configurable per-instance"), §8 (Fly deployment topology — **M5 explicitly retires the "one app = one machine" invariant**; see decision 1), §11.1 (no Fly-specific code outside `FlyDeployTarget` — M5 is the rule's largest single test), §11.4 (deferred features stub as real interfaces — applies to lifecycle modes we don't ship in v1.5)

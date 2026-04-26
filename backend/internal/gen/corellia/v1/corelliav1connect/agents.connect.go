@@ -54,6 +54,27 @@ const (
 	// AgentsServiceDestroyAgentInstanceProcedure is the fully-qualified name of the AgentsService's
 	// DestroyAgentInstance RPC.
 	AgentsServiceDestroyAgentInstanceProcedure = "/corellia.v1.AgentsService/DestroyAgentInstance"
+	// AgentsServiceListDeploymentRegionsProcedure is the fully-qualified name of the AgentsService's
+	// ListDeploymentRegions RPC.
+	AgentsServiceListDeploymentRegionsProcedure = "/corellia.v1.AgentsService/ListDeploymentRegions"
+	// AgentsServiceCheckDeploymentPlacementProcedure is the fully-qualified name of the AgentsService's
+	// CheckDeploymentPlacement RPC.
+	AgentsServiceCheckDeploymentPlacementProcedure = "/corellia.v1.AgentsService/CheckDeploymentPlacement"
+	// AgentsServiceUpdateAgentDeployConfigProcedure is the fully-qualified name of the AgentsService's
+	// UpdateAgentDeployConfig RPC.
+	AgentsServiceUpdateAgentDeployConfigProcedure = "/corellia.v1.AgentsService/UpdateAgentDeployConfig"
+	// AgentsServiceStartAgentInstanceProcedure is the fully-qualified name of the AgentsService's
+	// StartAgentInstance RPC.
+	AgentsServiceStartAgentInstanceProcedure = "/corellia.v1.AgentsService/StartAgentInstance"
+	// AgentsServiceResizeAgentReplicasProcedure is the fully-qualified name of the AgentsService's
+	// ResizeAgentReplicas RPC.
+	AgentsServiceResizeAgentReplicasProcedure = "/corellia.v1.AgentsService/ResizeAgentReplicas"
+	// AgentsServiceResizeAgentVolumeProcedure is the fully-qualified name of the AgentsService's
+	// ResizeAgentVolume RPC.
+	AgentsServiceResizeAgentVolumeProcedure = "/corellia.v1.AgentsService/ResizeAgentVolume"
+	// AgentsServiceBulkUpdateAgentDeployConfigProcedure is the fully-qualified name of the
+	// AgentsService's BulkUpdateAgentDeployConfig RPC.
+	AgentsServiceBulkUpdateAgentDeployConfigProcedure = "/corellia.v1.AgentsService/BulkUpdateAgentDeployConfig"
 )
 
 // AgentsServiceClient is a client for the corellia.v1.AgentsService service.
@@ -70,6 +91,15 @@ type AgentsServiceClient interface {
 	GetAgentInstance(context.Context, *connect.Request[v1.GetAgentInstanceRequest]) (*connect.Response[v1.GetAgentInstanceResponse], error)
 	StopAgentInstance(context.Context, *connect.Request[v1.StopAgentInstanceRequest]) (*connect.Response[v1.StopAgentInstanceResponse], error)
 	DestroyAgentInstance(context.Context, *connect.Request[v1.DestroyAgentInstanceRequest]) (*connect.Response[v1.DestroyAgentInstanceResponse], error)
+	// M5 fleet-control (plan §4 Phase 5). Service methods land on
+	// *agents.Service; handlers stay <30 LOC per blueprint §11.9.
+	ListDeploymentRegions(context.Context, *connect.Request[v1.ListDeploymentRegionsRequest]) (*connect.Response[v1.ListDeploymentRegionsResponse], error)
+	CheckDeploymentPlacement(context.Context, *connect.Request[v1.CheckDeploymentPlacementRequest]) (*connect.Response[v1.CheckDeploymentPlacementResponse], error)
+	UpdateAgentDeployConfig(context.Context, *connect.Request[v1.UpdateAgentDeployConfigRequest]) (*connect.Response[v1.UpdateAgentDeployConfigResponse], error)
+	StartAgentInstance(context.Context, *connect.Request[v1.StartAgentInstanceRequest]) (*connect.Response[v1.StartAgentInstanceResponse], error)
+	ResizeAgentReplicas(context.Context, *connect.Request[v1.ResizeAgentReplicasRequest]) (*connect.Response[v1.ResizeAgentReplicasResponse], error)
+	ResizeAgentVolume(context.Context, *connect.Request[v1.ResizeAgentVolumeRequest]) (*connect.Response[v1.ResizeAgentVolumeResponse], error)
+	BulkUpdateAgentDeployConfig(context.Context, *connect.Request[v1.BulkUpdateAgentDeployConfigRequest]) (*connect.Response[v1.BulkUpdateAgentDeployConfigResponse], error)
 }
 
 // NewAgentsServiceClient constructs a client for the corellia.v1.AgentsService service. By default,
@@ -125,18 +155,67 @@ func NewAgentsServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(agentsServiceMethods.ByName("DestroyAgentInstance")),
 			connect.WithClientOptions(opts...),
 		),
+		listDeploymentRegions: connect.NewClient[v1.ListDeploymentRegionsRequest, v1.ListDeploymentRegionsResponse](
+			httpClient,
+			baseURL+AgentsServiceListDeploymentRegionsProcedure,
+			connect.WithSchema(agentsServiceMethods.ByName("ListDeploymentRegions")),
+			connect.WithClientOptions(opts...),
+		),
+		checkDeploymentPlacement: connect.NewClient[v1.CheckDeploymentPlacementRequest, v1.CheckDeploymentPlacementResponse](
+			httpClient,
+			baseURL+AgentsServiceCheckDeploymentPlacementProcedure,
+			connect.WithSchema(agentsServiceMethods.ByName("CheckDeploymentPlacement")),
+			connect.WithClientOptions(opts...),
+		),
+		updateAgentDeployConfig: connect.NewClient[v1.UpdateAgentDeployConfigRequest, v1.UpdateAgentDeployConfigResponse](
+			httpClient,
+			baseURL+AgentsServiceUpdateAgentDeployConfigProcedure,
+			connect.WithSchema(agentsServiceMethods.ByName("UpdateAgentDeployConfig")),
+			connect.WithClientOptions(opts...),
+		),
+		startAgentInstance: connect.NewClient[v1.StartAgentInstanceRequest, v1.StartAgentInstanceResponse](
+			httpClient,
+			baseURL+AgentsServiceStartAgentInstanceProcedure,
+			connect.WithSchema(agentsServiceMethods.ByName("StartAgentInstance")),
+			connect.WithClientOptions(opts...),
+		),
+		resizeAgentReplicas: connect.NewClient[v1.ResizeAgentReplicasRequest, v1.ResizeAgentReplicasResponse](
+			httpClient,
+			baseURL+AgentsServiceResizeAgentReplicasProcedure,
+			connect.WithSchema(agentsServiceMethods.ByName("ResizeAgentReplicas")),
+			connect.WithClientOptions(opts...),
+		),
+		resizeAgentVolume: connect.NewClient[v1.ResizeAgentVolumeRequest, v1.ResizeAgentVolumeResponse](
+			httpClient,
+			baseURL+AgentsServiceResizeAgentVolumeProcedure,
+			connect.WithSchema(agentsServiceMethods.ByName("ResizeAgentVolume")),
+			connect.WithClientOptions(opts...),
+		),
+		bulkUpdateAgentDeployConfig: connect.NewClient[v1.BulkUpdateAgentDeployConfigRequest, v1.BulkUpdateAgentDeployConfigResponse](
+			httpClient,
+			baseURL+AgentsServiceBulkUpdateAgentDeployConfigProcedure,
+			connect.WithSchema(agentsServiceMethods.ByName("BulkUpdateAgentDeployConfig")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // agentsServiceClient implements AgentsServiceClient.
 type agentsServiceClient struct {
-	listAgentTemplates   *connect.Client[v1.ListAgentTemplatesRequest, v1.ListAgentTemplatesResponse]
-	spawnAgent           *connect.Client[v1.SpawnAgentRequest, v1.SpawnAgentResponse]
-	spawnNAgents         *connect.Client[v1.SpawnNAgentsRequest, v1.SpawnNAgentsResponse]
-	listAgentInstances   *connect.Client[v1.ListAgentInstancesRequest, v1.ListAgentInstancesResponse]
-	getAgentInstance     *connect.Client[v1.GetAgentInstanceRequest, v1.GetAgentInstanceResponse]
-	stopAgentInstance    *connect.Client[v1.StopAgentInstanceRequest, v1.StopAgentInstanceResponse]
-	destroyAgentInstance *connect.Client[v1.DestroyAgentInstanceRequest, v1.DestroyAgentInstanceResponse]
+	listAgentTemplates          *connect.Client[v1.ListAgentTemplatesRequest, v1.ListAgentTemplatesResponse]
+	spawnAgent                  *connect.Client[v1.SpawnAgentRequest, v1.SpawnAgentResponse]
+	spawnNAgents                *connect.Client[v1.SpawnNAgentsRequest, v1.SpawnNAgentsResponse]
+	listAgentInstances          *connect.Client[v1.ListAgentInstancesRequest, v1.ListAgentInstancesResponse]
+	getAgentInstance            *connect.Client[v1.GetAgentInstanceRequest, v1.GetAgentInstanceResponse]
+	stopAgentInstance           *connect.Client[v1.StopAgentInstanceRequest, v1.StopAgentInstanceResponse]
+	destroyAgentInstance        *connect.Client[v1.DestroyAgentInstanceRequest, v1.DestroyAgentInstanceResponse]
+	listDeploymentRegions       *connect.Client[v1.ListDeploymentRegionsRequest, v1.ListDeploymentRegionsResponse]
+	checkDeploymentPlacement    *connect.Client[v1.CheckDeploymentPlacementRequest, v1.CheckDeploymentPlacementResponse]
+	updateAgentDeployConfig     *connect.Client[v1.UpdateAgentDeployConfigRequest, v1.UpdateAgentDeployConfigResponse]
+	startAgentInstance          *connect.Client[v1.StartAgentInstanceRequest, v1.StartAgentInstanceResponse]
+	resizeAgentReplicas         *connect.Client[v1.ResizeAgentReplicasRequest, v1.ResizeAgentReplicasResponse]
+	resizeAgentVolume           *connect.Client[v1.ResizeAgentVolumeRequest, v1.ResizeAgentVolumeResponse]
+	bulkUpdateAgentDeployConfig *connect.Client[v1.BulkUpdateAgentDeployConfigRequest, v1.BulkUpdateAgentDeployConfigResponse]
 }
 
 // ListAgentTemplates calls corellia.v1.AgentsService.ListAgentTemplates.
@@ -174,6 +253,41 @@ func (c *agentsServiceClient) DestroyAgentInstance(ctx context.Context, req *con
 	return c.destroyAgentInstance.CallUnary(ctx, req)
 }
 
+// ListDeploymentRegions calls corellia.v1.AgentsService.ListDeploymentRegions.
+func (c *agentsServiceClient) ListDeploymentRegions(ctx context.Context, req *connect.Request[v1.ListDeploymentRegionsRequest]) (*connect.Response[v1.ListDeploymentRegionsResponse], error) {
+	return c.listDeploymentRegions.CallUnary(ctx, req)
+}
+
+// CheckDeploymentPlacement calls corellia.v1.AgentsService.CheckDeploymentPlacement.
+func (c *agentsServiceClient) CheckDeploymentPlacement(ctx context.Context, req *connect.Request[v1.CheckDeploymentPlacementRequest]) (*connect.Response[v1.CheckDeploymentPlacementResponse], error) {
+	return c.checkDeploymentPlacement.CallUnary(ctx, req)
+}
+
+// UpdateAgentDeployConfig calls corellia.v1.AgentsService.UpdateAgentDeployConfig.
+func (c *agentsServiceClient) UpdateAgentDeployConfig(ctx context.Context, req *connect.Request[v1.UpdateAgentDeployConfigRequest]) (*connect.Response[v1.UpdateAgentDeployConfigResponse], error) {
+	return c.updateAgentDeployConfig.CallUnary(ctx, req)
+}
+
+// StartAgentInstance calls corellia.v1.AgentsService.StartAgentInstance.
+func (c *agentsServiceClient) StartAgentInstance(ctx context.Context, req *connect.Request[v1.StartAgentInstanceRequest]) (*connect.Response[v1.StartAgentInstanceResponse], error) {
+	return c.startAgentInstance.CallUnary(ctx, req)
+}
+
+// ResizeAgentReplicas calls corellia.v1.AgentsService.ResizeAgentReplicas.
+func (c *agentsServiceClient) ResizeAgentReplicas(ctx context.Context, req *connect.Request[v1.ResizeAgentReplicasRequest]) (*connect.Response[v1.ResizeAgentReplicasResponse], error) {
+	return c.resizeAgentReplicas.CallUnary(ctx, req)
+}
+
+// ResizeAgentVolume calls corellia.v1.AgentsService.ResizeAgentVolume.
+func (c *agentsServiceClient) ResizeAgentVolume(ctx context.Context, req *connect.Request[v1.ResizeAgentVolumeRequest]) (*connect.Response[v1.ResizeAgentVolumeResponse], error) {
+	return c.resizeAgentVolume.CallUnary(ctx, req)
+}
+
+// BulkUpdateAgentDeployConfig calls corellia.v1.AgentsService.BulkUpdateAgentDeployConfig.
+func (c *agentsServiceClient) BulkUpdateAgentDeployConfig(ctx context.Context, req *connect.Request[v1.BulkUpdateAgentDeployConfigRequest]) (*connect.Response[v1.BulkUpdateAgentDeployConfigResponse], error) {
+	return c.bulkUpdateAgentDeployConfig.CallUnary(ctx, req)
+}
+
 // AgentsServiceHandler is an implementation of the corellia.v1.AgentsService service.
 type AgentsServiceHandler interface {
 	// M2 — catalog read, returns the static template list.
@@ -188,6 +302,15 @@ type AgentsServiceHandler interface {
 	GetAgentInstance(context.Context, *connect.Request[v1.GetAgentInstanceRequest]) (*connect.Response[v1.GetAgentInstanceResponse], error)
 	StopAgentInstance(context.Context, *connect.Request[v1.StopAgentInstanceRequest]) (*connect.Response[v1.StopAgentInstanceResponse], error)
 	DestroyAgentInstance(context.Context, *connect.Request[v1.DestroyAgentInstanceRequest]) (*connect.Response[v1.DestroyAgentInstanceResponse], error)
+	// M5 fleet-control (plan §4 Phase 5). Service methods land on
+	// *agents.Service; handlers stay <30 LOC per blueprint §11.9.
+	ListDeploymentRegions(context.Context, *connect.Request[v1.ListDeploymentRegionsRequest]) (*connect.Response[v1.ListDeploymentRegionsResponse], error)
+	CheckDeploymentPlacement(context.Context, *connect.Request[v1.CheckDeploymentPlacementRequest]) (*connect.Response[v1.CheckDeploymentPlacementResponse], error)
+	UpdateAgentDeployConfig(context.Context, *connect.Request[v1.UpdateAgentDeployConfigRequest]) (*connect.Response[v1.UpdateAgentDeployConfigResponse], error)
+	StartAgentInstance(context.Context, *connect.Request[v1.StartAgentInstanceRequest]) (*connect.Response[v1.StartAgentInstanceResponse], error)
+	ResizeAgentReplicas(context.Context, *connect.Request[v1.ResizeAgentReplicasRequest]) (*connect.Response[v1.ResizeAgentReplicasResponse], error)
+	ResizeAgentVolume(context.Context, *connect.Request[v1.ResizeAgentVolumeRequest]) (*connect.Response[v1.ResizeAgentVolumeResponse], error)
+	BulkUpdateAgentDeployConfig(context.Context, *connect.Request[v1.BulkUpdateAgentDeployConfigRequest]) (*connect.Response[v1.BulkUpdateAgentDeployConfigResponse], error)
 }
 
 // NewAgentsServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -239,6 +362,48 @@ func NewAgentsServiceHandler(svc AgentsServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(agentsServiceMethods.ByName("DestroyAgentInstance")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentsServiceListDeploymentRegionsHandler := connect.NewUnaryHandler(
+		AgentsServiceListDeploymentRegionsProcedure,
+		svc.ListDeploymentRegions,
+		connect.WithSchema(agentsServiceMethods.ByName("ListDeploymentRegions")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentsServiceCheckDeploymentPlacementHandler := connect.NewUnaryHandler(
+		AgentsServiceCheckDeploymentPlacementProcedure,
+		svc.CheckDeploymentPlacement,
+		connect.WithSchema(agentsServiceMethods.ByName("CheckDeploymentPlacement")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentsServiceUpdateAgentDeployConfigHandler := connect.NewUnaryHandler(
+		AgentsServiceUpdateAgentDeployConfigProcedure,
+		svc.UpdateAgentDeployConfig,
+		connect.WithSchema(agentsServiceMethods.ByName("UpdateAgentDeployConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentsServiceStartAgentInstanceHandler := connect.NewUnaryHandler(
+		AgentsServiceStartAgentInstanceProcedure,
+		svc.StartAgentInstance,
+		connect.WithSchema(agentsServiceMethods.ByName("StartAgentInstance")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentsServiceResizeAgentReplicasHandler := connect.NewUnaryHandler(
+		AgentsServiceResizeAgentReplicasProcedure,
+		svc.ResizeAgentReplicas,
+		connect.WithSchema(agentsServiceMethods.ByName("ResizeAgentReplicas")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentsServiceResizeAgentVolumeHandler := connect.NewUnaryHandler(
+		AgentsServiceResizeAgentVolumeProcedure,
+		svc.ResizeAgentVolume,
+		connect.WithSchema(agentsServiceMethods.ByName("ResizeAgentVolume")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentsServiceBulkUpdateAgentDeployConfigHandler := connect.NewUnaryHandler(
+		AgentsServiceBulkUpdateAgentDeployConfigProcedure,
+		svc.BulkUpdateAgentDeployConfig,
+		connect.WithSchema(agentsServiceMethods.ByName("BulkUpdateAgentDeployConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/corellia.v1.AgentsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentsServiceListAgentTemplatesProcedure:
@@ -255,6 +420,20 @@ func NewAgentsServiceHandler(svc AgentsServiceHandler, opts ...connect.HandlerOp
 			agentsServiceStopAgentInstanceHandler.ServeHTTP(w, r)
 		case AgentsServiceDestroyAgentInstanceProcedure:
 			agentsServiceDestroyAgentInstanceHandler.ServeHTTP(w, r)
+		case AgentsServiceListDeploymentRegionsProcedure:
+			agentsServiceListDeploymentRegionsHandler.ServeHTTP(w, r)
+		case AgentsServiceCheckDeploymentPlacementProcedure:
+			agentsServiceCheckDeploymentPlacementHandler.ServeHTTP(w, r)
+		case AgentsServiceUpdateAgentDeployConfigProcedure:
+			agentsServiceUpdateAgentDeployConfigHandler.ServeHTTP(w, r)
+		case AgentsServiceStartAgentInstanceProcedure:
+			agentsServiceStartAgentInstanceHandler.ServeHTTP(w, r)
+		case AgentsServiceResizeAgentReplicasProcedure:
+			agentsServiceResizeAgentReplicasHandler.ServeHTTP(w, r)
+		case AgentsServiceResizeAgentVolumeProcedure:
+			agentsServiceResizeAgentVolumeHandler.ServeHTTP(w, r)
+		case AgentsServiceBulkUpdateAgentDeployConfigProcedure:
+			agentsServiceBulkUpdateAgentDeployConfigHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -290,4 +469,32 @@ func (UnimplementedAgentsServiceHandler) StopAgentInstance(context.Context, *con
 
 func (UnimplementedAgentsServiceHandler) DestroyAgentInstance(context.Context, *connect.Request[v1.DestroyAgentInstanceRequest]) (*connect.Response[v1.DestroyAgentInstanceResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.DestroyAgentInstance is not implemented"))
+}
+
+func (UnimplementedAgentsServiceHandler) ListDeploymentRegions(context.Context, *connect.Request[v1.ListDeploymentRegionsRequest]) (*connect.Response[v1.ListDeploymentRegionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.ListDeploymentRegions is not implemented"))
+}
+
+func (UnimplementedAgentsServiceHandler) CheckDeploymentPlacement(context.Context, *connect.Request[v1.CheckDeploymentPlacementRequest]) (*connect.Response[v1.CheckDeploymentPlacementResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.CheckDeploymentPlacement is not implemented"))
+}
+
+func (UnimplementedAgentsServiceHandler) UpdateAgentDeployConfig(context.Context, *connect.Request[v1.UpdateAgentDeployConfigRequest]) (*connect.Response[v1.UpdateAgentDeployConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.UpdateAgentDeployConfig is not implemented"))
+}
+
+func (UnimplementedAgentsServiceHandler) StartAgentInstance(context.Context, *connect.Request[v1.StartAgentInstanceRequest]) (*connect.Response[v1.StartAgentInstanceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.StartAgentInstance is not implemented"))
+}
+
+func (UnimplementedAgentsServiceHandler) ResizeAgentReplicas(context.Context, *connect.Request[v1.ResizeAgentReplicasRequest]) (*connect.Response[v1.ResizeAgentReplicasResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.ResizeAgentReplicas is not implemented"))
+}
+
+func (UnimplementedAgentsServiceHandler) ResizeAgentVolume(context.Context, *connect.Request[v1.ResizeAgentVolumeRequest]) (*connect.Response[v1.ResizeAgentVolumeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.ResizeAgentVolume is not implemented"))
+}
+
+func (UnimplementedAgentsServiceHandler) BulkUpdateAgentDeployConfig(context.Context, *connect.Request[v1.BulkUpdateAgentDeployConfigRequest]) (*connect.Response[v1.BulkUpdateAgentDeployConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("corellia.v1.AgentsService.BulkUpdateAgentDeployConfig is not implemented"))
 }

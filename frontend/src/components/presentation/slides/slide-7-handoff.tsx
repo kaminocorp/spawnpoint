@@ -6,12 +6,15 @@ import { NebulaAvatar } from "@/components/spawn/nebula-avatar";
 import { Button } from "@/components/ui/button";
 
 /**
- * Slide 5 — Handoff. "Let's spawn one."
+ * Slide 7 — HANDOFF · "Let's spawn one."
  *
- * The Hermes nebula sits center-stage; copy collapses to a single CTA.
- * The button routes to `/spawn` (Q4 — real route transition over a
- * recorded splice; the dark register + nebula visual language carry
- * across the seam so the deck *becomes* the product).
+ * The deck *becomes* the product. Hermes nebula center-stage; single
+ * CTA below. The button routes to `/spawn` (Q4 — real route
+ * transition over a recorded splice; the dark register + nebula
+ * visual language carry across the seam).
+ *
+ * The nebula here is the *same* visual as Slide 1's galaxy resolved
+ * to a single point of light. Phase-4 transitions land that link.
  */
 export function SlideHandoff() {
   return (

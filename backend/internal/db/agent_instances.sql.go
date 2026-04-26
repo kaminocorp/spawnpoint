@@ -12,6 +12,60 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const bulkUpdateAgentDeployConfig = `-- name: BulkUpdateAgentDeployConfig :exec
+UPDATE agent_instances
+   SET region              = $3,
+       cpu_kind             = $4,
+       cpus                 = $5,
+       memory_mb            = $6,
+       restart_policy       = $7,
+       restart_max_retries  = $8,
+       lifecycle_mode       = $9,
+       desired_replicas     = $10,
+       updated_at           = now()
+ WHERE id = ANY($1::uuid[]) AND org_id = $2
+`
+
+type BulkUpdateAgentDeployConfigParams struct {
+	Column1           []uuid.UUID `json:"column_1"`
+	OrgID             uuid.UUID   `json:"org_id"`
+	Region            string      `json:"region"`
+	CpuKind           string      `json:"cpu_kind"`
+	Cpus              int32       `json:"cpus"`
+	MemoryMb          int32       `json:"memory_mb"`
+	RestartPolicy     string      `json:"restart_policy"`
+	RestartMaxRetries int32       `json:"restart_max_retries"`
+	LifecycleMode     string      `json:"lifecycle_mode"`
+	DesiredReplicas   int32       `json:"desired_replicas"`
+}
+
+// M5 Phase 4 caller (BulkUpdateDeployConfig). id = ANY($1) is the
+// pgx-friendly form of "in this set" — sqlc generates a []uuid.UUID
+// param. org_id filter is applied to every row; instance IDs that
+// belong to another org silently no-op (the service layer pre-filters
+// via ListAgentInstancesByOrg, so this is defence-in-depth, not the
+// primary tenancy gate).
+//
+// Per decision 8.4 volume_size_gb is intentionally absent from the
+// bulk delta — bulk-extending across a fleet creates surprise cost
+// and is rarely the right action. Per-instance ResizeVolume is the
+// power-user path.
+func (q *Queries) BulkUpdateAgentDeployConfig(ctx context.Context, arg BulkUpdateAgentDeployConfigParams) error {
+	_, err := q.db.Exec(ctx, bulkUpdateAgentDeployConfig,
+		arg.Column1,
+		arg.OrgID,
+		arg.Region,
+		arg.CpuKind,
+		arg.Cpus,
+		arg.MemoryMb,
+		arg.RestartPolicy,
+		arg.RestartMaxRetries,
+		arg.LifecycleMode,
+		arg.DesiredReplicas,
+	)
+	return err
+}
+
 const getAgentInstanceByID = `-- name: GetAgentInstanceByID :one
 SELECT
     ai.id,
@@ -29,6 +83,15 @@ SELECT
     ai.last_stopped_at,
     ai.created_at,
     ai.updated_at,
+    ai.region,
+    ai.cpu_kind,
+    ai.cpus,
+    ai.memory_mb,
+    ai.restart_policy,
+    ai.restart_max_retries,
+    ai.lifecycle_mode,
+    ai.desired_replicas,
+    ai.volume_size_gb,
     t.name AS template_name
 FROM agent_instances ai
 JOIN agent_templates t ON t.id = ai.agent_template_id
@@ -56,6 +119,15 @@ type GetAgentInstanceByIDRow struct {
 	LastStoppedAt     pgtype.Timestamptz `json:"last_stopped_at"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	Region            string             `json:"region"`
+	CpuKind           string             `json:"cpu_kind"`
+	Cpus              int32              `json:"cpus"`
+	MemoryMb          int32              `json:"memory_mb"`
+	RestartPolicy     string             `json:"restart_policy"`
+	RestartMaxRetries int32              `json:"restart_max_retries"`
+	LifecycleMode     string             `json:"lifecycle_mode"`
+	DesiredReplicas   int32              `json:"desired_replicas"`
+	VolumeSizeGb      int32              `json:"volume_size_gb"`
 	TemplateName      string             `json:"template_name"`
 }
 
@@ -64,6 +136,13 @@ type GetAgentInstanceByIDRow struct {
 // could surface a row must be parameterised by the requesting user's
 // org. Misuse — passing only id — would be a compile error because
 // sqlc generates a struct-arg with both fields.
+//
+// M5 Phase 4: the projection now includes the nine deploy-config
+// columns added by migration 20260426160000. UpdateDeployConfig /
+// ResizeReplicas / ResizeVolume / DetectDrift load the current
+// desired state via this query before applying their respective
+// delta. The fleet-page list query (ListAgentInstancesByOrg) is
+// widened in Phase 5/6 when the FE row card needs those fields.
 func (q *Queries) GetAgentInstanceByID(ctx context.Context, arg GetAgentInstanceByIDParams) (GetAgentInstanceByIDRow, error) {
 	row := q.db.QueryRow(ctx, getAgentInstanceByID, arg.ID, arg.OrgID)
 	var i GetAgentInstanceByIDRow
@@ -83,6 +162,15 @@ func (q *Queries) GetAgentInstanceByID(ctx context.Context, arg GetAgentInstance
 		&i.LastStoppedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Region,
+		&i.CpuKind,
+		&i.Cpus,
+		&i.MemoryMb,
+		&i.RestartPolicy,
+		&i.RestartMaxRetries,
+		&i.LifecycleMode,
+		&i.DesiredReplicas,
+		&i.VolumeSizeGb,
 		&i.TemplateName,
 	)
 	return i, err
@@ -100,7 +188,7 @@ INSERT INTO agent_instances (
     config_overrides
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, name, agent_template_id, owner_user_id, org_id, deploy_target_id, deploy_external_ref, model_provider, model_name, status, config_overrides, last_started_at, last_stopped_at, created_at, updated_at
+RETURNING id, name, agent_template_id, owner_user_id, org_id, deploy_target_id, deploy_external_ref, model_provider, model_name, status, config_overrides, last_started_at, last_stopped_at, created_at, updated_at, region, cpu_kind, cpus, memory_mb, restart_policy, restart_max_retries, lifecycle_mode, desired_replicas, volume_size_gb
 `
 
 type InsertAgentInstanceParams struct {
@@ -147,6 +235,15 @@ func (q *Queries) InsertAgentInstance(ctx context.Context, arg InsertAgentInstan
 		&i.LastStoppedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Region,
+		&i.CpuKind,
+		&i.Cpus,
+		&i.MemoryMb,
+		&i.RestartPolicy,
+		&i.RestartMaxRetries,
+		&i.LifecycleMode,
+		&i.DesiredReplicas,
+		&i.VolumeSizeGb,
 	)
 	return i, err
 }
@@ -352,5 +449,110 @@ UPDATE agent_instances
 // timestamp-invariant-pinning rationale.
 func (q *Queries) SetAgentInstanceStopped(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, setAgentInstanceStopped, id)
+	return err
+}
+
+const updateAgentDeployConfig = `-- name: UpdateAgentDeployConfig :exec
+UPDATE agent_instances
+   SET region              = $3,
+       cpu_kind            = $4,
+       cpus                = $5,
+       memory_mb           = $6,
+       restart_policy      = $7,
+       restart_max_retries = $8,
+       lifecycle_mode      = $9,
+       desired_replicas    = $10,
+       volume_size_gb      = $11,
+       updated_at          = now()
+ WHERE id = $1 AND org_id = $2
+`
+
+type UpdateAgentDeployConfigParams struct {
+	ID                uuid.UUID `json:"id"`
+	OrgID             uuid.UUID `json:"org_id"`
+	Region            string    `json:"region"`
+	CpuKind           string    `json:"cpu_kind"`
+	Cpus              int32     `json:"cpus"`
+	MemoryMb          int32     `json:"memory_mb"`
+	RestartPolicy     string    `json:"restart_policy"`
+	RestartMaxRetries int32     `json:"restart_max_retries"`
+	LifecycleMode     string    `json:"lifecycle_mode"`
+	DesiredReplicas   int32     `json:"desired_replicas"`
+	VolumeSizeGb      int32     `json:"volume_size_gb"`
+}
+
+// M5 Phase 4 caller (UpdateDeployConfig non-dry-run path). Writes the
+// full nine-tuple of deploy-config columns in one statement so the
+// service layer doesn't have to compose deltas at the SQL boundary.
+// The (id, org_id) pair is the multi-tenancy gate (matches the
+// GetAgentInstanceByID two-arg shape — same posture as M4).
+func (q *Queries) UpdateAgentDeployConfig(ctx context.Context, arg UpdateAgentDeployConfigParams) error {
+	_, err := q.db.Exec(ctx, updateAgentDeployConfig,
+		arg.ID,
+		arg.OrgID,
+		arg.Region,
+		arg.CpuKind,
+		arg.Cpus,
+		arg.MemoryMb,
+		arg.RestartPolicy,
+		arg.RestartMaxRetries,
+		arg.LifecycleMode,
+		arg.DesiredReplicas,
+		arg.VolumeSizeGb,
+	)
+	return err
+}
+
+const updateAgentInstanceVolumeSize = `-- name: UpdateAgentInstanceVolumeSize :exec
+UPDATE agent_instances
+   SET volume_size_gb = $3,
+       updated_at     = now()
+ WHERE id = $1 AND org_id = $2
+`
+
+type UpdateAgentInstanceVolumeSizeParams struct {
+	ID           uuid.UUID `json:"id"`
+	OrgID        uuid.UUID `json:"org_id"`
+	VolumeSizeGb int32     `json:"volume_size_gb"`
+}
+
+// M5 Phase 4 caller (ResizeVolume). Mirrors UpdateAgentReplicas's
+// single-column shape — separate RPC (ResizeAgentVolume), separate
+// live-update path (flaps.ExtendVolume per replica). Per decision 8.3
+// volumes are extend-only; the service layer rejects newSizeGB <
+// current with ErrVolumeShrink before this query runs, so the CHECK
+// (1..500) is the only DB-side guard needed.
+//
+// Naming note: this writes the *parent's* desired-state column on
+// agent_instances. The per-row mirror update on agent_volumes is the
+// separately-namespaced UpdateAgentVolumeSize. Same caller (ResizeVolume)
+// runs both inside one tx; the names had to diverge because sqlc's
+// query-name namespace is per-package, not per-table.
+func (q *Queries) UpdateAgentInstanceVolumeSize(ctx context.Context, arg UpdateAgentInstanceVolumeSizeParams) error {
+	_, err := q.db.Exec(ctx, updateAgentInstanceVolumeSize, arg.ID, arg.OrgID, arg.VolumeSizeGb)
+	return err
+}
+
+const updateAgentReplicas = `-- name: UpdateAgentReplicas :exec
+UPDATE agent_instances
+   SET desired_replicas = $3,
+       updated_at       = now()
+ WHERE id = $1 AND org_id = $2
+`
+
+type UpdateAgentReplicasParams struct {
+	ID              uuid.UUID `json:"id"`
+	OrgID           uuid.UUID `json:"org_id"`
+	DesiredReplicas int32     `json:"desired_replicas"`
+}
+
+// M5 Phase 4 caller (ResizeReplicas). Single-column update kept
+// separate from UpdateAgentDeployConfig because replica resize is its
+// own flow with its own RPC (ResizeAgentReplicas) and its own
+// reconciliation loop (per-replica volume provisioning/cleanup is
+// decision 7's Corellia-side reconciliation; this query is just the
+// DB-side desired-state flip).
+func (q *Queries) UpdateAgentReplicas(ctx context.Context, arg UpdateAgentReplicasParams) error {
+	_, err := q.db.Exec(ctx, updateAgentReplicas, arg.ID, arg.OrgID, arg.DesiredReplicas)
 	return err
 }

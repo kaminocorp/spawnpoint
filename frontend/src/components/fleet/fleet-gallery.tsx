@@ -6,10 +6,17 @@ import type { AgentInstance } from "@/gen/corellia/v1/agents_pb";
 
 type Props = {
   instances: AgentInstance[];
+  selectedIds: Set<string>;
+  onToggleOne: (id: string) => void;
   onChanged: () => void;
 };
 
-export function FleetGallery({ instances, onChanged }: Props) {
+export function FleetGallery({
+  instances,
+  selectedIds,
+  onToggleOne,
+  onChanged,
+}: Props) {
   return (
     <TerminalContainer
       title="AGENT INSTANCES"
@@ -18,7 +25,13 @@ export function FleetGallery({ instances, onChanged }: Props) {
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {instances.map((i) => (
-          <AgentCard key={i.id} instance={i} onChanged={onChanged} />
+          <AgentCard
+            key={i.id}
+            instance={i}
+            selected={selectedIds.has(i.id)}
+            onToggleSelected={() => onToggleOne(i.id)}
+            onChanged={onChanged}
+          />
         ))}
       </div>
     </TerminalContainer>

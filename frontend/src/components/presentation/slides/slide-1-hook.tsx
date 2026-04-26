@@ -2,26 +2,34 @@
 
 import { useEffect, useState } from "react";
 
+import { GalaxyOfAgents } from "../scenes/galaxy-of-agents";
+
 const TARGET = 1247;
-const NODE_COUNT = 120;
+const DURATION_MS = 2200;
 
 /**
- * Slide 1 — Hook. "The 250-agent problem."
+ * Slide 1 — HOOK · "1,247".
  *
- * Visual placeholder: count-up from 1 → 1,247 with a static node grid that
- * fades in as the number rises. Real 3D variant (camera pull-back, nodes
- * materialising in volumetric space) is a design-phase upgrade — this
- * scaffold gets the timing + copy locked first.
+ * The future-of-work hook. A single point of light at screen-center;
+ * the camera dollies back as ~1,247 particles materialise one-by-one
+ * in 3D space. By the end the viewer sees the galaxy from outside.
+ *
+ * Count-up drives the visual: `count` (1 → TARGET over 2.2s) is fed
+ * to `<GalaxyOfAgents>`, which clips its particle buffer at the
+ * matching index. Camera distance scales with the visible fraction,
+ * so the visual reads "the more agents, the further we have to be."
+ *
+ * Cubic-ease for the count-up, matching the original scaffold's
+ * timing (one of the few elements from 0.9.3 that survived).
  */
 export function SlideHook() {
   const [count, setCount] = useState(1);
 
   useEffect(() => {
     const start = performance.now();
-    const duration = 2200;
     let raf = 0;
     function tick(now: number) {
-      const t = Math.min((now - start) / duration, 1);
+      const t = Math.min((now - start) / DURATION_MS, 1);
       const eased = 1 - Math.pow(1 - t, 3);
       setCount(Math.round(1 + (TARGET - 1) * eased));
       if (t < 1) raf = requestAnimationFrame(tick);
@@ -30,19 +38,14 @@ export function SlideHook() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const visibleNodes = Math.round((count / TARGET) * NODE_COUNT);
-
   return (
-    <div className="relative mx-auto flex w-full max-w-5xl flex-col items-center gap-12">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 opacity-60"
-      >
-        <NodeField visible={visibleNodes} total={NODE_COUNT} />
+    <div className="relative flex size-full min-h-[70vh] w-full max-w-6xl flex-col items-center justify-center gap-12">
+      <div className="absolute inset-0 -z-10">
+        <GalaxyOfAgents count={count} target={TARGET} />
       </div>
 
       <p className="font-display text-[11px] uppercase tracking-widest text-muted-foreground">
-        [ THE 250-AGENT PROBLEM ]
+        [ THE 1,247-AGENT FUTURE ]
       </p>
 
       <div className="flex flex-col items-center gap-2">
@@ -50,45 +53,9 @@ export function SlideHook() {
           {count.toLocaleString()}
         </span>
         <span className="font-display text-xs uppercase tracking-[0.3em] text-muted-foreground">
-          AGENTS · ONE COMPANY · TODAY
+          AGENTS · ONE COMPANY · THIS YEAR
         </span>
       </div>
-
-      <p className="max-w-3xl text-center font-mono text-base leading-relaxed text-foreground/90 sm:text-lg">
-        A 250-person company wants every employee to have an AI agent. That&apos;s
-        1,000+ agents — each with different models, tools, and access. Today,
-        there is{" "}
-        <span className="text-[hsl(var(--status-failed))]">no way</span> to
-        govern that.
-      </p>
     </div>
-  );
-}
-
-function NodeField({ visible, total }: { visible: number; total: number }) {
-  return (
-    <svg
-      viewBox="0 0 100 100"
-      preserveAspectRatio="none"
-      className="size-full"
-    >
-      {Array.from({ length: total }, (_, i) => {
-        const seed = (i * 9301 + 49297) % 233280;
-        const x = (seed % 1000) / 10;
-        const y = ((seed * 31) % 1000) / 10;
-        const opacity = i < visible ? 0.6 : 0;
-        return (
-          <circle
-            key={i}
-            cx={x}
-            cy={y}
-            r={0.3}
-            fill="currentColor"
-            className="text-foreground transition-opacity duration-500"
-            opacity={opacity}
-          />
-        );
-      })}
-    </svg>
   );
 }

@@ -13,6 +13,14 @@ import { z } from "zod";
 import { EyeIcon, EyeOffIcon } from "lucide-react";
 
 import { NebulaAvatar } from "@/components/spawn/nebula-avatar";
+import {
+  DeploymentConfigForm,
+  type DeploymentFormValues,
+} from "@/components/fleet/deployment-config-form";
+import {
+  PlacementBanner,
+  type PlacementState,
+} from "@/components/fleet/placement-banner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,10 +35,17 @@ import {
   TerminalContainer,
   type TerminalAccent,
 } from "@/components/ui/terminal-container";
-import type { AgentTemplate } from "@/gen/corellia/v1/agents_pb";
+import type {
+  AgentTemplate,
+  DeployConfig,
+} from "@/gen/corellia/v1/agents_pb";
 import { ModelProvider } from "@/gen/corellia/v1/agents_pb";
 import { createApiClient } from "@/lib/api/client";
 import { HARNESSES, type HarnessEntry } from "@/lib/spawn/harnesses";
+import {
+  DEFAULT_DEPLOYMENT_VALUES,
+  describeSize,
+} from "@/lib/spawn/deployment-presets";
 
 /**
  * `<Wizard>` — Phases 4 + 5 of `docs/executing/agents-ui-mods.md`.
@@ -87,15 +102,13 @@ const PROVIDERS: ReadonlyArray<{
   { value: "openrouter", label: "OpenRouter", proto: ModelProvider.OPENROUTER },
 ];
 
-type LifecycleValue = "always-on" | "manual";
-
 type WizardFields = {
   name: string;
   provider: ProviderValue;
   modelName: string;
   apiKey: string;
-  lifecycle: LifecycleValue;
-  replicas: number;
+  /** Phase 6: full DeployConfig values collected by Step 4. Sent on the wire. */
+  deployment: DeploymentFormValues;
 };
 
 const INITIAL_FIELDS: WizardFields = {
@@ -103,8 +116,7 @@ const INITIAL_FIELDS: WizardFields = {
   provider: "anthropic",
   modelName: "",
   apiKey: "",
-  lifecycle: "always-on",
-  replicas: 1,
+  deployment: DEFAULT_DEPLOYMENT_VALUES,
 };
 
 type WizardState = {
@@ -234,6 +246,7 @@ export function Wizard({ templateId }: { templateId: string }) {
         provider: proto.proto,
         modelName: state.fields.modelName,
         modelApiKey: state.fields.apiKey,
+        deployConfig: deployConfigFromFields(state.fields.deployment),
       });
       // Transition out of "deploying" before navigating so the
       // synthetic-log interval's cleanup runs deterministically. The
@@ -597,120 +610,60 @@ function ModelForm({
 
 /* ─── STEP 4 // DEPLOYMENT ────────────────────────────────────────── */
 
-const deploymentSchema = z.object({
-  lifecycle: z.enum(["always-on", "manual"], { message: "Pick a lifecycle" }),
-  replicas: z
-    .number({ message: "Required" })
-    .int("Whole numbers only")
-    .min(1, "At least 1")
-    .max(10, "v1 caps replicas at 10"),
-});
-type DeploymentValues = z.infer<typeof deploymentSchema>;
-
 function DeploymentStep({ state, dispatch, isCurrent }: StepBodyProps) {
   if (!isCurrent) {
-    return (
-      <ConfirmedSummary
-        rows={[
-          { label: "LIFECYCLE", value: state.fields.lifecycle },
-          { label: "REPLICAS", value: String(state.fields.replicas) },
-        ]}
-      />
-    );
+    return <ConfirmedSummary rows={deploymentSummaryRows(state.fields.deployment)} />;
   }
 
   return (
-    <DeploymentForm
-      defaults={{
-        lifecycle: state.fields.lifecycle,
-        replicas: state.fields.replicas,
-      }}
-      onSubmit={(v) => {
-        dispatch({
-          type: "setField",
-          patch: { lifecycle: v.lifecycle, replicas: v.replicas },
-        });
-        dispatch({ type: "confirm", step: "deployment" });
-      }}
-    />
+    <div className="space-y-4">
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Where and how this agent runs. Region + size + volume become
+        immutable lightly: most can be edited live from the fleet page;
+        region change destroys and respawns the agent.
+      </p>
+      <DeploymentConfigForm
+        defaults={state.fields.deployment}
+        onSubmit={(v) => {
+          dispatch({ type: "setField", patch: { deployment: v } });
+          dispatch({ type: "confirm", step: "deployment" });
+        }}
+      />
+    </div>
   );
 }
 
-function DeploymentForm({
-  defaults,
-  onSubmit,
-}: {
-  defaults: DeploymentValues;
-  onSubmit: (v: DeploymentValues) => void;
-}) {
-  const form = useForm<DeploymentValues>({
-    resolver: zodResolver(deploymentSchema),
-    defaultValues: defaults,
-  });
-  const lifecycle = useWatch({ control: form.control, name: "lifecycle" });
+function deploymentSummaryRows(d: DeploymentFormValues): ReadonlyArray<{
+  label: string;
+  value: string;
+}> {
+  const restart =
+    d.restartPolicy === "on-failure"
+      ? `on-failure · ${d.restartMaxRetries} retries`
+      : d.restartPolicy;
+  return [
+    { label: "REGION", value: d.region },
+    { label: "SIZE", value: describeSize(d.cpuKind, d.cpus, d.memoryMb) },
+    { label: "VOLUME", value: `${d.volumeSizeGb}GB` },
+    { label: "REPLICAS", value: String(d.desiredReplicas) },
+    { label: "RESTART", value: restart },
+    { label: "LIFECYCLE", value: d.lifecycleMode },
+  ];
+}
 
-  return (
-    <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-4">
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        Where and how this agent runs. M5 fills out region / size / volume /
-        restart; today these two control the v1 default behavior.
-      </p>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="lifecycle">Lifecycle</Label>
-        <Select
-          value={lifecycle}
-          onValueChange={(v) =>
-            form.setValue("lifecycle", v as LifecycleValue, {
-              shouldValidate: true,
-            })
-          }
-        >
-          <SelectTrigger id="lifecycle" className="w-full">
-            <SelectValue placeholder="Pick a lifecycle" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="always-on">Always on</SelectItem>
-            <SelectItem value="manual">Manual start / stop</SelectItem>
-          </SelectContent>
-        </Select>
-        {form.formState.errors.lifecycle?.message && (
-          <p className="text-sm text-destructive">
-            {form.formState.errors.lifecycle.message}
-          </p>
-        )}
-      </div>
-
-      <Field
-        id="replicas"
-        label="Replicas"
-        hint="One Fly machine per replica. v1 caps at 10."
-        error={form.formState.errors.replicas?.message}
-      >
-        <Input
-          id="replicas"
-          type="number"
-          min={1}
-          max={10}
-          aria-invalid={!!form.formState.errors.replicas}
-          {...form.register("replicas", { valueAsNumber: true })}
-        />
-      </Field>
-
-      <dl className="space-y-1 border-t border-border pt-3 font-mono text-[11px]">
-        <SpecRow label="REGION" value="—" deferred />
-        <SpecRow label="SIZE" value="—" deferred />
-        <SpecRow label="VOLUME" value="—" deferred />
-        <SpecRow label="RESTART" value="—" deferred />
-      </dl>
-
-      <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
-        <Button size="sm" type="submit">
-          › CONFIRM
-        </Button>
-      </div>
-    </form>
-  );
+function deployConfigFromFields(d: DeploymentFormValues): DeployConfig {
+  return {
+    $typeName: "corellia.v1.DeployConfig",
+    region: d.region,
+    cpuKind: d.cpuKind,
+    cpus: d.cpus,
+    memoryMb: d.memoryMb,
+    restartPolicy: d.restartPolicy,
+    restartMaxRetries: d.restartMaxRetries,
+    lifecycleMode: d.lifecycleMode,
+    desiredReplicas: d.desiredReplicas,
+    volumeSizeGb: d.volumeSizeGb,
+  };
 }
 
 /* ─── STEP 5 // REVIEW ────────────────────────────────────────────── */
@@ -728,13 +681,70 @@ function ReviewStep({
   // shouldn't happen in normal flow because deploy unmounts the
   // wizard), fall through to the same summary.
   const ready = isCurrent || isConfirmed;
+
+  // Fire CheckDeploymentPlacement once on entry; re-fire when the
+  // confirmed deployment config changes (cascading invalidation from
+  // an earlier-step edit re-confirms and lands the operator back here
+  // with possibly-different values). Step 4 commits via `› CONFIRM`,
+  // so no debounce — one round-trip per confirmed config.
+  const [placement, setPlacement] = useState<PlacementState>({ kind: "idle" });
+  const cfg = state.fields.deployment;
+  const cfgKey = JSON.stringify(cfg);
+
+  useEffect(() => {
+    if (!isCurrent) return;
+    let cancelled = false;
+    (async () => {
+      // setState lives inside the async IIFE rather than the
+      // synchronous effect body — same pattern the codebase uses
+      // elsewhere to satisfy `react-hooks/set-state-in-effect`
+      // without dropping back to a useSyncExternalStore (which
+      // doesn't fit an async fetch).
+      if (cancelled) return;
+      setPlacement({ kind: "checking" });
+      try {
+        const api = createApiClient();
+        const res = await api.agents.checkDeploymentPlacement({
+          deployConfig: deployConfigFromFields(cfg),
+        });
+        if (cancelled) return;
+        const result = res.placementResult;
+        if (!result) {
+          setPlacement({ kind: "error", message: "no placement result" });
+          return;
+        }
+        setPlacement({
+          kind: result.available ? "ok" : "blocked",
+          result,
+        });
+      } catch (e) {
+        if (cancelled) return;
+        setPlacement({ kind: "error", message: ConnectError.from(e).message });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // cfgKey covers the structural identity of cfg; isCurrent guards
+    // remount-on-edit. Listing both keeps the dep-array exhaustive
+    // without re-triggering on every parent re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfgKey, isCurrent]);
+
   if (!ready) return null;
+
+  const deployBlocked =
+    placement.kind === "checking" ||
+    placement.kind === "blocked" ||
+    placement.kind === "error";
 
   return (
     <div className="space-y-4">
       <p className="text-xs leading-relaxed text-muted-foreground">
-        Review the configuration. Deploying spins up one Fly machine and
-        lands you on the fleet view.
+        Review the configuration. Deploying spins up{" "}
+        {cfg.desiredReplicas === 1 ? "one Fly machine" : `${cfg.desiredReplicas} Fly machines`}{" "}
+        in <code className="text-foreground">{cfg.region}</code> and lands you
+        on the fleet view.
       </p>
 
       <dl className="space-y-1 font-mono text-[11px]">
@@ -743,13 +753,16 @@ function ReviewStep({
         <SpecRow label="PROVIDER" value={providerLabel(state.fields.provider)} />
         <SpecRow label="MODEL" value={state.fields.modelName} />
         <SpecRow label="API KEY" value={maskApiKey(state.fields.apiKey)} />
-        <SpecRow label="LIFECYCLE" value={state.fields.lifecycle} />
-        <SpecRow label="REPLICAS" value={String(state.fields.replicas)} />
+        {deploymentSummaryRows(cfg).map((r) => (
+          <SpecRow key={r.label} label={r.label} value={r.value} />
+        ))}
       </dl>
+
+      {isCurrent && <PlacementBanner state={placement} />}
 
       {isCurrent && (
         <div className="flex items-center justify-end gap-2 border-t border-[hsl(var(--status-running))]/30 pt-3">
-          <Button size="sm" onClick={onDeploy}>
+          <Button size="sm" onClick={onDeploy} disabled={deployBlocked}>
             › DEPLOY AGENT
           </Button>
         </div>
