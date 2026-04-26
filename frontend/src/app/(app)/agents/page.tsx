@@ -51,10 +51,10 @@ export default function AgentsPage() {
       <header className="flex items-end justify-between border-b border-border pb-4">
         <div>
           <div className="font-display text-[10px] uppercase tracking-widest text-muted-foreground/60">
-            [ HARNESS CATALOG ]
+            [ DEPLOY ]
           </div>
           <h1 className="mt-1 font-display text-2xl font-bold uppercase tracking-widest text-foreground">
-            CATALOG
+            AGENTS
           </h1>
         </div>
         <div className="flex items-center gap-4 font-display text-[10px] uppercase tracking-widest">

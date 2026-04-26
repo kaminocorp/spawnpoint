@@ -2,6 +2,7 @@
 
 Index - short one-liners:
 
+- [0.7.2 — UX Copy: `/agents` Nav + Page Heading Renamed to "Agents"](#072--ux-copy-agents-nav--page-heading-renamed-to-agents-2026-04-26)
 - [0.7.1 — Frontend Mission-Control Implementation: Spec → Pixels](#071--frontend-mission-control-implementation-spec--pixels-2026-04-26)
 - [0.7.0 — M4: Spawn Flow (Phases 1–6)](#070--m4-spawn-flow-phases-16-2026-04-26)
 - [0.6.1 — Frontend Redesign Phase 5: Dark Mode Activation + Base UI Button Fixes](#061--frontend-redesign-phase-5-dark-mode-activation--base-ui-button-fixes-2026-04-26)
@@ -22,6 +23,22 @@ Index - short one-liners:
 - [0.1.0 — Backend Scaffolding & Docs Reconciliation](#010--backend-scaffolding--docs-reconciliation-2026-04-24)
 
 Latest on top. Each release has a tight index followed by detail entries (**What / Where / Why** inlined). When a decision contradicts an earlier one, note the supersession in the new entry rather than editing the old one.
+
+---
+
+## 0.7.2 — UX Copy: `/agents` Nav + Page Heading Renamed to "Agents" (2026-04-26)
+
+Three-string copy fix. The sidebar nav item for `/agents` was labelled "Catalog" — an internal descriptor for the harness-template listing, not a user-facing concept. Post-M4, that page is where admins deploy agents; "Catalog" describes the implementation but not the user's job-to-be-done. Renamed to **"Agents"** to match the URL slug, the nav's sibling "Fleet" naming convention (noun = section), and the user's mental model ("I go to Agents to create one; I go to Fleet to see them running"). The page's H1 follows the nav label for consistency (`CATALOG` → `AGENTS`). The decorative section tag above the H1 (`[ HARNESS CATALOG ]`) flips to `[ DEPLOY ]` — it reads as intent rather than section label, signalling to the user that this page is the deploy entry point without baking a verb into the H1 or the nav. Patch version (not minor): pure copy change, zero logic delta, no API/env/DB change.
+
+### Index
+
+- **`app-sidebar.tsx:26` — `label: "Catalog"` → `label: "Agents"`.** *Why:* "Catalog" was the M2-era internal label; the URL has always been `/agents`. Nav label and URL slug should name the same thing. The sibling items ("Fleet", "Dashboard", "Settings") are all nouns naming sections; "Catalog" was the odd one out.
+- **`agents/page.tsx:54` — `[ HARNESS CATALOG ]` → `[ DEPLOY ]`.** *Why:* The section tag sits above the H1 and reads as intent, not as the section title. "Harness Catalog" describes the listing's content; `[ DEPLOY ]` tells the user what they are here to do. The distinction matters post-M4 because the page now has a real Deploy button — the tag is no longer just label copy, it narrates the action.
+- **`agents/page.tsx:57` — H1 `CATALOG` → `AGENTS`.** *Why:* Consistency with the sidebar label (both say "Agents") and the URL. The Fleet page's H1 is "FLEET"; the Agents page's H1 is now "AGENTS" — parallel structure across the two core app sections.
+
+### Supersedes
+
+- **M2's "Catalog" label for the `/agents` route** (`app-sidebar.tsx` first set in 0.4.0). The harness-listing framing is preserved in the `TerminalContainer` title ("AVAILABLE HARNESSES") and the coming-soon section ("COMING SOON") — the word "catalog" doesn't need to appear at the nav/H1 level to be legible as a catalog page.
 
 ---
 
