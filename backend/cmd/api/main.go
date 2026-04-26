@@ -47,7 +47,10 @@ func main() {
 	orgsSvc := organizations.NewService(queries, usersSvc)
 	agentsSvc := agents.NewService(queries)
 
-	flyTarget, err := deploy.NewFlyDeployTarget(ctx, cfg.FlyAPIToken, cfg.FlyOrgSlug)
+	flyTarget, err := deploy.NewFlyDeployTarget(ctx, deploy.FlyCredentials{
+		APIToken: cfg.FlyAPIToken,
+		OrgSlug:  cfg.FlyOrgSlug,
+	})
 	if err != nil {
 		slog.Error("fly deploy target", "err", err)
 		os.Exit(1)
@@ -62,6 +65,7 @@ func main() {
 	slog.Info("deploy targets initialised",
 		"kinds", strings.Join(keysOf(deployTargets), ","),
 		"fly_org", cfg.FlyOrgSlug)
+	deployResolver := deploy.NewStaticResolver(deployTargets)
 
 	handler := httpsrv.New(httpsrv.Deps{
 		Config:               cfg,
@@ -69,7 +73,7 @@ func main() {
 		UsersHandler:         httpsrv.NewUsersHandler(usersSvc),
 		OrganizationsHandler: httpsrv.NewOrganizationsHandler(orgsSvc),
 		AgentsHandler:        httpsrv.NewAgentsHandler(agentsSvc),
-		DeployTargets:        deployTargets,
+		DeployTargets:        deployResolver,
 		AllowedOrigin:        cfg.FrontendOrigin,
 	})
 

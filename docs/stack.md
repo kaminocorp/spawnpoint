@@ -35,7 +35,7 @@ authoritative.
 | Database | Supabase Postgres | Hosted, pooled, branching; shares vendor with auth |
 | JS package manager | pnpm (workspaces) | Monorepo ergonomics, strict hoisting |
 | Go workspace | `go.work` → `backend/` | Standard Go multi-module setup |
-| Local orchestration | overmind + `Procfile.dev` | One command boots FE + BE with hot reload |
+| Local orchestration | overmind + `Procfile` | One command boots FE + BE with hot reload |
 | Backend hot reload | [air](https://github.com/air-verse/air) | Go file-watcher |
 | Frontend deploy | Vercel | One-click Next.js; preview URLs per PR |
 | Backend deploy | Fly.io | Dogfood the infrastructure we're orchestrating |
@@ -84,7 +84,7 @@ corellia/
 │       └── corellia/v1/*.proto
 │
 ├── docs/                       vision, blueprint, stack (this file), research
-├── Procfile.dev                overmind config: web + api
+├── Procfile                    overmind config: web + api
 ├── pnpm-workspace.yaml         declares `frontend` as a workspace
 ├── go.work                     Go workspace file: `use ./backend`
 ├── turbo.json                  (optional) task caching for FE builds
@@ -449,7 +449,7 @@ The "prove the pipeline works before writing product code" milestone.
 
 1. **Hour 0–1.** Monorepo skeleton: `frontend/` scaffolded via
    `create-next-app`, `backend/` with `go mod init`, `shared/proto/`
-   with first `.proto` file, `Procfile.dev`, `.env.example`, `.gitignore`.
+   with first `.proto` file, `Procfile`, `.env.example`, `.gitignore`.
 2. **Hour 1–2.** Supabase project created. First migration applied
    (users + organizations + agent_templates + agent_instances from
    blueprint §9). sqlc emits typed queries.

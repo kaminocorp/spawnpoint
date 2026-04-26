@@ -18,7 +18,7 @@ type Deps struct {
 	UsersHandler         corelliav1connect.UsersServiceHandler
 	OrganizationsHandler corelliav1connect.OrganizationsServiceHandler
 	AgentsHandler        corelliav1connect.AgentsServiceHandler
-	DeployTargets        map[string]deploy.DeployTarget
+	DeployTargets        deploy.Resolver
 	AllowedOrigin        string
 }
 

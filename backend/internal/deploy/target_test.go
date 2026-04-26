@@ -1,6 +1,8 @@
 package deploy
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -93,6 +95,29 @@ func TestAppNameFor(t *testing.T) {
 			t.Error("hash collision on distinct names")
 		}
 	})
+}
+
+func TestStaticResolver_KindRegistered(t *testing.T) {
+	want := NewLocalDeployTarget()
+	r := NewStaticResolver(map[string]DeployTarget{"local": want})
+	got, err := r.For(context.Background(), "local")
+	if err != nil {
+		t.Fatalf("For(local) err = %v, want nil", err)
+	}
+	if got != want {
+		t.Errorf("For(local) returned %p, want %p (same instance)", got, want)
+	}
+}
+
+func TestStaticResolver_KindUnregistered(t *testing.T) {
+	r := NewStaticResolver(map[string]DeployTarget{"local": NewLocalDeployTarget()})
+	got, err := r.For(context.Background(), "fly")
+	if !errors.Is(err, ErrTargetNotConfigured) {
+		t.Errorf("For(fly) err = %v, want %v", err, ErrTargetNotConfigured)
+	}
+	if got != nil {
+		t.Errorf("For(fly) target = %v, want nil", got)
+	}
 }
 
 func TestParseExternalRef(t *testing.T) {

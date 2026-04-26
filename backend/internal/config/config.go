@@ -27,9 +27,17 @@ type Config struct {
 	// prepared-statement cache, which sqlc relies on.
 	DatabaseURL string `env:"DATABASE_URL,required"`
 
-	SupabaseURL    string `env:"SUPABASE_URL,required"`
-	FlyAPIToken    string `env:"FLY_API_TOKEN,required"`
-	FlyOrgSlug     string `env:"FLY_ORG_SLUG,required"`
+	SupabaseURL string `env:"SUPABASE_URL,required"`
+
+	// FlyAPIToken / FlyOrgSlug are bootstrap credentials for the single
+	// process-wide DeployTarget consumed by deploy.StaticResolver. They
+	// are slated for retirement in v1.5, when DB-backed deploy_targets
+	// rows replace this env-var bootstrap with per-org user-configurable
+	// credentials. See docs/executing/deploy-target-resolver.md §1.
+	// TODO(v1.5): delete these two fields when DBResolver lands.
+	FlyAPIToken string `env:"FLY_API_TOKEN,required"`
+	FlyOrgSlug  string `env:"FLY_ORG_SLUG,required"`
+
 	FrontendOrigin string `env:"FRONTEND_ORIGIN,required"`
 }
 

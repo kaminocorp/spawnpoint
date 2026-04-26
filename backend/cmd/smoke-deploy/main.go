@@ -46,7 +46,10 @@ func main() {
 	cfg := config.Load()
 	ctx := context.Background()
 
-	target, err := deploy.NewFlyDeployTarget(ctx, cfg.FlyAPIToken, cfg.FlyOrgSlug)
+	target, err := deploy.NewFlyDeployTarget(ctx, deploy.FlyCredentials{
+		APIToken: cfg.FlyAPIToken,
+		OrgSlug:  cfg.FlyOrgSlug,
+	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "new fly target:", err)
 		os.Exit(1)

@@ -10,7 +10,7 @@ Companion docs:
 
 ## Build & dev orchestration
 
-- **overmind** — `tmux`-based Procfile runner. Reads `Procfile.dev` (`web:` + `api:`) and boots both halves in one command, with per-process panes you can attach to and `Ctrl-c` independently. Replacement for Heroku's `foreman`, but better.
+- **overmind** — `tmux`-based Procfile runner. Reads `Procfile` (`web:` + `api:`) and boots both halves in one command, with per-process panes you can attach to and `Ctrl-c` independently. Replacement for Heroku's `foreman`, but better.
 - **air** — Go file-watcher with hot reload. Watches `backend/**/*.go`, rebuilds the binary, restarts it on change. The Go equivalent of `nodemon`.
 - **direnv** — Per-directory env auto-loader. `cd backend/` → it auto-`source`s `backend/.env` into your shell; `cd ..` → unloads. Makes `goose` and ad-hoc CLI tools see the same env as the Go binary.
 - **godotenv/autoload** — Go library imported as `_ "github.com/joho/godotenv/autoload"`. Auto-reads `.env` from the binary's cwd at process start. The reason `air` Just Works without sourcing.

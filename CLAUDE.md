@@ -110,7 +110,7 @@ air
 cd backend && go build -o bin/api ./cmd/api && ./bin/api
 
 # Once both halves exist, from repo root:
-overmind start                # reads Procfile.dev; boots FE + BE together
+overmind start                # reads Procfile; boots FE + BE together
 ```
 
 ### Testing + checks

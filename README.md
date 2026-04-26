@@ -103,7 +103,7 @@ See [`docs/changelog.md`](docs/changelog.md) for the full trail.
 | Database | Supabase Postgres (Direct Connection; `pgxpool` pools in-process — never transaction pooling) |
 | Frontend deploy | Vercel |
 | Backend deploy | Fly.io (we dogfood the infra we're orchestrating) |
-| Local orchestration | overmind + `Procfile.dev` |
+| Local orchestration | overmind + `Procfile` |
 | Env loading | `godotenv/autoload` + `direnv` |
 
 ---
@@ -139,7 +139,7 @@ corellia/
 │
 ├── shared/proto/         Proto IDL — the ONLY FE↔BE contract surface
 ├── docs/                 vision, blueprint, stack, changelog, scaffolding recipes
-├── Procfile.dev          `overmind start` boots FE + BE together
+├── Procfile              `overmind start` boots FE + BE together
 └── go.work               Go workspace
 ```
 

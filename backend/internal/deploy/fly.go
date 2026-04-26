@@ -23,6 +23,18 @@ const (
 	cleanupTimeout  = 30 * time.Second
 )
 
+// FlyCredentials carries the per-account inputs NewFlyDeployTarget
+// needs to construct a flaps client. Today the two fields exactly
+// mirror what the previous positional constructor took; the struct
+// exists so v1.5's per-org credential rows (DefaultRegion, scoped
+// API tokens, etc.) can land additively without rippling through
+// every caller's signature. Per the deploy-target-resolver plan §2
+// decision 4: no fields beyond what current callers need.
+type FlyCredentials struct {
+	APIToken string
+	OrgSlug  string
+}
+
 // FlyDeployTarget is the only place in the codebase that imports
 // `fly-go` or talks to the Fly.io API. Per blueprint §11.1, every
 // other package sees only the DeployTarget interface.
@@ -34,15 +46,15 @@ type FlyDeployTarget struct {
 // NewFlyDeployTarget constructs a Fly-backed deploy target. The
 // flaps client is global across apps; per-app routing happens at
 // each method call via the appName argument.
-func NewFlyDeployTarget(ctx context.Context, token, orgSlug string) (*FlyDeployTarget, error) {
+func NewFlyDeployTarget(ctx context.Context, creds FlyCredentials) (*FlyDeployTarget, error) {
 	fc, err := flaps.NewWithOptions(ctx, flaps.NewClientOpts{
-		Tokens:    tokens.Parse(token),
+		Tokens:    tokens.Parse(creds.APIToken),
 		UserAgent: "corellia",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fly: flaps client: %w", err)
 	}
-	return &FlyDeployTarget{flaps: fc, orgSlug: orgSlug}, nil
+	return &FlyDeployTarget{flaps: fc, orgSlug: creds.OrgSlug}, nil
 }
 
 func (f *FlyDeployTarget) Kind() string { return flyKind }
